@@ -32,6 +32,16 @@ test('login, perfis, WebSocket e salas',async()=>{
   const socket=await wsConnect(child.cookie);
   const roomMessage=once(socket,'roomState');socket.send(JSON.stringify({type:'create',solo:true}));const r=await roomMessage;assert.equal(r.game,'race');assert.equal(r.started,false);
   const progress=once(socket,'frame');const frame=await progress;assert.ok(frame.remaining>0);
+  const adminWS=await wsConnect(adminCookie);
+  const online=await request('admin/overview','GET',null,adminCookie);
+  assert.equal(online.data.users.find(u=>u.name==='Piloto').online,true,'Presença online não atualizou');
+  const second=await request('admin/users','POST',{name:'Piloto Dois',password:'4567'},adminCookie);assert.equal(second.res.status,201);
+  const loginTwo=await request('login','POST',{name:'Piloto Dois',password:'4567'});assert.equal(loginTwo.res.status,200);
+  const secondWS=await wsConnect(loginTwo.cookie);
+  const secondRoom=once(secondWS,'roomState');secondWS.send(JSON.stringify({type:'join',code:r.code}));
+  const joined=await secondRoom;assert.equal(joined.players.length,2);
+  const rename=await request('admin/users/'+second.data.user.id,'POST',{name:'Segundo Piloto',password:'5678'},adminCookie);assert.equal(rename.res.status,200);
+  secondWS.close();adminWS.close();
   socket.close();
   const state=await request('admin/overview','GET',null,adminCookie);
   assert.equal(state.res.status,200);assert.ok(state.data.users.some(u=>u.name==='Piloto'));

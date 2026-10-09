@@ -76,3 +76,5 @@ html:has(.race-screen),body:has(.race-screen){height:100%;overflow:hidden;oversc
 /* Bloco B: resposta tatil consistente */
 .race-controls button{touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:transform .08s,filter .08s}
 .race-controls button.pressed{transform:translateY(4px) scale(.97);filter:brightness(1.14);box-shadow:0 1px 0 #b15f1e}
+
+.spectator-footer{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:86px;background:#141c4f;padding:12px;color:white}.spectator-footer #spectatorScores{display:flex;gap:18px;font-size:16px;font-weight:900}.spectator-footer #voiceStatus{font-size:12px;color:#d5defc}

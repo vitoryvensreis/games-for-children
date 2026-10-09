@@ -53,8 +53,9 @@ function leaveRoom(p){if(!p.room)return;const code=p.room;p.room=null;p.playing=
 function ensureRoom(p,code){const r=rooms.get(code);if(!r||r.finished)return null;if(!r.players.has(p.user.id)&&p.playing&&(r.players.size>=2||r.started))return null;if(p.room!==code)leaveRoom(p);p.room=code;if(p.playing)r.players.add(p.user.id);return r}
 function roomState(r){return {type:'roomState',code:r.code,game:r.game,started:r.started,remaining:Math.max(0,Math.ceil((r.endAt-now())/1000)),players:[...r.players].map(id=>{const u=state.users.find(u=>u.id===id);return {id,name:u?.name,score:r.scores[id]||0,lane:r.lanes[id]||1}})}}
 function finish(r){if(r.finished)return;r.finished=true;const ranking=[...r.players].map(id=>({name:state.users.find(u=>u.id===id)?.name||'Jogador',score:r.scores[id]||0})).sort((a,b)=>b.score-a.score);state.games.push({id:uuid(),at:now(),players:ranking});state.games=state.games.slice(-300);save();broadcastRoom(r,{type:'finished',ranking});report()}
-function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;for(const q of peers.values())if(q.room===r.code)emit(q.ws,{...roomState(r),mode:q.playing?'player':'spectator'})}
+function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;if(r.game==='pong')r.pong={x:.5,y:.5,vx:.008,vy:.006,paddles:{},points:{},lastTick:now()};for(const q of peers.values())if(q.room===r.code)emit(q.ws,{...roomState(r),mode:q.playing?'player':'spectator'})}
 function gameTick(){const t=now();for(const r of rooms.values()){if(!r.started||r.finished)continue;if(t>=r.endAt){finish(r);continue}
+if(r.game==='pong'){const g=r.pong;const ids=[...r.players];const dt=Math.min(2.5,(t-g.lastTick)/125);g.lastTick=t;if(ids.length===1){g.paddles.ai??=.5;g.paddles.ai+=Math.sign(g.y-g.paddles.ai)*Math.min(.024*dt,Math.abs(g.y-g.paddles.ai))}g.x+=g.vx*dt;g.y+=g.vy*dt;if(g.y<=.035||g.y>=.965)g.vy*=-1;const left=g.paddles[ids[0]]??.5,right=ids[1]?(g.paddles[ids[1]]??.5):g.paddles.ai;if(g.x<.045&&g.vx<0){if(Math.abs(g.y-left)<.15){g.x=.045;g.vx=Math.abs(g.vx)*1.015}else{r.scores[ids[1]||ids[0]]=(r.scores[ids[1]||ids[0]]||0)+1;g.x=.5;g.y=.5;g.vx=.008}}if(g.x>.955&&g.vx>0){if(Math.abs(g.y-right)<.15){g.x=.955;g.vx=-Math.abs(g.vx)*1.015}else{r.scores[ids[0]]=(r.scores[ids[0]]||0)+1;g.x=.5;g.y=.5;g.vx=-.008}}broadcastRoom(r,{type:'frame',game:'pong',remaining:Math.ceil((r.endAt-t)/1000),players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),ball:{x:g.x,y:g.y},aiPaddle:g.paddles.ai??.5});continue}
 if(t>=r.nextObstacle){r.spawn++;const lane=Math.floor(Math.random()*3);r.obstacles.push({id:r.spawn,lane,at:t});r.nextObstacle=t+780}
 for(const o of r.obstacles){if(o.done||t-o.at<2400)continue;o.done=true;for(const id of r.players){if(r.lanes[id]===o.lane)r.scores[id]=Math.max(0,(r.scores[id]||0)-5);else r.scores[id]=(r.scores[id]||0)+10}}
 r.obstacles=r.obstacles.filter(o=>t-o.at<3000);
@@ -123,7 +124,7 @@ server.on('upgrade',(req,socket,head)=>{
 wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});report();
 ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
 if(m.type==='lobby')lobby();
-if(m.type==='create'&&(u.role==='child'||u.role==='admin')){leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const r={code,game:'race',players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
+if(m.type==='create'&&(u.role==='child'||u.role==='admin')){leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=['race','pong'].includes(m.game)?m.game:'race';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){
  const code=m.code.toUpperCase(),r0=rooms.get(code);
  const playing=u.role==='child'||m.mode==='player';
@@ -138,6 +139,7 @@ if(m.type==='join'&&typeof m.code==='string'){
  if(r.players.size===2&&!r.started)start(r);
  report()
 }
+if(m.type==='paddle'&&p.room&&p.playing){const r=rooms.get(p.room);if(r?.game==='pong'&&r.started&&!r.finished&&Number.isFinite(m.y)){r.pong.paddles[u.id]=Math.max(.13,Math.min(.87,m.y))}}
 if(m.type==='lane'&&p.room&&p.playing){const r=rooms.get(p.room);if(r&&r.started&&!r.finished&&r.players.has(u.id)&&Number.isInteger(m.lane)&&m.lane>=0&&m.lane<=2){r.lanes[u.id]=m.lane;if(Number.isSafeInteger(m.seq)&&m.seq>=0){r.ack??={};r.ack[u.id]=m.seq}}}
 if(m.type==='leave')leaveRoom(p);
 if(m.type==='signal'&&p.room&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<6500){if(u.role==='child'&&!u.voiceEnabled)return;const recipient=peers.get(m.to);if(recipient&&recipient.room===p.room&&(recipient.user.role==='admin'||recipient.user.voiceEnabled))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}

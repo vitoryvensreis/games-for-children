@@ -72,3 +72,7 @@ html:has(.race-screen),body:has(.race-screen){height:100%;overflow:hidden;oversc
 .wait-card{border:3px solid #ffca46;box-shadow:0 8px 0 #65368a;padding:25px 22px}
 .wait-label{display:inline-block;color:#ef607e;font-size:11px;letter-spacing:3px;margin-bottom:12px}
 @media(max-width:390px){.race-brand{display:none}.race-top{gap:5px}.race-score{gap:4px}.race-metric{padding:6px;min-width:52px}.race-sound button{min-width:36px}.race-controls{gap:8px;padding:8px}.race-controls button span{font-size:9px}}
+
+/* Bloco B: resposta tatil consistente */
+.race-controls button{touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;transition:transform .08s,filter .08s}
+.race-controls button.pressed{transform:translateY(4px) scale(.97);filter:brightness(1.14);box-shadow:0 1px 0 #b15f1e}

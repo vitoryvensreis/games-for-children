@@ -2,11 +2,16 @@ const http=require('node:http');
 const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
+const net=require('node:net');
+const {spawn}=require('node:child_process');
 const {WebSocketServer}=require('ws');
 const webpush=require('web-push');
 const sqlStore=require('./database/store.cjs');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
+const MCGALAXY_PORT=Number(process.env.MCGALAXY_PORT||25565);
+const MCGALAXY_DIR=path.join(ROOT,'vendor','mcgalaxy');
+let mcgalaxyProcess=null,mcgalaxyReady=false;
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
 let state={users:[],sessions:[],events:[],games:[]};
 try{state=JSON.parse(fs.readFileSync(DB,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e}
@@ -38,6 +43,24 @@ function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws
 function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=Math.min(t-s.lastTick,15000);s.lastTick=t;if(delta>0&&delta<16000){const k=localDay(t);s.daily??={};s.daily[k]=(s.daily[k]||0)+delta}}
 function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
 function end(s){touch(s);s.revoked=true;for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
+function cubePlayerName(u){const clean=u.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]/g,'').slice(0,11)||'Piloto';return clean+'_'+u.id.replace(/-/g,'').slice(0,4)}
+function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
+function setupMCGalaxy(){
+ const exec=path.join(MCGALAXY_DIR,'MCGalaxyCLI');if(!fs.existsSync(exec)||process.env.MCGALAXY_ENABLED==='false')return;
+ const cfgDir=path.join(MCGALAXY_DIR,'properties');fs.mkdirSync(cfgDir,{recursive:true});
+ const cfg=path.join(cfgDir,'server.properties');
+ const required={'server-name':'GamesForChildren Privado','public':'false','verify-names':'false','listen-ip':'127.0.0.1','port':String(MCGALAXY_PORT),'support-web-client':'true','allow-ip-forwarding':'false','max-players':'12','max-guests':'12','use-whitelist':'false','autoload':'true'};
+ let lines=fs.existsSync(cfg)?fs.readFileSync(cfg,'utf8').split(/\r?\n/):[];
+ for(const [key,value] of Object.entries(required)){const matcher=new RegExp('^\\s*'+key+'\\s*=','i');let found=false;lines=lines.map(line=>{if(matcher.test(line)){found=true;return key+' = '+value}return line});if(!found)lines.push(key+' = '+value)}
+ fs.writeFileSync(cfg,lines.join('\n')+'\n',{mode:0o600});
+ mcgalaxyProcess=spawn(exec,[],{cwd:MCGALAXY_DIR,env:{...process.env,DOTNET_SYSTEM_GLOBALIZATION_INVARIANT:'0'},stdio:['pipe','pipe','pipe']});
+ const log=(channel,chunk)=>{const msg=String(chunk).slice(0,700).trim();if(msg)console.log('[MCGalaxy '+channel+'] '+msg)};
+ mcgalaxyProcess.stdout.on('data',d=>log('out',d));mcgalaxyProcess.stderr.on('data',d=>log('err',d));
+ mcgalaxyProcess.on('error',e=>{mcgalaxyReady=false;console.error('[MCGalaxy] Falha na inicialização:',e.message)});
+ mcgalaxyProcess.on('exit',(code)=>{mcgalaxyReady=false;mcgalaxyProcess=null;console.warn('[MCGalaxy] Encerrado, código',code)});
+ const probe=setInterval(async()=>{if(!mcgalaxyProcess){clearInterval(probe);return}if(await cubePortReady()){mcgalaxyReady=true;clearInterval(probe);console.log('[MCGalaxy] Mundo privado disponível em localhost')}},1500);probe.unref();
+}
+process.once('SIGTERM',()=>{try{mcgalaxyProcess?.stdin?.write('stop\n')}catch{};setTimeout(()=>process.exit(0),1000).unref()});
 function userInfo(u){return {id:u.id,name:u.name,role:u.role,enabled:u.enabled,loginEnabled:u.loginEnabled,dailyLimit:u.dailyLimit,voiceEnabled:u.voiceEnabled,usedSeconds:Math.floor(usage(u)/1000),online:activeUser(u),hasPhoto:Boolean(u.photo)}}
 function json(res,status,obj,cookie){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end(JSON.stringify(obj))}
 function readBody(req){return new Promise((resolve,reject)=>{let text='';req.on('data',b=>{text+=b;if(text.length>20000){reject(Error('payload excessivo'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(Error('JSON inválido'))}});req.on('error',reject)})}
@@ -109,7 +132,7 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
-if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'local-client',multiplayerConfigured:false});
+if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
 if(pathname==='/api/heartbeat'&&req.method==='POST'){const was=activeUser(u);touch(s);s.lastSeen=now();save();if(!was&&u.role==='child')track(u,'online');report();return json(res,200,{ok:true,online:true})}
 if(pathname.startsWith('/api/photos/')&&req.method==='GET'){const id=pathname.slice('/api/photos/'.length),target=state.users.find(x=>x.id===id);if(!target||!target.photo||(u.role!=='admin'&&u.id!==id))return json(res,404,{error:'Foto indisponível'});const match=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(target.photo);if(!match)return json(res,404,{error:'Foto inválida'});res.writeHead(200,{'Content-Type':'image/'+match[1],'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});return res.end(Buffer.from(match[2],'base64'))}
 if(pathname==='/api/voice/config'&&req.method==='GET')return json(res,200,{iceServers:ICE_SERVERS,turnConfigured:ICE_SERVERS.length>1});
@@ -140,6 +163,27 @@ const file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));if(
 const fp=path.join(publicDir,file);if(!fp.startsWith(publicDir+path.sep)){res.writeHead(403);return res.end()}
 fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.wasm':'application/wasm','.zip':'application/zip','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'?'no-cache':'public, max-age=3600'});res.end(b)});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{error:'Erro interno'})}});
+const cubeWss=new WebSocketServer({noServer:true,maxPayload:1024});
+const cubeSessions=new Map();
+cubeWss.on('connection',(ws,{u,s})=>{
+ const old=cubeSessions.get(u.id);if(old&&old.readyState<2)old.close(4000,'Novo acesso');cubeSessions.set(u.id,ws);
+ const tcp=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});
+ let handshake=Buffer.alloc(0),accepted=false,closed=false;
+ const close=()=>{if(closed)return;closed=true;tcp.destroy();if(ws.readyState<2)ws.close();if(cubeSessions.get(u.id)===ws)cubeSessions.delete(u.id)};
+ tcp.on('data',data=>{if(ws.readyState===1){if(ws.bufferedAmount>1024*1024){close();return}ws.send(data,{binary:true})}});
+ tcp.on('error',()=>close());tcp.on('close',()=>close());ws.on('error',()=>close());ws.on('close',()=>close());
+ ws.on('message',(payload,isBinary)=>{
+  if(!isBinary||s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){close();return}
+  const data=Buffer.from(payload);
+  if(!accepted){handshake=Buffer.concat([handshake,data]);if(handshake.length>500){close();return}if(handshake.length<131)return;
+   if(handshake[0]!==0||handshake[1]>12){close();return}
+   const name=cubePlayerName(u),id=Buffer.alloc(64,32);id.write(name,0,'ascii');id.copy(handshake,2);
+   // Externally verified ClassiCube names are intentionally disabled on this localhost-only server.
+   tcp.write(handshake);accepted=true;handshake=Buffer.alloc(0);return
+  }
+  if(data.length>0&&tcp.writable&&!tcp.destroyed)tcp.write(data);
+ });
+});
 const wss=new WebSocketServer({noServer:true,maxPayload:8192});
 server.on('upgrade',(req,socket,head)=>{
  const pathname=new URL(req.url,'http://local').pathname;
@@ -151,6 +195,12 @@ server.on('upgrade',(req,socket,head)=>{
  const auth=checkSession(req);
  if(!auth){console.warn('[WS] Rejeitado: sessão ausente ou inválida');socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
+ if(new URL(req.url,'http://localhost').searchParams.get('classicube')==='1'){
+  if(!mcgalaxyReady||req.headers['sec-websocket-protocol']!=='ClassiCube'){
+    socket.write('HTTP/1.1 503 Service Unavailable\\r\\nConnection: close\\r\\n\\r\\n');socket.destroy();return;
+  }
+  cubeWss.handleUpgrade(req,socket,head,ws=>cubeWss.emit('connection',ws,auth));return;
+ }
  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))
 });
 wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});emit(ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))});report();
@@ -181,5 +231,5 @@ if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&[
 });
 ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
-async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
+async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();setupMCGalaxy();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

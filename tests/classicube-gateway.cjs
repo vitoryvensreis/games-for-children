@@ -40,6 +40,9 @@ test('Gateway ClassiCube: authenticated binary proxy to localhost only',async()=
   const following=Buffer.from([5,4,3,2,1]);ws.send(following);
   for(let i=0;i<35&&incoming.length<2;i++)await pause(20);
   assert.deepEqual(incoming[1],following);
-  ws.close();
+  const closed=new Promise((resolve,reject)=>{const timeout=setTimeout(()=>reject(Error('Parental logout did not close multiplayer')),3500);ws.once('close',code=>{clearTimeout(timeout);resolve(code)})});
+  const logout=await fetch('http://127.0.0.1:'+PORT+'/api/logout',{method:'POST',headers:{Cookie:cookie}});
+  assert.equal(logout.status,200);
+  assert.equal(await closed,4001,'Logout must immediately close the shared-world socket');
  }finally{if(child){child.kill('SIGTERM');await Promise.race([new Promise(r=>child.once('exit',r)),pause(1800)])}serverSocket?.destroy();await new Promise(r=>server.close(r));fs.rmSync(data,{recursive:true,force:true,maxRetries:8,retryDelay:120})}
 });

@@ -16,7 +16,7 @@ test('ClassiCube tem orientação horizontal e não corta o jogo',()=>{
  const app=read('public/app.js');
  const css=read('public/style.css');
  const html=read('public/classicube/index.html');
- assert.match(app,/screen\.orientation\?\.lock\('landscape'\)/);
+ assert.match(app,/screen\.orientation\.lock\('landscape'\)/);
  assert.match(app,/classicubeRotate/);
  assert.match(app,/classicubeTryLandscape/);
  assert.match(css,/\.classicube-embed iframe\{position:absolute!important/);

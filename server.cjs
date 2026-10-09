@@ -46,7 +46,7 @@ function track(u,type){state.events.unshift({id:uuid(),userId:u.id,name:u.name,t
 const peers=new Map(), rooms=new Map(), voxelPeers=new Map();
 function voiceEligible(p){return p.ws.readyState===1&&(p.user.role==='admin'||p.user.voiceEnabled===true)}
 function voiceMembers(){return [...peers.values()].filter(p=>p.voiceActive&&voiceEligible(p))}
-function voiceList(p){return voiceMembers().filter(q=>q!==p).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))}
+function voiceList(p){return voiceMembers().filter(q=>q!==p&&q.user.id!==p.user.id).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))}
 function voicePresence(){for(const p of peers.values())if(voiceEligible(p))emit(p.ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}
 
 const VOXEL_TYPES=new Set(['air','grass','dirt','stone','wood','leaves','sand','brick','glass']);
@@ -60,7 +60,7 @@ function admins(o){for(const p of peers.values())if(p.user.role==='admin')emit(p
 function broadcastRoom(room,o){for(const p of peers.values())if(p.room===room.code)emit(p.ws,o)}
 function lobby(){const available=[...rooms.values()].filter(r=>!r.finished&&!r.started&&r.players.size<2).map(r=>({code:r.code,game:r.game,host:state.users.find(u=>u.id===[...r.players][0])?.name||'Jogador',players:r.players.size}));for(const p of peers.values())if(p.user.role==='child')emit(p.ws,{type:'lobby',rooms:available})}
 function report(){admins({type:'adminUpdate'});lobby()}
-function leaveRoom(p){if(!p.room)return;const code=p.room;p.room=null;p.playing=false;const r=rooms.get(code);if(r){if(![...peers.values()].some(x=>x!==p&&x.room===code&&x.user.id===p.user.id))r.players.delete(p.user.id);broadcastRoom(r,{type:'peerLeft',id:p.id});if(!r.players.size)rooms.delete(code)}report()}
+function leaveRoom(p){if(!p.room)return;const code=p.room;p.room=null;p.playing=false;const r=rooms.get(code);if(r){if(![...peers.values()].some(x=>x!==p&&x.room===code&&x.user.id===p.user.id))r.players.delete(p.user.id);broadcastRoom(r,{type:'roomPeerLeft',id:p.id});if(!r.players.size)rooms.delete(code)}report()}
 function ensureRoom(p,code){const r=rooms.get(code);if(!r||r.finished)return null;if(!r.players.has(p.user.id)&&p.playing&&(r.players.size>=2||r.started))return null;if(p.room!==code)leaveRoom(p);p.room=code;if(p.playing)r.players.add(p.user.id);return r}
 function roomState(r){return {type:'roomState',code:r.code,game:r.game,started:r.started,remaining:Math.max(0,Math.ceil((r.endAt-now())/1000)),players:[...r.players].map(id=>{const u=state.users.find(u=>u.id===id);return {id,name:u?.name,score:r.scores[id]||0,lane:r.lanes[id]||1}})}}
 function finish(r){if(r.finished)return;r.finished=true;const ranking=[...r.players].map(id=>({name:state.users.find(u=>u.id===id)?.name||'Jogador',score:r.scores[id]||0})).sort((a,b)=>b.score-a.score);state.games.push({id:uuid(),at:now(),players:ranking});state.games=state.games.slice(-300);save();broadcastRoom(r,{type:'finished',ranking});report()}

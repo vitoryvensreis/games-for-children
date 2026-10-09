@@ -16,3 +16,28 @@
 .child-card .actions button:first-child{grid-column:1/-1}
 .child-card .actions button:active{transform:translateY(1px)}
 @media(max-width:390px){.child-card .actions{grid-template-columns:1fr}}
+
+
+/* Corrida mobile-first, ocupa o viewport do PWA */
+body:has(.race-screen){overflow:hidden}
+.race-screen{height:100dvh;width:100%;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(135deg,#35238b,#1479c3);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);color:white}
+.race-top{height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:7px;padding:7px 10px;background:#22156d}
+.race-top button{box-shadow:none;padding:10px 12px;border-radius:13px;min-height:44px}
+.race-exit{background:#5036a0}.race-voice{background:#117fc9}
+.race-score{display:flex;gap:12px;align-items:center;font-size:18px;font-weight:900}
+.race-score span{white-space:nowrap;display:flex;align-items:center;gap:5px}
+.race-track{position:relative;flex:1;min-height:0;display:flex;justify-content:center;overflow:hidden;background:#314464}
+.race-track canvas{height:100%;width:min(100%,540px);display:block;object-fit:fill;background:#3d4563}
+.race-controls{height:112px;flex-shrink:0;background:#20176f;display:flex;align-items:stretch;justify-content:space-between;padding:10px 12px;gap:12px}
+.race-controls button{flex:1;max-width:180px;background:#fdc82e;color:#24176b;box-shadow:0 6px 0 #cc8b0a;display:flex;justify-content:center;align-items:center;touch-action:none}
+.race-controls button .icon{width:52px;height:52px;stroke-width:3.5}
+#raceMode{font-size:12px;text-align:center;align-self:center;max-width:90px;font-weight:900}
+.race-status{min-height:22px;text-align:center;font-size:11px;background:#20176f;color:#ecdefe;padding:2px 8px}
+.race-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#10153c9f;z-index:2;padding:24px;text-align:center;color:white;font-weight:900}
+.race-overlay[hidden]{display:none}
+.wait-card{background:#fff;color:#402d82;border-radius:25px;box-shadow:0 10px 0 #c6adee;padding:30px 22px;max-width:360px}
+.wait-card b{font-size:28px;letter-spacing:4px;color:#6d42cb}
+.lobby-room{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;margin:10px 0;border-radius:18px;background:#e5f8ff}
+.lobby-room button{background:#12af9d;box-shadow:0 4px 0 #087c6f}
+details{margin-top:18px}summary{cursor:pointer;font-weight:800;margin-bottom:12px}
+@media(max-width:420px){.race-top{height:60px;padding:6px}.race-top button{font-size:12px;padding:8px}.race-score{gap:6px;font-size:14px}.race-controls{height:96px}.race-controls button .icon{width:40px;height:40px}}

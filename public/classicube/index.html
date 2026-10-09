@@ -4,11 +4,38 @@
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#13213d">
 <title>ClassiCube — GamesForChildren</title>
-<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0d1633;color:#fff;font-family:system-ui,-apple-system,sans-serif}#canvas{width:100vw;height:100dvh;display:block;margin:0;border:0;padding:0;background:#000;touch-action:none}#logmsg{position:fixed;top:10px;left:8px;right:8px;padding:9px 12px;font-size:13px;text-align:center;background:#111b3cdc;border-radius:12px;color:white;pointer-events:none}#error{position:fixed;inset:0;display:none;justify-content:center;align-items:center;z-index:2;padding:22px;text-align:center;background:#151a46}#error a{color:#ffe27e}</style>
+<style>
+*,*:before,*:after{box-sizing:border-box}
+html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#071122;color:#fff;font-family:system-ui,-apple-system,sans-serif;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+#canvas{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:fill;border:0;padding:0;margin:0;background:#050b19;touch-action:none;-webkit-tap-highlight-color:transparent}
+#canvas_wrapper{position:fixed!important;inset:0!important;width:100%!important;height:100%!important;overflow:hidden!important}
+#canvas_wrapper #canvas{position:absolute;inset:0;width:100%;height:100%}
+#logmsg{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);max-width:76vw;padding:8px 12px;font-size:12px;text-align:center;background:#111b3cdd;border:1px solid #ffffff44;border-radius:11px;color:white;pointer-events:none;z-index:5}
+#error{position:fixed;inset:0;display:none;justify-content:center;align-items:center;z-index:10;padding:22px;text-align:center;background:#151a46}
+#error a{color:#ffe27e}
+</style>
 </head><body><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div>
 <script>
 (async()=>{
 const status=document.getElementById('logmsg'), canvas=document.getElementById('canvas'), error=document.getElementById('error');
+  // The upstream ClassiCube webclient expects this callback on viewport changes.
+  // Match the WebGL framebuffer to the *visible* iframe bounds; do not crop or stretch.
+  window.resizeGameCanvas=function(){
+    const viewport=window.visualViewport;
+    const width=Math.max(1,Math.round(viewport?.width||document.documentElement.clientWidth||window.innerWidth));
+    const height=Math.max(1,Math.round(viewport?.height||document.documentElement.clientHeight||window.innerHeight));
+    const pixelRatio=window.devicePixelRatio||1;
+    const pixelsWide=Math.max(1,Math.round(width*pixelRatio));
+    const pixelsHigh=Math.max(1,Math.round(height*pixelRatio));
+    if(canvas.width!==pixelsWide)canvas.width=pixelsWide;
+    if(canvas.height!==pixelsHigh)canvas.height=pixelsHigh;
+    canvas.style.width=width+'px';
+    canvas.style.height=height+'px';
+  };
+  window.forceTouchLayout=window.resizeGameCanvas;
+  window.resizeGameCanvas();
+  window.visualViewport?.addEventListener('resize',window.resizeGameCanvas);
+
 try{
  const response=await fetch('/api/me',{credentials:'same-origin'});
  if(!response.ok)throw Error('É necessário entrar no GamesForChildren.');

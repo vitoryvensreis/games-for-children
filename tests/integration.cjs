@@ -31,7 +31,8 @@ test('login, perfis, WebSocket e salas',async()=>{
   const child=await request('login','POST',{name:'Piloto',password:'1234'});assert.equal(child.res.status,200);
   const cubeStatus=await request('classicube/status','GET',null,child.cookie);
   assert.equal(cubeStatus.res.status,200);
-  assert.equal(cubeStatus.data.mode,'local-client');
+  assert.equal(cubeStatus.data.mode,'family-multiplayer');
+  assert.equal(cubeStatus.data.multiplayerConfigured,false,'Mundo precisa do servidor MCGalaxy em execução');
   const notLoggedIn=await fetch(base+'/classicube/index.html');
   assert.equal(notLoggedIn.status,401);
   const cubePage=await fetch(base+'/classicube/index.html',{headers:{Cookie:child.cookie}});

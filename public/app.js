@@ -8,6 +8,7 @@ function login(){app.innerHTML=box('<section class="panel narrow stack"><h1>🚗
 function send(m){if(ws?.readyState===1)ws.send(JSON.stringify(m));else notify('Conexão indisponível')}
 function connect(){ws?.close();ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws');ws.onopen=()=>{if(room)send({type:'join',code:room.code})};ws.onmessage=async e=>{const m=JSON.parse(e.data);if(m.type==='hello'){myId=m.id;send({type:'peers'})}
 if(m.type==='logout'){me=null;room=null;stopVoice();login();notify('Acesso encerrado pelo administrador')}
+if(m.type==='voiceBlocked'){stopVoice();notify('O administrador desligou o chat de voz')}
 if(m.type==='roomState'){room=m;if(me?.role==='child')race();else showAdminRoom();send({type:'peers'})}
 if(m.type==='frame'){frame=m;const el=$('#clock');if(el)el.textContent=m.remaining+'s';const mine=m.players.find(p=>p.id===me?.id);if(mine){const points=$('#points');if(points)points.textContent=mine.score} }
 if(m.type==='finished'){const lines=m.ranking.map((p,i)=>(i?'🥈 ':'🏆 ')+p.name+' — '+p.score+' pontos').join(' | ');notify('Fim da corrida! '+lines);const el=$('#finish');if(el){el.textContent=lines;el.style.display='block'}}

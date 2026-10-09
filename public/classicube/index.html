@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#13213d">
+<title>ClassiCube — GamesForChildren</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0d1633;color:#fff;font-family:system-ui,-apple-system,sans-serif}#canvas{width:100vw;height:100dvh;display:block;margin:0;border:0;padding:0;background:#000;touch-action:none}#logmsg{position:fixed;top:10px;left:8px;right:8px;padding:9px 12px;font-size:13px;text-align:center;background:#111b3cdc;border-radius:12px;color:white;pointer-events:none}#error{position:fixed;inset:0;display:none;justify-content:center;align-items:center;z-index:2;padding:22px;text-align:center;background:#151a46}#error a{color:#ffe27e}</style>
+</head><body><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div>
+<script>
+(async()=>{
+const status=document.getElementById('logmsg'), canvas=document.getElementById('canvas'), error=document.getElementById('error');
+try{
+ const response=await fetch('/api/me',{credentials:'same-origin'});
+ if(!response.ok)throw Error('É necessário entrar no GamesForChildren.');
+ const user=(await response.json()).user;
+ const username=(user.name||'Jogador').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_]/g,'').slice(0,16)||'Jogador';
+ // Apenas mundo criativo local: o servidor privado multiplayer exige MCGalaxy/WSS em uma implantação futura.
+ window.Module={
+ preRun:[],postRun:[],arguments:[username],canvas,print:(...args)=>console.log(...args),printErr:(...args)=>console.warn(...args),
+ setStatus:text=>{status.textContent=text;if(!text||text==='All downloads complete.')setTimeout(()=>status.style.display='none',1200)},
+ totalDependencies:0,
+ monitorRunDependencies(left){this.totalDependencies=Math.max(this.totalDependencies,left);this.setStatus(left?'Preparando arquivos... '+(this.totalDependencies-left)+'/'+this.totalDependencies:'All downloads complete.')}
+ };
+ const script=document.createElement('script');script.src='/classicube/ClassiCube.js';script.async=true;script.onerror=()=>{status.style.display='none';error.style.display='flex';error.firstElementChild.textContent='Arquivos do ClassiCube não encontrados na nossa VPS.'};document.body.append(script);
+}catch(e){status.style.display='none';error.style.display='flex';error.firstElementChild.textContent=e.message}
+})();
+</script>
+</body></html>

@@ -160,3 +160,36 @@ html:has(.voxel-screen),body:has(.voxel-screen){height:100%;overflow:hidden;over
 .voxel-card{background:linear-gradient(135deg,#dff4fb,#e3e7ff)}
 @media(max-width:400px){.voxel-top{gap:6px;padding:8px}.voxel-online{font-size:9px;padding:7px}.voxel-top button{padding:8px}.voxel-joystick button{width:45px;height:49px}.voxel-actions button{min-width:90px;min-height:50px}.voxel-title b{font-size:12px}.voxel-help{font-size:10px}}
 @media(min-width:800px){.voxel-hotbar{justify-content:center}.voxel-joystick{bottom:34px;left:30px}.voxel-actions{bottom:38px;right:35px}.voxel-actions button{min-width:138px}.voxel-top{padding:12px 26px}.voxel-title b{font-size:24px}}
+
+
+/* Gorilas no Telhado — arcade responsivo */
+body:has(.gorilla-game){overflow:hidden}
+#app:has(.gorilla-game){position:fixed;inset:0;z-index:9999}
+.gorilla-game{position:fixed;inset:0;display:flex;flex-direction:column;width:100%;height:100dvh;overflow:hidden;background:#161b47;color:#fff;z-index:9999;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);font-family:Nunito,system-ui,sans-serif}
+.gorilla-header{display:flex;flex:0 0 auto;align-items:center;gap:13px;padding:8px 14px;background:linear-gradient(110deg,#242554,#31265b);border-bottom:3px solid #f9b869;min-height:67px}
+.gorilla-header button{min-height:42px;padding:8px 14px;background:#444c8b;box-shadow:none;border-radius:13px;color:#fff}
+.gorilla-header>div:nth-child(2){flex:1;min-width:0;display:flex;flex-direction:column;gap:0}
+.gorilla-header strong{font-weight:1000;letter-spacing:.5px;font-size:clamp(13px,3.8vw,22px)}
+.gorilla-header small{font-size:11px;color:#ffd48a;letter-spacing:2px;text-transform:uppercase;font-weight:900}
+.gorilla-scores{text-align:center;display:flex;flex-direction:column;gap:1px;border-radius:12px;background:#10163785;padding:6px 12px}
+.gorilla-scores b{font-size:20px;color:#fff}
+.gorilla-scores small{font-size:10px;white-space:nowrap;color:#ffe0ab;letter-spacing:0}
+.gorilla-stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;background:#141a40}
+.gorilla-stage canvas{width:100%;max-height:100%;height:100%;object-fit:contain;display:block;touch-action:none}
+.gorilla-notice{position:absolute;top:10px;left:50%;transform:translateX(-50%);max-width:calc(100% - 20px);padding:8px 14px;background:#172047bd;color:#fff;border:1px solid #ffd17d80;border-radius:999px;font-size:clamp(10px,2.8vw,14px);font-weight:900;text-align:center;white-space:nowrap;pointer-events:none}
+.gorilla-bottom{flex:0 0 auto;background:linear-gradient(#2c315d,#171d48);border-top:3px solid #f3b66d;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 14px}
+.gorilla-modes{display:flex;gap:8px;width:100%;justify-content:center}
+.gorilla-modes button{flex:1;max-width:260px;min-height:36px;padding:7px 9px;border:1px solid #ffffff3a;background:#48507f;color:#fff;border-radius:11px;font-size:11px;box-shadow:none}
+.gorilla-modes button.selected{background:#31a898;border-color:#a4f1de}
+.gorilla-aim{display:flex;align-items:center;justify-content:center;width:100%;gap:12px}
+.gorilla-aim label{flex:1;max-width:240px;min-width:0;font-weight:900;font-size:12px;display:flex;flex-direction:column;gap:4px}
+.gorilla-aim label b{color:#ffe088}
+.gorilla-aim input{width:100%;accent-color:#ffd25b;min-height:30px;touch-action:pan-x}
+.gorilla-aim .gorilla-fire{min-height:63px;max-width:170px;padding:8px 15px;border-radius:16px;background:linear-gradient(#ffdb6b,#ff9f45);color:#301f52;border:2px solid #ffeba2;font-size:13px;font-weight:1000;box-shadow:0 4px 0 #b76326}
+.gorilla-aim button:disabled,.gorilla-aim input:disabled{opacity:.58}
+.gorilla-wind{font-size:12px;color:#d9dfff;font-weight:900}
+.gorilla-credit{font-size:9px;color:#adb4d8;text-align:center;max-width:600px}
+.gorilla-card{background:linear-gradient(135deg,#f8e6fc,#def3ff)}
+.pong-serve{position:absolute;top:23%;left:50%;transform:translateX(-50%);padding:12px 18px;z-index:4;background:#172b5bdc;border:2px solid #ffe36d;color:#fff;font-weight:1000;font-size:20px;border-radius:14px;white-space:nowrap;pointer-events:none;text-shadow:0 0 14px #f5d84e}
+.pong-serve[hidden]{display:none}
+@media(max-width:520px){.gorilla-header{gap:7px;padding:6px 8px;min-height:55px}.gorilla-header strong{font-size:12px}.gorilla-header small{font-size:9px}.gorilla-scores b{font-size:16px}.gorilla-bottom{gap:6px;padding:7px 8px}.gorilla-aim{gap:7px}.gorilla-aim label{font-size:10px}.gorilla-aim .gorilla-fire{min-height:55px;font-size:11px;padding:8px}.gorilla-modes button{font-size:10px}.gorilla-credit{font-size:8px}.gorilla-wind{font-size:10px}}

@@ -61,13 +61,18 @@ jobs:
         run: |
           ssh -p "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'set -eu
             cd /home/gamesforchildren/apps/games-for-children
-            cp -f server.cjs server.cjs.previous
+            cp -p server.cjs server.cjs.previous
             mv server.cjs.next server.cjs
-            sudo -n /usr/bin/systemctl restart games-for-children.service
-            for i in 1 2 3 4 5; do
-              if curl --fail --silent http://127.0.0.1:3100/api/health; then exit 0; fi
-              sleep 2
-            done
-            cp server.cjs.previous server.cjs
+            if sudo -n /usr/bin/systemctl restart games-for-children.service; then
+              for i in 1 2 3 4 5; do
+                if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q '\"ok\":true'; then
+                  echo DEPLOY_HEALTH_OK
+                  exit 0
+                fi
+                sleep 2
+              done
+            fi
+            echo DEPLOY_FAILED_ROLLBACK
+            cp -p server.cjs.previous server.cjs
             sudo -n /usr/bin/systemctl restart games-for-children.service
             exit 1'

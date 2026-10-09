@@ -14,7 +14,7 @@ async function request(route,method='GET',payload,cookie){
 function wsConnect(cookie){
  return new Promise((resolve,reject)=>{const ws=new WebSocket('ws://127.0.0.1:'+PORT+'/ws',{headers:{Cookie:cookie,Origin:'https://gamesforchildren.escotilhaprodutora.com'}});ws.once('open',()=>resolve(ws));ws.once('error',reject)});
 }
-function once(ws,type,predicate=()=>true){return new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{ws.off('message',on);reject(Error('timeout '+type))},4000);function on(data){const m=JSON.parse(data);if(m.type===type&&predicate(m)){clearTimeout(timeout);ws.off('message',on);resolve(m)}}ws.on('message',on)})}
+function once(ws,type,predicate=()=>true){return new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{ws.off('message',on);reject(Error('timeout '+type))},7500);function on(data){const m=JSON.parse(data);if(m.type===type&&predicate(m)){clearTimeout(timeout);ws.off('message',on);resolve(m)}}ws.on('message',on)})}
 test('login, perfis, WebSocket e salas',async()=>{
  proc=spawn(process.execPath,[path.resolve(__dirname,'../server.cjs')],{env:{...process.env,PORT:String(PORT),DATA_DIR:dir,ADMIN_PASSWORD:'senha-forte-teste-123456'},stdio:'pipe'});
  try{

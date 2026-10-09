@@ -147,6 +147,7 @@ jobs:
             mkdir -p backup
             cp server.cjs backup/server.cjs
             if test -d public; then cp -a public backup/public; fi
+            if test -d vendor/mcgalaxy/levels; then tar -czf backup/mcgalaxy-levels-latest.tar.gz -C vendor/mcgalaxy levels; fi
             if test -f package.json; then cp package.json backup/package.json; fi
             tar -xzf release.tar.gz
             PATH=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin:$PATH /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund

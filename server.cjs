@@ -98,7 +98,7 @@ const CLASSICUBE_TEXTURES=path.join(CLASSICUBE_DIR,'default.zip');
 
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;
-res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');
+res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options',pathname==='/classicube/index.html'?'SAMEORIGIN':'DENY');
 if(pathname==='/api/health')return json(res,200,{ok:true,service:'games-for-children'});
 if(pathname==='/classicube/index.html'){if(!checkSession(req)){res.writeHead(401);return res.end('Login necessário')} }
 if(pathname==='/static/default.zip')return fs.readFile(CLASSICUBE_TEXTURES,(err,b)=>{if(err){res.writeHead(404);return res.end('Pacote de textura não instalado')}res.writeHead(200,{'Content-Type':'application/zip','Cache-Control':'public, max-age=3600'});res.end(b)});
@@ -148,7 +148,7 @@ return json(res,404,{error:'Rota não encontrada'});
 }
 const file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));if(file.includes('..')||file.startsWith('.')){res.writeHead(403);return res.end()}
 const fp=path.join(publicDir,file);if(!fp.startsWith(publicDir+path.sep)){res.writeHead(403);return res.end()}
-fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'?'no-cache':'public, max-age=3600'});res.end(b)});
+fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.wasm':'application/wasm','.zip':'application/zip','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'?'no-cache':'public, max-age=3600'});res.end(b)});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{error:'Erro interno'})}});
 const wss=new WebSocketServer({noServer:true,maxPayload:8192});
 server.on('upgrade',(req,socket,head)=>{

@@ -156,8 +156,15 @@ jobs:
                     && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/classicube/ClassiCube.js \
                     && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/classicube/ClassiCube.wasm \
                     && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/static/default.zip; then
-                  echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK
-                  exit 0
+                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+                    if timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/25565" 2>/dev/null; then
+                      echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
+                      exit 0
+                    fi
+                    sleep 2
+                  done
+                  echo "::error::O servidor privado MCGalaxy não iniciou em 30 segundos"
+                  /usr/bin/journalctl --no-pager -u games-for-children.service -n 35 || true
                 fi
                 sleep 2
               done

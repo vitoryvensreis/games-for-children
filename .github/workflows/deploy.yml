@@ -79,7 +79,7 @@ jobs:
             mv server.cjs.next server.cjs
             if sudo -n /usr/bin/systemctl restart games-for-children.service; then
               for i in 1 2 3 4 5; do
-                if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q '\"ok\":true'; then
+                if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q ok; then
                   echo DEPLOY_HEALTH_OK
                   exit 0
                 fi

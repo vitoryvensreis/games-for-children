@@ -44,9 +44,15 @@ test('login, perfis, WebSocket e salas',async()=>{
   const spectatorFrame=once(adminWS,'frame');const viewed=await spectatorFrame;assert.equal(viewed.players.length,2);
   const nextFrame=once(socket,'frame');socket.send(JSON.stringify({type:'lane',lane:2,seq:1}));const moved=await nextFrame;assert.equal(moved.players.find(p=>p.id===c.data.user.id).lane,2);assert.equal(moved.players.find(p=>p.id===c.data.user.id).ackSeq,1);
   const rename=await request('admin/users/'+second.data.user.id,'POST',{name:'Segundo Piloto',password:'5678'},adminCookie);assert.equal(rename.res.status,200);
-  const adminSolo=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',solo:true}));const soloRoom=await adminSolo;assert.equal(soloRoom.mode,'player');assert.equal(soloRoom.players[0].id,a.data.user.id);const pongState=once(adminWS,'roomState',m=>m.game==='pong');adminWS.send(JSON.stringify({type:'create',game:'pong',solo:true}));const pong=await pongState;assert.equal(pong.game,'pong');const pongFrame=once(adminWS,'frame',m=>m.game==='pong');const pf=await pongFrame;assert.equal(pf.game,'pong');assert.ok(pf.ball.x>=0&&pf.ball.x<=1);
+  const adminSolo=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',solo:true}));const soloRoom=await adminSolo;assert.equal(soloRoom.mode,'player');assert.equal(soloRoom.players[0].id,a.data.user.id);const pongState=once(adminWS,'roomState',m=>m.game==='pong');adminWS.send(JSON.stringify({type:'create',game:'pong',solo:true}));const pong=await pongState;assert.equal(pong.game,'pong');const pongServing=once(adminWS,'frame',m=>m.game==='pong'&&m.phase==='serve');const serve=await pongServing;
+  assert.equal(serve.ball.x,.5,'Bola precisa partir do centro');
+  assert.equal(serve.ball.y,.5);
+  assert.equal(serve.round,1);
+  assert.ok(serve.serveRemaining>0,'Deve existir contagem de saque');
+  const pongPlaying=once(adminWS,'frame',m=>m.game==='pong'&&m.phase==='play');
+  const pf=await pongPlaying;assert.ok(pf.ball.x>=0&&pf.ball.x<=1);
   await new Promise(r=>setTimeout(r,180));
-  const laterFrame=once(adminWS,'frame',m=>m.game==='pong');
+  const laterFrame=once(adminWS,'frame',m=>m.game==='pong'&&m.phase==='play'&&m.round===pf.round);
   const later=await laterFrame;
   assert.ok(Math.abs(later.ball.x-pf.ball.x)>.04,'Bola do Pong deve percorrer a tela rapidamente');
   const duoStart=once(adminWS,'roomState',m=>m.game==='pong'&&!m.started);

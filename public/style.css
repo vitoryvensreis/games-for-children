@@ -193,3 +193,25 @@ body:has(.gorilla-game){overflow:hidden}
 .pong-serve{position:absolute;top:23%;left:50%;transform:translateX(-50%);padding:12px 18px;z-index:4;background:#172b5bdc;border:2px solid #ffe36d;color:#fff;font-weight:1000;font-size:20px;border-radius:14px;white-space:nowrap;pointer-events:none;text-shadow:0 0 14px #f5d84e}
 .pong-serve[hidden]{display:none}
 @media(max-width:520px){.gorilla-header{gap:7px;padding:6px 8px;min-height:55px}.gorilla-header strong{font-size:12px}.gorilla-header small{font-size:9px}.gorilla-scores b{font-size:16px}.gorilla-bottom{gap:6px;padding:7px 8px}.gorilla-aim{gap:7px}.gorilla-aim label{font-size:10px}.gorilla-aim .gorilla-fire{min-height:55px;font-size:11px;padding:8px}.gorilla-modes button{font-size:10px}.gorilla-credit{font-size:8px}.gorilla-wind{font-size:10px}}
+
+
+/* Bate-papo de voz familiar persistente */
+#voiceDock[hidden]{display:none!important}
+#voiceDock{position:fixed;top:calc(env(safe-area-inset-top) + 72px);right:10px;z-index:25000;max-width:min(94vw,316px);font-family:Nunito,system-ui,-apple-system,sans-serif;pointer-events:none}
+.family-voice-panel{pointer-events:auto;display:flex;align-items:center;gap:7px;background:#102148ed;border:2px solid #93dbffc4;box-shadow:0 6px 23px #0005;border-radius:18px;padding:6px;color:white}
+.family-voice-panel button{border:0;border-radius:13px;padding:10px 9px;background:#4c75c8;color:white;min-width:58px;min-height:45px;font-size:11px;font-weight:900;box-shadow:none!important;white-space:normal;line-height:1.1;touch-action:manipulation}
+.family-voice-panel button.connected{background:#178e80}
+.family-voice-panel button:disabled{opacity:.45}
+.family-voice-info{flex:1;min-width:78px;display:flex;flex-direction:column;gap:4px;font-size:11px;line-height:1.14;text-align:center}
+.family-voice-info strong{font-size:12px;font-weight:1000;white-space:normal}
+.family-voice-info span{font-size:10px;color:#daecff;white-space:normal}
+body:has(.classicube-embed){overflow:hidden}
+#app:has(.classicube-embed){position:fixed;inset:0;z-index:15000}
+.classicube-embed{position:fixed;inset:0;width:100%;height:100dvh;display:flex;flex-direction:column;background:#101d40;color:#fff;z-index:15000;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.classicube-top{flex:0 0 auto;display:flex;align-items:center;gap:14px;padding:9px 12px;min-height:55px;background:#162047}
+.classicube-top button{background:#335293;color:#fff;box-shadow:none;min-height:40px;font-size:13px;border-radius:10px}
+.classicube-top strong{font-size:12px;color:#f1f5ff}
+.classicube-embed iframe{border:0;min-height:0;flex:1;width:100%;background:#000}
+.classicube-card{background:linear-gradient(135deg,#d9f5e4,#e1ebff)}
+body:has(.classicube-embed) #voiceDock{top:calc(env(safe-area-inset-top) + 65px)}
+@media(max-width:400px){#voiceDock{top:calc(env(safe-area-inset-top) + 62px);right:5px;max-width:275px}.family-voice-panel{padding:5px;gap:4px}.family-voice-panel button{min-width:52px;padding:9px 5px;font-size:10px}.family-voice-info strong{font-size:11px}.family-voice-info span{font-size:9px}}

@@ -3,12 +3,18 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {WebSocketServer}=require('ws');
+const webpush=require('web-push');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
 let state={users:[],sessions:[],events:[],games:[]};
 try{state=JSON.parse(fs.readFileSync(DB,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e}
-for(const k of ['users','sessions','events','games'])state[k]??=[];
+for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[];
+const VAPID_PUBLIC_KEY=process.env.VAPID_PUBLIC_KEY||'';
+if(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT){webpush.setVapidDetails(process.env.VAPID_SUBJECT,VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
+const PUSH_READY=Boolean(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
+const TURN_URLS=(process.env.TURN_URLS||'').split(',').map(v=>v.trim()).filter(Boolean);
+const ICE_SERVERS=[{urls:'stun:stun.l.google.com:19302'},...(TURN_URLS.length&&process.env.TURN_USERNAME&&process.env.TURN_PASSWORD?[{urls:TURN_URLS,username:process.env.TURN_USERNAME,credential:process.env.TURN_PASSWORD}]:[])];
 function save(){const tmp=DB+'.tmp';fs.writeFileSync(tmp,JSON.stringify(state),{mode:0o600});fs.renameSync(tmp,DB)}
 const uuid=()=>crypto.randomUUID(), now=()=>Date.now();
 const hash=(s,salt)=>crypto.scryptSync(String(s),salt,64).toString('hex');
@@ -32,7 +38,8 @@ function end(s){touch(s);s.revoked=true;for(const p of peers.values())if(p.sessi
 function userInfo(u){return {id:u.id,name:u.name,role:u.role,enabled:u.enabled,loginEnabled:u.loginEnabled,dailyLimit:u.dailyLimit,voiceEnabled:u.voiceEnabled,usedSeconds:Math.floor(usage(u)/1000),online:activeUser(u)}}
 function json(res,status,obj,cookie){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end(JSON.stringify(obj))}
 function readBody(req){return new Promise((resolve,reject)=>{let text='';req.on('data',b=>{text+=b;if(text.length>20000){reject(Error('payload excessivo'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(Error('JSON inválido'))}});req.on('error',reject)})}
-function track(u,type){state.events.unshift({id:uuid(),userId:u.id,name:u.name,type,at:now()});state.events=state.events.slice(0,1000);save();admins({type:'notice',text:u.name+': '+type})}
+async function pushAdmins(title,body){if(!PUSH_READY)return;const targets=state.pushSubscriptions.filter(s=>state.users.some(u=>u.id===s.userId&&u.role==='admin'&&u.enabled));await Promise.allSettled(targets.map(async entry=>{try{await webpush.sendNotification(entry.subscription,JSON.stringify({title,body,url:'/'}),{TTL:90,urgency:'normal'})}catch(err){if(err.statusCode===404||err.statusCode===410){state.pushSubscriptions=state.pushSubscriptions.filter(s=>s.endpoint!==entry.endpoint);save()}else console.error('Push falhou:',err.statusCode||err.message)}}))}
+function track(u,type){state.events.unshift({id:uuid(),userId:u.id,name:u.name,type,at:now()});state.events=state.events.slice(0,1000);save();admins({type:'notice',text:u.name+': '+type});if(u.role==='child'&&['online','offline','entrou','desconectado pelo ADM'].includes(type))void pushAdmins('GamesForChildren',u.name+' — '+type)}
 const peers=new Map(), rooms=new Map();
 function emit(ws,o){if(ws.readyState===1)ws.send(JSON.stringify(o))}
 function admins(o){for(const p of peers.values())if(p.user.role==='admin')emit(p.ws,o)}
@@ -66,6 +73,10 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
+if(pathname==='/api/voice/config'&&req.method==='GET')return json(res,200,{iceServers:ICE_SERVERS,turnConfigured:ICE_SERVERS.length>1});
+if(pathname==='/api/push/key'&&req.method==='GET')return json(res,200,{enabled:PUSH_READY,key:VAPID_PUBLIC_KEY});
+if(pathname==='/api/push/subscribe'&&req.method==='POST'){if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});if(!PUSH_READY)return json(res,503,{error:'Notificações ainda não configuradas'});const b=await readBody(req),sub=b.subscription;if(typeof sub?.endpoint!=='string'||!sub.endpoint.startsWith('https://')||typeof sub.keys?.p256dh!=='string'||typeof sub.keys?.auth!=='string')return json(res,400,{error:'Assinatura inválida'});state.pushSubscriptions=state.pushSubscriptions.filter(x=>x.endpoint!==sub.endpoint);state.pushSubscriptions.push({userId:u.id,endpoint:sub.endpoint,subscription:{endpoint:sub.endpoint,keys:{p256dh:sub.keys.p256dh,auth:sub.keys.auth}}});save();return json(res,200,{ok:true})}
+if(pathname==='/api/push/unsubscribe'&&req.method==='POST'){const b=await readBody(req);state.pushSubscriptions=state.pushSubscriptions.filter(x=>x.userId!==u.id||x.endpoint!==b.endpoint);save();return json(res,200,{ok:true})}
 if(pathname==='/api/logout'&&req.method==='POST'){end(s);return json(res,200,{ok:true},'gfc_sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0')}
 if(u.role!=='admin')return json(res,403,{error:'Acesso restrito'});
 if(pathname==='/api/admin/overview'&&req.method==='GET')return json(res,200,{users:state.users.filter(x=>x.role==='child').map(userInfo),events:state.events.slice(0,50),games:state.games.slice(-30).reverse(),rooms:[...rooms.values()].map(r=>({code:r.code,game:r.game,players:[...r.players].map(id=>state.users.find(u=>u.id===id)?.name),started:r.started,finished:r.finished}))});
@@ -96,6 +107,6 @@ if(m.type==='signal'&&p.room&&typeof m.to==='string'&&['offer','answer','ice'].i
 if(m.type==='peers'&&p.room){emit(ws,{type:'peers',items:[...peers.values()].filter(q=>q.room===p.room&&q!==p).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}
 if(m.type==='voice-ready'&&p.room&&(u.role==='admin'||u.voiceEnabled)){for(const q of peers.values())if(q!==p&&q.room===p.room)emit(q.ws,{type:'voiceReady',id:p.id,name:u.name,role:u.role})}
 });
-ws.on('close',()=>{leaveRoom(p);peers.delete(p.id);touch(s);save();report()})});
+ws.on('close',()=>{leaveRoom(p);peers.delete(p.id);touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT));

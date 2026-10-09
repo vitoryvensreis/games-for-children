@@ -27,7 +27,7 @@ jobs:
     needs: validate
     if: ${{ vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - name: Configurar SSH e verificar identidade
@@ -62,42 +62,40 @@ jobs:
             echo "::error::TCP_PORT_UNREACHABLE: runner não alcança SSH da VPS"
             exit 1
           fi
-      - name: Obter client oficial ClassiCube via HTTPS
+      - name: Restaurar compilação ClassiCube em cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            public/classicube/ClassiCube.js
+            public/classicube/ClassiCube.wasm
+            public/classicube/default.zip
+          key: classicube-web-1.3.8-ubuntu-emscripten-v1
+      - name: Compilar ClassiCube oficial para web, quando necessário
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p public/classicube
-          ok=0
-          for url in \
-            "https://cs.classicube.net/client/latest/ClassiCube.js" \
-            "https://cs.classicube.net/c_client/latest/ClassiCube.js" \
-            "https://static.classicube.net/client/latest/ClassiCube.js"; do
-            echo "Tentando origem oficial: $url"
-            if curl --fail --location --silent --show-error --retry 1 --max-time 35 --proto '=https' --proto-redir '=https' \
-              "$url" -o public/classicube/ClassiCube.js.tmp; then
-              if test "$(wc -c < public/classicube/ClassiCube.js.tmp)" -gt 100000 && grep -q 'Module' public/classicube/ClassiCube.js.tmp; then
-                mv public/classicube/ClassiCube.js.tmp public/classicube/ClassiCube.js
-                ok=1
-                break
-              fi
-            fi
-          done
-          if [ "$ok" != 1 ]; then
-            echo "::warning::ClassiCube upstream não está acessível por HTTPS seguro. Portal fica inativo até disponibilizar assets confiáveis."
-            rm -f public/classicube/ClassiCube.js.tmp public/classicube/ClassiCube.js
+          if test -s public/classicube/ClassiCube.js && test -s public/classicube/ClassiCube.wasm && test -s public/classicube/default.zip; then
+            echo "ClassiCube oficial recuperado do cache seguro."
           else
-            if curl --fail --location --silent --show-error --retry 2 --max-time 60 --proto '=https' --proto-redir '=https' \
-              "https://static.classicube.net/default.zip" -o public/classicube/default.zip; then
-              test "$(wc -c < public/classicube/default.zip)" -gt 10000
-              head -c 2 public/classicube/default.zip | od -An -tx1 | tr -d ' ' | grep -q '^504b'
-              echo "Client ClassiCube e texturas hospedados localmente:"
-              sha256sum public/classicube/ClassiCube.js public/classicube/default.zip
-            else
-              echo "::warning::Texturas oficiais indisponíveis via HTTPS; ClassiCube ficará temporariamente inativo"
-              rm -f public/classicube/default.zip
-            fi
+            echo "Compilando fontes oficiais ClassiCube, versão 1.3.8, no runner de CI."
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq emscripten
+            git clone --depth 1 --branch 1.3.8 https://github.com/ClassiCube/ClassiCube.git /tmp/classicube-official
+            cd /tmp/classicube-official
+            git rev-parse HEAD
+            make web RELEASE=1
+            test -s ClassiCube.js
+            test -s ClassiCube.wasm
+            cp ClassiCube.js ClassiCube.wasm "$GITHUB_WORKSPACE/public/classicube/"
+            cp misc/cc_textures.zip "$GITHUB_WORKSPACE/public/classicube/default.zip"
+            cd "$GITHUB_WORKSPACE"
           fi
-          rm -f public/classicube/ClassiCube.js.tmp
+          test "$(wc -c < public/classicube/ClassiCube.js)" -gt 50000
+          test "$(wc -c < public/classicube/ClassiCube.wasm)" -gt 200000
+          test "$(wc -c < public/classicube/default.zip)" -gt 10000
+          head -c 4 public/classicube/ClassiCube.wasm | od -An -tx1 | tr -d ' ' | grep -q '^0061736d'
+          sha256sum public/classicube/ClassiCube.js public/classicube/ClassiCube.wasm public/classicube/default.zip
       - name: Empacotar aplicação
         run: tar -czf release.tar.gz server.cjs package.json public database
       - name: Enviar servidor

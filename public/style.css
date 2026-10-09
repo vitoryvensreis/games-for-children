@@ -92,3 +92,38 @@ html:has(.race-screen),body:has(.race-screen){height:100%;overflow:hidden;oversc
 .snake-controls>div{display:flex;gap:8px}
 .snake-controls button{padding:8px 12px;min-height:42px;box-shadow:none;background:#ffc442;color:#192149}
 body:has(.mini-game){overflow:hidden}
+
+
+/* Games Arcade v3: Pong / Snake */
+.mini-game{background:radial-gradient(circle at 50% -20%,#3c377f,#111a44 72%);color:#fff}
+.mini-game .mini-header{height:72px;padding:10px max(12px,env(safe-area-inset-right));background:linear-gradient(90deg,#161647,#22215c);border-bottom:2px solid #6c68c7;gap:8px}
+.mini-game .mini-header button{border-radius:12px;min-width:42px;min-height:43px;padding:8px;background:#384288;box-shadow:none;color:white}
+.mini-title{display:flex;flex-direction:column;gap:2px;min-width:0;line-height:1.1;text-align:left}
+.mini-title small{font-size:9px;font-weight:900;letter-spacing:2px;color:#63e6ed}
+.mini-title strong{font-size:clamp(13px,4.1vw,24px);font-weight:1000;letter-spacing:.6px;white-space:nowrap}
+.mini-time{display:flex;gap:4px;align-items:center;border-radius:12px;background:#080e348a;border:1px solid #747aba88;padding:10px;font-size:14px}
+.mini-game .mini-stage{background:radial-gradient(ellipse at center,#322968,#14142e)}
+.mini-game .mini-stage canvas{width:auto;height:100%;max-width:100%;max-height:100%;object-fit:contain}
+.pong-game .pong-stage canvas{aspect-ratio:360/560;border-left:3px solid #1bf4db55;border-right:3px solid #ff5bcc55}
+.pong-score{position:absolute;top:10px;left:50%;transform:translateX(-50%);color:#f7f7ff;letter-spacing:3px;text-shadow:0 0 16px #ffffff;z-index:2;font-weight:1000;font-size:clamp(20px,6vw,35px);pointer-events:none}
+.pong-score span{color:#fbd75c;padding:0 10px}
+.pong-controls{min-height:90px!important;display:flex;flex-direction:row;gap:8px;align-items:center;justify-content:space-between;padding:9px 10px!important;background:#14183f}
+.pong-controls button{background:linear-gradient(160deg,#53f5e5,#23b4d7);border-radius:16px;min-height:64px;flex:1;color:#0c2755;font-weight:1000;font-size:14px;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 0 #0a7697;touch-action:none}
+.pong-controls button .icon{width:23px;height:23px}
+.pong-controls span{flex:1;max-width:115px;font-size:11px;line-height:1.3;color:#b6cef1}
+.mini-game .mini-voice-status{min-height:22px;font-size:10px;text-align:center;padding:4px;background:#0f173f;color:#cdd6f7}
+.snake-game .mini-header{border-bottom:2px solid #38dcbf}
+.snake-stat{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 9px;background:#ffffff0b;border:1px solid #ffffff21;border-radius:12px}
+.snake-stat b{font-size:19px;color:#ffe571;line-height:1.1}
+.snake-stat small{font-size:8px;color:#a4c9dc;font-weight:900;letter-spacing:1px}
+.snake-game .snake-stage{background:radial-gradient(circle at center,#216b88,#101d46);padding:5px}
+.snake-game .snake-stage canvas{aspect-ratio:4/5;border:3px solid #51d5d0;border-radius:13px;box-shadow:0 0 24px #16bca95b,0 0 80px #06414a6b;touch-action:none}
+.snake-game .snake-controls{height:160px;min-height:160px;gap:7px;padding:9px 12px!important;background:linear-gradient(#101b45,#091236)}
+.snake-controls button{min-height:45px;min-width:56px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(#50eccb,#21b5bd);color:#102847;box-shadow:0 3px 0 #0e6c7e;touch-action:none}
+.snake-controls button .icon{width:27px;height:27px}
+.snake-controls>div{gap:10px}
+.snake-controls>div button{flex:1}
+.snake-game .mini-overlay{z-index:5;backdrop-filter:blur(5px)}
+.snake-game .mini-overlay[hidden]{display:none}
+.snake-game .mini-overlay .wait-card button{background:linear-gradient(#ffe16c,#ffab40);color:#25214c}
+@media(max-width:380px){.mini-game .mini-header{padding:6px;gap:5px;height:60px}.mini-title small{display:none}.mini-title strong{font-size:12px}.mini-time{font-size:11px;padding:7px}.snake-stat{padding:3px 5px}.snake-stat b{font-size:15px}.pong-controls span{font-size:10px}}

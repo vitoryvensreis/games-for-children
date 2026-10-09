@@ -74,6 +74,7 @@ const m=pathname.match(/^\/api\/admin\/users\/([a-f0-9-]+)(?:\/(kick))?$/);
 if(m&&req.method==='POST'){const child=state.users.find(x=>x.id===m[1]&&x.role==='child');if(!child)return json(res,404,{error:'Não encontrado'});if(m[2]==='kick'){child.version++;for(const a of state.sessions.filter(a=>a.userId===child.id&&!a.revoked))end(a);track(child,'desconectado pelo ADM');report();return json(res,200,{ok:true})}
 const b=await readBody(req);
 for(const key of ['enabled','loginEnabled','voiceEnabled'])if(typeof b[key]==='boolean')child[key]=b[key];
+if(!child.voiceEnabled){for(const peer of peers.values())if(peer.user.id===child.id)emit(peer.ws,{type:'voiceBlocked'})}
 if(Number.isInteger(b.dailyLimit)&&b.dailyLimit>=0&&b.dailyLimit<=1440)child.dailyLimit=b.dailyLimit;
 if(!child.enabled||usage(child)>=child.dailyLimit*60000){child.version++;for(const a of state.sessions.filter(a=>a.userId===child.id&&!a.revoked))end(a)}
 save();report();return json(res,200,{user:userInfo(child)})}

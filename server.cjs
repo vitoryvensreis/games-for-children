@@ -34,7 +34,7 @@ const bucket=new Map();
 function limit(ip){const a=bucket.get(ip)||[];const b=a.filter(t=>now()-t<900000);b.push(now());bucket.set(ip,b);return b.length<=15}
 function localDay(t){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Fortaleza',year:'numeric',month:'2-digit',day:'2-digit'}).format(t)}
 function usage(u){const d=localDay(now());return state.sessions.filter(s=>s.userId===u.id).reduce((sum,s)=>sum+(s.daily?.[d]||0),0)}
-function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws.readyState===1)}
+function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws.readyState===1)||state.sessions.some(s=>s.userId===u.id&&!s.revoked&&s.expires>now()&&s.lastSeen&&now()-s.lastSeen<45000)}
 function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=Math.min(t-s.lastTick,15000);s.lastTick=t;if(delta>0&&delta<16000){const k=localDay(t);s.daily??={};s.daily[k]=(s.daily[k]||0)+delta}}
 function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
 function end(s){touch(s);s.revoked=true;for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
@@ -76,6 +76,7 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
+if(pathname==='/api/heartbeat'&&req.method==='POST'){const was=activeUser(u);touch(s);s.lastSeen=now();save();if(!was&&u.role==='child')track(u,'online');report();return json(res,200,{ok:true,online:true})}
 if(pathname.startsWith('/api/photos/')&&req.method==='GET'){const id=pathname.slice('/api/photos/'.length),target=state.users.find(x=>x.id===id);if(!target||!target.photo||(u.role!=='admin'&&u.id!==id))return json(res,404,{error:'Foto indisponível'});const match=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(target.photo);if(!match)return json(res,404,{error:'Foto inválida'});res.writeHead(200,{'Content-Type':'image/'+match[1],'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});return res.end(Buffer.from(match[2],'base64'))}
 if(pathname==='/api/voice/config'&&req.method==='GET')return json(res,200,{iceServers:ICE_SERVERS,turnConfigured:ICE_SERVERS.length>1});
 if(pathname==='/api/push/key'&&req.method==='GET')return json(res,200,{enabled:PUSH_READY,key:VAPID_PUBLIC_KEY});
@@ -88,6 +89,8 @@ if(pathname==='/api/admin/users'&&req.method==='POST'){const b=await readBody(re
 const m=pathname.match(/^\/api\/admin\/users\/([a-f0-9-]+)(?:\/(kick))?$/);
 if(m&&req.method==='POST'){const child=state.users.find(x=>x.id===m[1]&&x.role==='child');if(!child)return json(res,404,{error:'Não encontrado'});if(m[2]==='kick'){child.version++;for(const a of state.sessions.filter(a=>a.userId===child.id&&!a.revoked))end(a);track(child,'desconectado pelo ADM');report();return json(res,200,{ok:true})}
 const b=await readBody(req);
+if(Object.prototype.hasOwnProperty.call(b,'name')){const n=String(b.name||'').trim().slice(0,32);if(n.length<2||state.users.some(x=>x.id!==child.id&&x.name.toLowerCase()===n.toLowerCase()))return json(res,400,{error:'Nome inválido ou já cadastrado'});child.name=n}
+if(Object.prototype.hasOwnProperty.call(b,'password')){const p=String(b.password||'');if(p.length<4||p.length>100)return json(res,400,{error:'PIN precisa ter de 4 a 100 caracteres'});child.pass=password(p);child.version++;for(const session of state.sessions.filter(x=>x.userId===child.id&&!x.revoked))end(session)}
 if(Object.prototype.hasOwnProperty.call(b,'photo')){
  if(b.photo===null){delete child.photo}
  else {const p=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(b.photo||'');if(!p||p[2].length>180000||Buffer.from(p[2],'base64').length>110000)return json(res,400,{error:'Foto inválida ou muito grande (máximo 110 KB)'});child.photo=b.photo}

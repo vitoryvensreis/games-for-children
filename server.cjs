@@ -107,7 +107,18 @@ const fp=path.join(publicDir,file);if(!fp.startsWith(publicDir+path.sep)){res.wr
 fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'?'no-cache':'public, max-age=3600'});res.end(b)});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{error:'Erro interno'})}});
 const wss=new WebSocketServer({noServer:true,maxPayload:8192});
-server.on('upgrade',(req,socket,head)=>{if(new URL(req.url,'http://local').pathname!=='/ws'||req.headers.origin!=='https://gamesforchildren.escotilhaprodutora.com'){socket.destroy();return}const auth=checkSession(req);if(!auth){socket.destroy();return}wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))});
+server.on('upgrade',(req,socket,head)=>{
+ const pathname=new URL(req.url,'http://local').pathname;
+ const origin=req.headers.origin;
+ if(pathname!=='/ws'||origin!=='https://gamesforchildren.escotilhaprodutora.com'){
+   console.warn('[WS] Rejeitado: caminho/origem',pathname,origin||'(ausente)');
+   socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return;
+ }
+ const auth=checkSession(req);
+ if(!auth){console.warn('[WS] Rejeitado: sessão ausente ou inválida');socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}
+ console.log('[WS] Upgrade aceito para papel:',auth.u.role);
+ wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))
+});
 wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});report();
 ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
 if(m.type==='create'&&u.role==='child'){let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const r={code,game:'race',players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;emit(ws,roomState(r));if(m.solo===true)start(r);report()}

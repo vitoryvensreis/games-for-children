@@ -127,3 +127,36 @@ body:has(.mini-game){overflow:hidden}
 .snake-game .mini-overlay[hidden]{display:none}
 .snake-game .mini-overlay .wait-card button{background:linear-gradient(#ffe16c,#ffab40);color:#25214c}
 @media(max-width:380px){.mini-game .mini-header{padding:6px;gap:5px;height:60px}.mini-title small{display:none}.mini-title strong{font-size:12px}.mini-time{font-size:11px;padding:7px}.snake-stat{padding:3px 5px}.snake-stat b{font-size:15px}.pong-controls span{font-size:10px}}
+
+
+/* Mundo de Blocos 3D */
+html:has(.voxel-screen),body:has(.voxel-screen){height:100%;overflow:hidden;overscroll-behavior:none}
+#app:has(.voxel-screen){position:fixed;inset:0;z-index:9999}
+.voxel-screen{position:fixed;inset:0;width:100%;height:100dvh;display:flex;flex-direction:column;background:#18284b;color:#fff;overflow:hidden;z-index:10000;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);font-family:system-ui,-apple-system,sans-serif}
+.voxel-view{flex:1;min-height:0;position:relative;overflow:hidden;touch-action:none;background:linear-gradient(#80cfff,#bde9ff)}
+.voxel-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.voxel-top{position:absolute;z-index:5;left:0;right:0;top:0;display:flex;align-items:center;gap:10px;min-height:65px;padding:8px 12px;background:linear-gradient(#182443ed,#18244388,transparent)}
+.voxel-top button{min-height:40px;border:1px solid #ffffff80;border-radius:12px;background:#253e6bcf;color:white;font-size:13px;padding:10px 15px;box-shadow:none}
+.voxel-title{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;text-shadow:0 1px 5px #0c2350}
+.voxel-title b{font-size:clamp(13px,3.7vw,21px);font-weight:1000;letter-spacing:.6px;white-space:nowrap}
+.voxel-title small{font-size:10px;color:#f2ffff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.voxel-online{border-radius:99px;background:#135f4ad9;padding:8px 11px;white-space:nowrap;font-size:11px;font-weight:800;border:1px solid #86f3c466}
+.voxel-crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;font-size:40px;line-height:25px;color:#ffdd56;text-shadow:0 2px 5px #222c51,0 0 7px #222c51;pointer-events:none;font-weight:500}
+.voxel-help{position:absolute;top:75px;left:50%;transform:translateX(-50%);z-index:3;padding:7px 13px;border-radius:99px;background:#182c54ad;color:white;font-size:11px;white-space:nowrap;pointer-events:none}
+.voxel-joystick{position:absolute;z-index:5;bottom:16px;left:max(13px,env(safe-area-inset-left));display:flex;flex-direction:column;align-items:center;gap:5px;touch-action:none}
+.voxel-joystick>div{display:flex;gap:5px}
+.voxel-joystick button{width:54px;height:54px;display:grid;place-items:center;padding:0;min-height:0;border:2px solid #e6fbffb9;border-radius:15px;background:#1d3c64bd;color:#fff;font-weight:900;font-size:28px;box-shadow:0 4px 9px #04152866;touch-action:none;user-select:none;-webkit-user-select:none}
+.voxel-joystick button.active{background:#55b9e2e0;transform:translateY(2px)}
+.voxel-actions{position:absolute;bottom:20px;right:max(13px,env(safe-area-inset-right));z-index:5;display:flex;flex-direction:column;gap:10px}
+.voxel-actions button{min-width:106px;min-height:55px;padding:10px 13px;border-radius:16px;color:#fff;font-size:15px;font-weight:900;box-shadow:0 5px 0 #171c38a8;touch-action:manipulation}
+.voxel-break{background:linear-gradient(135deg,#e75c60,#9e354e)!important}.voxel-place{background:linear-gradient(135deg,#4bcb84,#158d75)!important}
+.voxel-hotbar{flex:0 0 auto;min-height:84px;display:flex;align-items:center;gap:8px;padding:9px max(10px,env(safe-area-inset-left)) 10px;overflow-x:auto;scroll-snap-type:x proximity;background:linear-gradient(#182c55,#101d3b);border-top:3px solid #ffd377}
+.voxel-hotbar button{flex:0 0 71px;min-height:59px;padding:6px 3px;border-radius:13px;border:2px solid #758cad;background:#27385a;color:#eff8ff;box-shadow:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;scroll-snap-align:center}
+.voxel-hotbar button.chosen{border-color:#ffe276;background:#425082;box-shadow:0 0 0 2px #eac54c66}
+.voxel-hotbar button i{height:24px;width:28px;border-radius:4px;display:block;background:var(--swatch);border:2px solid #fff5;box-shadow:inset 0 5px #ffffff42,inset -5px -3px #0000002b}
+.voxel-hotbar button span{font-size:10px;font-weight:800}
+.voxel-flash{position:absolute;z-index:7;top:26%;left:50%;transform:translateX(-50%);background:#1e2954e6;border:1px solid #ffffff4d;border-radius:12px;padding:11px 16px;color:white;text-align:center;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .18s}
+.voxel-flash.show{opacity:1}
+.voxel-card{background:linear-gradient(135deg,#dff4fb,#e3e7ff)}
+@media(max-width:400px){.voxel-top{gap:6px;padding:8px}.voxel-online{font-size:9px;padding:7px}.voxel-top button{padding:8px}.voxel-joystick button{width:45px;height:49px}.voxel-actions button{min-width:90px;min-height:50px}.voxel-title b{font-size:12px}.voxel-help{font-size:10px}}
+@media(min-width:800px){.voxel-hotbar{justify-content:center}.voxel-joystick{bottom:34px;left:30px}.voxel-actions{bottom:38px;right:35px}.voxel-actions button{min-width:138px}.voxel-top{padding:12px 26px}.voxel-title b{font-size:24px}}

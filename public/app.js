@@ -104,7 +104,7 @@ function snake(){
  $('#snakeAgain').onclick=restart;
  function endGame(){over=true;clearInterval(snakeTimer);$('#snakeEndTitle').textContent=score>=best&&score>0?'Novo recorde!':'Boa tentativa!';$('#snakeEndScore').textContent=score+' pontos';$('#snakeEnd').hidden=false}
  function step(){
-  if(over)return;dir=next;const head={x:(body[0].x+dir.x+cols)%cols,y:(body[0].y+dir.y+rows)%rows};
+  if(over)return;dir=next;const head=window.nextSnakeCell(body[0],dir,cols,rows);
   const eating=head.x===food.x&&head.y===food.y;
   if(body.slice(0,eating?body.length:-1).some(p=>p.x===head.x&&p.y===head.y)){endGame();return}
   body.unshift(head);if(eating){score+=10;$('#snakeScore').textContent=score;if(score>best){best=score;$('#snakeBest').textContent=best;try{localStorage.setItem(key,String(best))}catch{}}for(let j=0;j<14;j++)sparkles.push({x:food.x*unit+10,y:food.y*unit+10,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,life:1});food=spawnFood()}else body.pop()

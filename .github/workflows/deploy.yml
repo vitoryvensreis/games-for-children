@@ -1,0 +1,73 @@
+name: Deploy GamesForChildren
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-gamesforchildren
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check server.cjs
+
+  deploy:
+    needs: validate
+    if: ${{ vars.ENABLE_DEPLOY == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar SSH e verificar identidade
+        env:
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          FP: ${{ secrets.VPS_HOST_FINGERPRINT }}
+          HOST: ${{ secrets.VPS_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
+          actual="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk 'NR==1 {print $2}')"
+          test "$actual" = "$FP"
+          ssh-keygen -F "$HOST" -f ~/.ssh/known_hosts >/dev/null
+      - name: Enviar servidor
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          scp -B -P "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server.cjs "$USER@$HOST:/home/gamesforchildren/apps/games-for-children/server.cjs.next"
+      - name: Ativar e validar nova versão
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          ssh -p "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'set -eu
+            cd /home/gamesforchildren/apps/games-for-children
+            cp -f server.cjs server.cjs.previous
+            mv server.cjs.next server.cjs
+            sudo -n /usr/bin/systemctl restart games-for-children.service
+            for i in 1 2 3 4 5; do
+              if curl --fail --silent http://127.0.0.1:3100/api/health; then exit 0; fi
+              sleep 2
+            done
+            cp server.cjs.previous server.cjs
+            sudo -n /usr/bin/systemctl restart games-for-children.service
+            exit 1'

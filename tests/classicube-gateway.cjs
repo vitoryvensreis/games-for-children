@@ -35,11 +35,11 @@ test('Gateway ClassiCube: authenticated binary proxy to localhost only',async()=
   assert.ok(forwarded,'No packets forwarded to local MCGalaxy');
   assert.equal(forwarded.length,131);
   const sentName=forwarded.subarray(2,66).toString('ascii').trim();
-  assert.ok(sentName.startsWith('Administrador_'),sentName);
+  assert.match(sentName,/^Administrad_[a-f0-9]{4}$/i);
   assert.notEqual(sentName,'ForgedUsername');
   const following=Buffer.from([5,4,3,2,1]);ws.send(following);
   for(let i=0;i<35&&incoming.length<2;i++)await pause(20);
   assert.deepEqual(incoming[1],following);
   ws.close();
- }finally{child?.kill('SIGTERM');serverSocket?.destroy();await new Promise(r=>server.close(r));fs.rmSync(data,{recursive:true,force:true})}
+ }finally{if(child){child.kill('SIGTERM');await Promise.race([new Promise(r=>child.once('exit',r)),pause(1800)])}serverSocket?.destroy();await new Promise(r=>server.close(r));fs.rmSync(data,{recursive:true,force:true,maxRetries:8,retryDelay:120})}
 });

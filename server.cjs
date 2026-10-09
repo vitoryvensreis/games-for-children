@@ -4,6 +4,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const {WebSocketServer}=require('ws');
 const webpush=require('web-push');
+const sqlStore=require('./database/store.cjs');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
@@ -15,16 +16,18 @@ if(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT){w
 const PUSH_READY=Boolean(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
 const TURN_URLS=(process.env.TURN_URLS||'').split(',').map(v=>v.trim()).filter(Boolean);
 const ICE_SERVERS=[{urls:'stun:stun.l.google.com:19302'},...(TURN_URLS.length&&process.env.TURN_USERNAME&&process.env.TURN_PASSWORD?[{urls:TURN_URLS,username:process.env.TURN_USERNAME,credential:process.env.TURN_PASSWORD}]:[])];
-function save(){const tmp=DB+'.tmp';fs.writeFileSync(tmp,JSON.stringify(state),{mode:0o600});fs.renameSync(tmp,DB)}
+function save(){const tmp=DB+'.tmp';fs.writeFileSync(tmp,JSON.stringify(state),{mode:0o600});fs.renameSync(tmp,DB);sqlStore.persist(state)}
 const uuid=()=>crypto.randomUUID(), now=()=>Date.now();
 const hash=(s,salt)=>crypto.scryptSync(String(s),salt,64).toString('hex');
 function password(pass){const salt=crypto.randomBytes(16).toString('hex');return salt+':'+hash(pass,salt)}
 function verify(pass,stored){try{const [salt,h]=stored.split(':');return crypto.timingSafeEqual(Buffer.from(hash(pass,salt),'hex'),Buffer.from(h,'hex'))}catch{return false}}
+function ensureAdmin(){
 if(!state.users.some(u=>u.role==='admin')){
  const p=process.env.ADMIN_PASSWORD||'';
  if(p.length<12)throw Error('Defina ADMIN_PASSWORD com 12+ caracteres no systemd antes de iniciar o aplicativo');
  state.users.push({id:uuid(),name:'Administrador',role:'admin',pass:password(p),enabled:true,loginEnabled:true,dailyLimit:1440,version:0,voiceEnabled:true});save();
  console.log('Administrador criado; remova ADMIN_PASSWORD do ambiente depois do primeiro start');
+}
 }
 const ADMIN=()=>state.users.find(u=>u.role==='admin');
 const bucket=new Map();
@@ -109,4 +112,5 @@ if(m.type==='voice-ready'&&p.room&&(u.role==='admin'||u.voiceEnabled)){for(const
 });
 ws.on('close',()=>{leaveRoom(p);peers.delete(p.id);touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
-server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT));
+async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
+boot();

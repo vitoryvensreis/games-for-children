@@ -13,6 +13,7 @@ if(m.type==='roomState'){room=m;if(me?.role==='child')race();else showAdminRoom(
 if(m.type==='frame'){frame=m;const el=$('#clock');if(el)el.textContent=m.remaining+'s';const mine=m.players.find(p=>p.id===me?.id);if(mine){const points=$('#points');if(points)points.textContent=mine.score} }
 if(m.type==='finished'){const lines=m.ranking.map((p,i)=>(i?'🥈 ':'🏆 ')+p.name+' — '+p.score+' pontos').join(' | ');notify('Fim da corrida! '+lines);const el=$('#finish');if(el){el.textContent=lines;el.style.display='block'}}
 if(m.type==='error')notify(m.message);
+if(m.type==='notice')notify(m.text);
 if(m.type==='notice'&&me?.role==='admin'){notify(m.text);if(Notification.permission==='granted')new Notification('GamesForChildren',{body:m.text})}
 if(m.type==='adminUpdate'&&me?.role==='admin')refreshAdmin();
 if(m.type==='peers'){for(const p of m.items)if(p.id!==myId)maybeCall(p)}

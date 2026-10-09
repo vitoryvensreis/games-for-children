@@ -14,7 +14,7 @@ async function request(route,method='GET',payload,cookie){
 function wsConnect(cookie){
  return new Promise((resolve,reject)=>{const ws=new WebSocket('ws://127.0.0.1:'+PORT+'/ws',{headers:{Cookie:cookie,Origin:'https://gamesforchildren.escotilhaprodutora.com'}});ws.once('open',()=>resolve(ws));ws.once('error',reject)});
 }
-function once(ws,type){return new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{ws.off('message',on);reject(Error('timeout '+type))},4000);function on(data){const m=JSON.parse(data);if(m.type===type){clearTimeout(timeout);ws.off('message',on);resolve(m)}}ws.on('message',on)})}
+function once(ws,type,predicate=()=>true){return new Promise((resolve,reject)=>{const timeout=setTimeout(()=>{ws.off('message',on);reject(Error('timeout '+type))},4000);function on(data){const m=JSON.parse(data);if(m.type===type&&predicate(m)){clearTimeout(timeout);ws.off('message',on);resolve(m)}}ws.on('message',on)})}
 test('login, perfis, WebSocket e salas',async()=>{
  proc=spawn(process.execPath,[path.resolve(__dirname,'../server.cjs')],{env:{...process.env,PORT:String(PORT),DATA_DIR:dir,ADMIN_PASSWORD:'senha-forte-teste-123456'},stdio:'pipe'});
  try{
@@ -44,7 +44,7 @@ test('login, perfis, WebSocket e salas',async()=>{
   const spectatorFrame=once(adminWS,'frame');const viewed=await spectatorFrame;assert.equal(viewed.players.length,2);
   const nextFrame=once(socket,'frame');socket.send(JSON.stringify({type:'lane',lane:2,seq:1}));const moved=await nextFrame;assert.equal(moved.players.find(p=>p.id===c.data.user.id).lane,2);assert.equal(moved.players.find(p=>p.id===c.data.user.id).ackSeq,1);
   const rename=await request('admin/users/'+second.data.user.id,'POST',{name:'Segundo Piloto',password:'5678'},adminCookie);assert.equal(rename.res.status,200);
-  const adminSolo=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',solo:true}));const soloRoom=await adminSolo;assert.equal(soloRoom.mode,'player');assert.equal(soloRoom.players[0].id,a.data.user.id);const pongState=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',game:'pong',solo:true}));const pong=await pongState;assert.equal(pong.game,'pong');const pongFrame=once(adminWS,'frame');const pf=await pongFrame;assert.equal(pf.game,'pong');assert.ok(pf.ball.x>=0&&pf.ball.x<=1);secondWS.close();adminWS.close();
+  const adminSolo=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',solo:true}));const soloRoom=await adminSolo;assert.equal(soloRoom.mode,'player');assert.equal(soloRoom.players[0].id,a.data.user.id);const pongState=once(adminWS,'roomState',m=>m.game==='pong');adminWS.send(JSON.stringify({type:'create',game:'pong',solo:true}));const pong=await pongState;assert.equal(pong.game,'pong');const pongFrame=once(adminWS,'frame',m=>m.game==='pong');const pf=await pongFrame;assert.equal(pf.game,'pong');assert.ok(pf.ball.x>=0&&pf.ball.x<=1);secondWS.close();adminWS.close();
   socket.close();
   const state=await request('admin/overview','GET',null,adminCookie);
   assert.equal(state.res.status,200);assert.ok(state.data.users.some(u=>u.name==='Piloto'));

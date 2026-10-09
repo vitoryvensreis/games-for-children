@@ -42,7 +42,7 @@ function usage(u){const d=localDay(now());return state.sessions.filter(s=>s.user
 function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws.readyState===1)||state.sessions.some(s=>s.userId===u.id&&!s.revoked&&s.expires>now()&&s.lastSeen&&now()-s.lastSeen<45000)}
 function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=Math.min(t-s.lastTick,15000);s.lastTick=t;if(delta>0&&delta<16000){const k=localDay(t);s.daily??={};s.daily[k]=(s.daily[k]||0)+delta}}
 function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
-function end(s){touch(s);s.revoked=true;for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
+function end(s){touch(s);s.revoked=true;for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
 function cubePlayerName(u){const clean=u.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]/g,'').slice(0,11)||'Piloto';return clean+'_'+u.id.replace(/-/g,'').slice(0,4)}
 function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
 function setupMCGalaxy(){
@@ -167,7 +167,7 @@ fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontr
 const cubeWss=new WebSocketServer({noServer:true,maxPayload:1024});
 const cubeSessions=new Map();
 cubeWss.on('connection',(ws,{u,s})=>{
- const old=cubeSessions.get(u.id);if(old&&old.readyState<2)old.close(4000,'Novo acesso');cubeSessions.set(u.id,ws);
+ const old=cubeSessions.get(u.id);if(old&&old.readyState<2)old.close(4000,'Novo acesso');ws.session=s;ws.user=u;cubeSessions.set(u.id,ws);
  const tcp=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});
  let handshake=Buffer.alloc(0),accepted=false,closed=false;
  const close=()=>{if(closed)return;closed=true;tcp.destroy();if(ws.readyState<2)ws.close();if(cubeSessions.get(u.id)===ws)cubeSessions.delete(u.id)};
@@ -231,6 +231,6 @@ if(m.type==='peers'){emit(ws,{type:'peers',items:voiceList(p)})}
 if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<14000){const recipient=peers.get(m.to);if(recipient?.voiceActive&&voiceEligible(recipient))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 });
 ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
-setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
+setInterval(()=>{for(const [id,cube] of cubeSessions){const u=cube.user,s=cube.session;if(!s||!u||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){cube.close(4001,'Acesso da família encerrado');cubeSessions.delete(id)}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();setupMCGalaxy();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

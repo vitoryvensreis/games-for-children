@@ -36,7 +36,7 @@ function makePlayer(p){
 }
 
 export function openVoxel({app,me,send,onExit}){
- let alive=true,joined=false,blocks=createWorld(),players=new Map(),edits={},lastPresence=0,lastFrame=performance.now(),target=null;
+ let alive=true,joined=false,blocks=createWorld(),players=new Map(),edits={},lastPresence=0,lastFrame=performance.now(),target=null,lastPickAt=0;
  let yaw=0,pitch=-.42,selected='grass',drag=null,flashTimer=0;
  const pressed=new Set();
  const root=document.createElement('main');root.className='voxel-screen';
@@ -53,11 +53,12 @@ export function openVoxel({app,me,send,onExit}){
  const floor=new THREE.Mesh(new THREE.PlaneGeometry(70,70),new THREE.MeshLambertMaterial({color:0x69ba65}));
  floor.rotation.x=-Math.PI/2;floor.position.y=-.52;scene.add(floor);
  const cloudMat=new THREE.MeshLambertMaterial({color:0xffffff,transparent:true,opacity:.8});
+ const cloudGeo=new THREE.BoxGeometry(3.2,1.15,2.6);
  for(const [x,y,z] of [[-12,12,-17],[8,14,-19],[16,11,2],[-16,13,8]]){
-  const group=new THREE.Group();for(let j=0;j<3;j++){const m=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.15,2.6),cloudMat);m.position.set((j-1)*2.1,Math.sin(j)*.4,0);group.add(m)}group.position.set(x,y,z);scene.add(group);
+  const group=new THREE.Group();for(let j=0;j<3;j++){const m=new THREE.Mesh(cloudGeo,cloudMat);m.position.set((j-1)*2.1,Math.sin(j)*.4,0);group.add(m)}group.position.set(x,y,z);scene.add(group);
  }
  const geometry=new THREE.BoxGeometry(1,1,1);
- const mats={};for(const type of TYPES)mats[type]=new THREE.MeshLambertMaterial({color:COLORS[type],transparent:type==='glass',opacity:type==='glass'?.65:1,depthWrite:type!=='glass'});
+ const mats={};for(const type of TYPES)mats[type]=new THREE.MeshLambertMaterial({color:COLORS[type],transparent:type==='glass',opacity:type==='glass' ? 0.65 : 1,depthWrite:type!=='glass'});
  const meshes=[];const raycaster=new THREE.Raycaster();raycaster.far=7;
  const cursor=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.045,1.045,1.045)),new THREE.LineBasicMaterial({color:0xffdc50,linewidth:2,depthTest:false}));
  cursor.visible=false;cursor.renderOrder=4;scene.add(cursor);
@@ -144,7 +145,7 @@ export function openVoxel({app,me,send,onExit}){
    pz=Math.max(-10.5,Math.min(10.5,pz+(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*mult));
   }
   const floorY=terrainHeight(Math.round(px),Math.round(pz))+2.2;py+=(floorY-py)*Math.min(1,dt*9);orient();
-  const hit=pick();cursor.visible=Boolean(hit);if(hit)cursor.position.set(hit.x,hit.y,hit.z);
+  if(time-lastPickAt>110){lastPickAt=time;target=pick()}cursor.visible=Boolean(target);if(target)cursor.position.set(target.x,target.y,target.z);
   for(const entry of players.values()){const mesh=entry.mesh;const h=terrainHeight(Math.round(entry.x),Math.round(entry.z));mesh.position.lerp(new THREE.Vector3(entry.x,h+.5,entry.z),Math.min(1,dt*9));mesh.rotation.y=entry.yaw}
   if(joined&&time-lastPresence>180){lastPresence=time;send({type:'voxelMove',x:px,z:pz,yaw})}
   renderer.render(scene,camera);
@@ -154,7 +155,7 @@ export function openVoxel({app,me,send,onExit}){
  function stop(){if(!alive)return;alive=false;joined=false;clearTimeout(flashTimer);
   window.removeEventListener('resize',resize);window.removeEventListener('keydown',keyDown);window.removeEventListener('keyup',keyUp);
   pressed.clear();for(const p of players.values())p.mesh.userData.dispose();players.clear();for(const o of meshes){scene.remove(o);o.dispose()}meshes.length=0;
-  cursor.geometry.dispose();cursor.material.dispose();geometry.dispose();for(const m of Object.values(mats))m.dispose();cloudMat.dispose();floor.geometry.dispose();floor.material.dispose();
+  cursor.geometry.dispose();cursor.material.dispose();geometry.dispose();for(const m of Object.values(mats))m.dispose();cloudGeo.dispose();cloudMat.dispose();floor.geometry.dispose();floor.material.dispose();
   renderer.dispose();renderer.domElement.remove();
  }
  return {onMessage,onDisconnect,stop};

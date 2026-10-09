@@ -47,9 +47,10 @@ const peers=new Map(), rooms=new Map();
 function emit(ws,o){if(ws.readyState===1)ws.send(JSON.stringify(o))}
 function admins(o){for(const p of peers.values())if(p.user.role==='admin')emit(p.ws,o)}
 function broadcastRoom(room,o){for(const p of peers.values())if(p.room===room.code)emit(p.ws,o)}
-function report(){admins({type:'adminUpdate'})}
-function leaveRoom(p){if(!p.room)return;const r=rooms.get(p.room);if(r){r.players.delete(p.user.id);broadcastRoom(r,{type:'peerLeft',id:p.user.id});if(!r.players.size&&![...peers.values()].some(x=>x.room===r.code))rooms.delete(r.code)}p.room=null}
-function ensureRoom(p,code){const r=rooms.get(code);if(!r)return null;if(p.user.role==='child'&&!r.players.has(p.user.id)&&r.players.size>=2)return null;leaveRoom(p);p.room=code;if(p.user.role==='child')r.players.add(p.user.id);return r}
+function lobby(){const available=[...rooms.values()].filter(r=>!r.finished&&!r.started&&r.players.size<2).map(r=>({code:r.code,game:r.game,host:state.users.find(u=>u.id===[...r.players][0])?.name||'Jogador',players:r.players.size}));for(const p of peers.values())if(p.user.role==='child')emit(p.ws,{type:'lobby',rooms:available})}
+function report(){admins({type:'adminUpdate'});lobby()}
+function leaveRoom(p){if(!p.room)return;const code=p.room;p.room=null;const r=rooms.get(code);if(r){if(![...peers.values()].some(x=>x!==p&&x.room===code&&x.user.id===p.user.id))r.players.delete(p.user.id);broadcastRoom(r,{type:'peerLeft',id:p.id});if(!r.players.size)rooms.delete(code)}report()}
+function ensureRoom(p,code){const r=rooms.get(code);if(!r||r.finished)return null;if(p.user.role==='child'&&!r.players.has(p.user.id)&&(r.players.size>=2||r.started))return null;if(p.room!==code)leaveRoom(p);p.room=code;if(p.user.role==='child')r.players.add(p.user.id);return r}
 function roomState(r){return {type:'roomState',code:r.code,game:r.game,started:r.started,remaining:Math.max(0,Math.ceil((r.endAt-now())/1000)),players:[...r.players].map(id=>{const u=state.users.find(u=>u.id===id);return {id,name:u?.name,score:r.scores[id]||0,lane:r.lanes[id]||1}})}}
 function finish(r){if(r.finished)return;r.finished=true;const ranking=[...r.players].map(id=>({name:state.users.find(u=>u.id===id)?.name||'Jogador',score:r.scores[id]||0})).sort((a,b)=>b.score-a.score);state.games.push({id:uuid(),at:now(),players:ranking});state.games=state.games.slice(-300);save();broadcastRoom(r,{type:'finished',ranking});report()}
 function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;broadcastRoom(r,roomState(r))}
@@ -121,6 +122,7 @@ server.on('upgrade',(req,socket,head)=>{
 });
 wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});report();
 ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
+if(m.type==='lobby')lobby();
 if(m.type==='create'&&u.role==='child'){let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const r={code,game:'race',players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;emit(ws,roomState(r));if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){const r=ensureRoom(p,m.code.toUpperCase());if(!r){emit(ws,{type:'error',message:'Sala indisponível'});return}r.lanes[u.id]??=1;r.scores[u.id]??=0;broadcastRoom(r,roomState(r));if(u.role==='admin')broadcastRoom(r,{type:'notice',text:'Administrador entrou na sala'});if(r.players.size===2&&!r.started)start(r);report()}
 if(m.type==='lane'&&p.room&&u.role==='child'){const r=rooms.get(p.room);if(r&&r.started&&!r.finished&&r.players.has(u.id)&&Number.isInteger(m.lane)&&m.lane>=0&&m.lane<=2)r.lanes[u.id]=m.lane}

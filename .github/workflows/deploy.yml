@@ -21,7 +21,7 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js
-      - run: node --test tests/integration.cjs tests/snake.cjs
+      - run: node --test tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs
 
   deploy:
     needs: validate

@@ -46,6 +46,7 @@ function end(s){touch(s);s.revoked=true;for(const p of peers.values())if(p.sessi
 function cubePlayerName(u){const clean=u.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]/g,'').slice(0,11)||'Piloto';return clean+'_'+u.id.replace(/-/g,'').slice(0,4)}
 function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
 function setupMCGalaxy(){
+ if(process.env.MCGALAXY_EXTERNAL==='true'){const check=setInterval(async()=>{if(await cubePortReady()){mcgalaxyReady=true;clearInterval(check)}},150);check.unref();return}
  const exec=path.join(MCGALAXY_DIR,'MCGalaxyCLI');if(!fs.existsSync(exec)||process.env.MCGALAXY_ENABLED==='false')return;
  const cfgDir=path.join(MCGALAXY_DIR,'properties');fs.mkdirSync(cfgDir,{recursive:true});
  const cfg=path.join(cfgDir,'server.properties');
@@ -197,7 +198,7 @@ server.on('upgrade',(req,socket,head)=>{
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
  if(new URL(req.url,'http://localhost').searchParams.get('classicube')==='1'){
   if(!mcgalaxyReady||req.headers['sec-websocket-protocol']!=='ClassiCube'){
-    socket.write('HTTP/1.1 503 Service Unavailable\\r\\nConnection: close\\r\\n\\r\\n');socket.destroy();return;
+    socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');socket.destroy();return;
   }
   cubeWss.handleUpgrade(req,socket,head,ws=>cubeWss.emit('connection',ws,auth));return;
  }

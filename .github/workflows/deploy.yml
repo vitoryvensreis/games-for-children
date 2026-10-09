@@ -60,13 +60,15 @@ jobs:
             echo "::error::TCP_PORT_UNREACHABLE: runner não alcança SSH da VPS"
             exit 1
           fi
+      - name: Empacotar aplicação
+        run: tar -czf release.tar.gz server.cjs package.json public
       - name: Enviar servidor
         env:
           HOST: ${{ secrets.VPS_HOST }}
           USER: ${{ secrets.VPS_USER }}
           PORT: ${{ secrets.VPS_PORT }}
         run: |
-          scp -B -P "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes server.cjs "$USER@$HOST:/home/gamesforchildren/apps/games-for-children/server.cjs.next"
+          scp -B -P "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes release.tar.gz "$USER@$HOST:/home/gamesforchildren/apps/games-for-children/release.tar.gz"
       - name: Ativar e validar nova versão
         env:
           HOST: ${{ secrets.VPS_HOST }}
@@ -75,8 +77,12 @@ jobs:
         run: |
           ssh -p "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'set -eu
             cd /home/gamesforchildren/apps/games-for-children
-            cp -p server.cjs server.cjs.previous
-            mv server.cjs.next server.cjs
+            mkdir -p backup
+            cp server.cjs backup/server.cjs
+            if test -d public; then cp -a public backup/public; fi
+            if test -f package.json; then cp package.json backup/package.json; fi
+            tar -xzf release.tar.gz
+            /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund
             if sudo -n /usr/bin/systemctl restart games-for-children.service; then
               for i in 1 2 3 4 5; do
                 if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q ok; then
@@ -87,6 +93,8 @@ jobs:
               done
             fi
             echo DEPLOY_FAILED_ROLLBACK
-            cp -p server.cjs.previous server.cjs
+            cp backup/server.cjs server.cjs
+            if test -d backup/public; then rm -rf public; cp -a backup/public public; fi
+            if test -f backup/package.json; then cp backup/package.json package.json; fi
             sudo -n /usr/bin/systemctl restart games-for-children.service
             exit 1'

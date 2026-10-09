@@ -95,6 +95,7 @@ const publicDir=path.join(ROOT,'public');
 const CLASSICUBE_DIR=path.join(publicDir,'classicube');
 const CLASSICUBE_JS=path.join(CLASSICUBE_DIR,'ClassiCube.js');
 const CLASSICUBE_TEXTURES=path.join(CLASSICUBE_DIR,'default.zip');
+const CLASSICUBE_WASM=path.join(CLASSICUBE_DIR,'ClassiCube.wasm');
 
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;
@@ -119,7 +120,7 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
-if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'local-client',multiplayerConfigured:false});
+if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'local-client',multiplayerConfigured:false});
 if(pathname==='/api/heartbeat'&&req.method==='POST'){const was=activeUser(u);touch(s);s.lastSeen=now();save();if(!was&&u.role==='child')track(u,'online');report();return json(res,200,{ok:true,online:true})}
 if(pathname.startsWith('/api/photos/')&&req.method==='GET'){const id=pathname.slice('/api/photos/'.length),target=state.users.find(x=>x.id===id);if(!target||!target.photo||(u.role!=='admin'&&u.id!==id))return json(res,404,{error:'Foto indisponível'});const match=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(target.photo);if(!match)return json(res,404,{error:'Foto inválida'});res.writeHead(200,{'Content-Type':'image/'+match[1],'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});return res.end(Buffer.from(match[2],'base64'))}
 if(pathname==='/api/voice/config'&&req.method==='GET')return json(res,200,{iceServers:ICE_SERVERS,turnConfigured:ICE_SERVERS.length>1});

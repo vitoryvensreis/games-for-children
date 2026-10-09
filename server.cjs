@@ -58,7 +58,7 @@ function gameTick(){const t=now();for(const r of rooms.values()){if(!r.started||
 if(t>=r.nextObstacle){r.spawn++;const lane=Math.floor(Math.random()*3);r.obstacles.push({id:r.spawn,lane,at:t});r.nextObstacle=t+780}
 for(const o of r.obstacles){if(o.done||t-o.at<2400)continue;o.done=true;for(const id of r.players){if(r.lanes[id]===o.lane)r.scores[id]=Math.max(0,(r.scores[id]||0)-5);else r.scores[id]=(r.scores[id]||0)+10}}
 r.obstacles=r.obstacles.filter(o=>t-o.at<3000);
-broadcastRoom(r,{type:'frame',remaining:Math.ceil((r.endAt-t)/1000),players:[...r.players].map(id=>({id,lane:r.lanes[id]||1,score:r.scores[id]||0})),obstacles:r.obstacles.map(o=>({lane:o.lane,progress:(t-o.at)/2400}))});
+broadcastRoom(r,{type:'frame',remaining:Math.ceil((r.endAt-t)/1000),players:[...r.players].map(id=>({id,lane:r.lanes[id]||1,score:r.scores[id]||0,ackSeq:r.ack?.[id]||0})),obstacles:r.obstacles.map(o=>({lane:o.lane,progress:(t-o.at)/2400}))});
 }}
 setInterval(gameTick,125).unref();
 const publicDir=path.join(ROOT,'public');
@@ -125,7 +125,7 @@ ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revok
 if(m.type==='lobby')lobby();
 if(m.type==='create'&&u.role==='child'){let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const r={code,game:'race',players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;emit(ws,roomState(r));if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){const r=ensureRoom(p,m.code.toUpperCase());if(!r){emit(ws,{type:'error',message:'Sala indisponível'});return}r.lanes[u.id]??=1;r.scores[u.id]??=0;broadcastRoom(r,roomState(r));if(u.role==='admin')broadcastRoom(r,{type:'notice',text:'Administrador entrou na sala'});if(r.players.size===2&&!r.started)start(r);report()}
-if(m.type==='lane'&&p.room&&u.role==='child'){const r=rooms.get(p.room);if(r&&r.started&&!r.finished&&r.players.has(u.id)&&Number.isInteger(m.lane)&&m.lane>=0&&m.lane<=2)r.lanes[u.id]=m.lane}
+if(m.type==='lane'&&p.room&&u.role==='child'){const r=rooms.get(p.room);if(r&&r.started&&!r.finished&&r.players.has(u.id)&&Number.isInteger(m.lane)&&m.lane>=0&&m.lane<=2){r.lanes[u.id]=m.lane;if(Number.isSafeInteger(m.seq)&&m.seq>=0){r.ack??={};r.ack[u.id]=m.seq}}}
 if(m.type==='leave')leaveRoom(p);
 if(m.type==='signal'&&p.room&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<6500){if(u.role==='child'&&!u.voiceEnabled)return;const recipient=peers.get(m.to);if(recipient&&recipient.room===p.room&&(recipient.user.role==='admin'||recipient.user.voiceEnabled))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 if(m.type==='peers'&&p.room){emit(ws,{type:'peers',items:[...peers.values()].filter(q=>q.room===p.room&&q!==p).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}

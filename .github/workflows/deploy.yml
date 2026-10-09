@@ -88,7 +88,9 @@ jobs:
             test -s ClassiCube.js
             test -s ClassiCube.wasm
             cp ClassiCube.js ClassiCube.wasm "$GITHUB_WORKSPACE/public/classicube/"
-            cp misc/cc_textures.zip "$GITHUB_WORKSPACE/public/classicube/default.zip"
+            curl --fail --location --silent --show-error --retry 2 --max-time 60 --proto '=https' --proto-redir '=https' \
+              "https://raw.githubusercontent.com/ClassiCube/ClassiCube/master/misc/cc_textures.zip" \
+              -o "$GITHUB_WORKSPACE/public/classicube/default.zip"
             cd "$GITHUB_WORKSPACE"
           fi
           test "$(wc -c < public/classicube/ClassiCube.js)" -gt 50000

@@ -43,17 +43,11 @@ function json(res,status,obj,cookie){res.writeHead(status,{'Content-Type':'appli
 function readBody(req){return new Promise((resolve,reject)=>{let text='';req.on('data',b=>{text+=b;if(text.length>20000){reject(Error('payload excessivo'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(Error('JSON inválido'))}});req.on('error',reject)})}
 async function pushAdmins(title,body){if(!PUSH_READY)return;const targets=state.pushSubscriptions.filter(s=>state.users.some(u=>u.id===s.userId&&u.role==='admin'&&u.enabled));await Promise.allSettled(targets.map(async entry=>{try{await webpush.sendNotification(entry.subscription,JSON.stringify({title,body,url:'/'}),{TTL:90,urgency:'normal'})}catch(err){if(err.statusCode===404||err.statusCode===410){state.pushSubscriptions=state.pushSubscriptions.filter(s=>s.endpoint!==entry.endpoint);save()}else console.error('Push falhou:',err.statusCode||err.message)}}))}
 function track(u,type){state.events.unshift({id:uuid(),userId:u.id,name:u.name,type,at:now()});state.events=state.events.slice(0,1000);save();admins({type:'notice',text:u.name+': '+type});if(u.role==='child'&&['online','offline','entrou','desconectado pelo ADM'].includes(type))void pushAdmins('GamesForChildren',u.name+' — '+type)}
-const peers=new Map(), rooms=new Map(), voxelPeers=new Map();
+const peers=new Map(), rooms=new Map();
 function voiceEligible(p){return p.ws.readyState===1&&(p.user.role==='admin'||p.user.voiceEnabled===true)}
 function voiceMembers(){return [...peers.values()].filter(p=>p.voiceActive&&voiceEligible(p))}
 function voiceList(p){return voiceMembers().filter(q=>q!==p&&q.user.id!==p.user.id).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))}
 function voicePresence(){for(const p of peers.values())if(voiceEligible(p))emit(p.ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}
-
-const VOXEL_TYPES=new Set(['air','grass','dirt','stone','wood','leaves','sand','brick','glass']);
-function voxelWorld(){state.voxelWorld??={version:1,edits:{}};state.voxelWorld.edits??={};return state.voxelWorld}
-function voxelUsers(){return [...voxelPeers.values()].map(p=>({id:p.user.id,name:p.user.name,role:p.user.role,x:p.voxelPos?.x??0,z:p.voxelPos?.z??4,yaw:p.voxelPos?.yaw??0}))}
-function voxelBroadcast(data){for(const p of voxelPeers.values())emit(p.ws,data)}
-function voxelDepart(p){if(!voxelPeers.has(p.id))return;voxelPeers.delete(p.id);voxelBroadcast({type:'voxelPresence',players:voxelUsers()})}
 
 function emit(ws,o){if(ws.readyState===1)ws.send(JSON.stringify(o))}
 function admins(o){for(const p of peers.values())if(p.user.role==='admin')emit(p.ws,o)}
@@ -103,11 +97,6 @@ res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy
 if(pathname==='/api/health')return json(res,200,{ok:true,service:'games-for-children'});
 if(pathname==='/classicube/index.html'){if(!checkSession(req)){res.writeHead(401);return res.end('Login necessário')} }
 if(pathname==='/static/default.zip')return fs.readFile(CLASSICUBE_TEXTURES,(err,b)=>{if(err){res.writeHead(404);return res.end('Pacote de textura não instalado')}res.writeHead(200,{'Content-Type':'application/zip','Cache-Control':'public, max-age=3600'});res.end(b)});
-
-if(/^\/vendor\/three\.(module|core)\.js$/.test(pathname)){
- const name=pathname.slice('/vendor/'.length),asset=path.join(ROOT,'node_modules','three','build',name);
- return fs.readFile(asset,(err,b)=>{if(err){res.writeHead(404);return res.end('Módulo 3D indisponível')};res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'});res.end(b)})
-}
 
 if(pathname.startsWith('/api/')){
 const origin=req.headers.origin;if(req.method!=='GET'&&origin){const allowed='https://gamesforchildren.escotilhaprodutora.com';if(origin!==allowed)return json(res,403,{error:'Origem não permitida'})}
@@ -167,29 +156,8 @@ server.on('upgrade',(req,socket,head)=>{
 wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});emit(ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))});report();
 ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
 if(m.type==='lobby')lobby();
-if(m.type==='voxelJoin'){
- leaveRoom(p);voxelPeers.set(p.id,p);p.voxelPos={x:0,z:4,yaw:0};
- emit(ws,{type:'voxelSnapshot',worldId:'familia',edits:voxelWorld().edits,players:voxelUsers(),selfId:u.id});
- voxelBroadcast({type:'voxelPresence',players:voxelUsers()});
-}
-if(m.type==='voxelLeave')voxelDepart(p);
-if(m.type==='voxelMove'&&voxelPeers.has(p.id)){
- const t=now();if(t-(p.voxelMoveAt||0)>=95&&Number.isFinite(m.x)&&Number.isFinite(m.z)&&Number.isFinite(m.yaw)){
- p.voxelMoveAt=t;p.voxelPos={x:Math.max(-11,Math.min(11,m.x)),z:Math.max(-11,Math.min(11,m.z)),yaw:Math.max(-6.3,Math.min(6.3,m.yaw))};
- for(const q of voxelPeers.values())if(q!==p)emit(q.ws,{type:'voxelPlayer',player:{id:u.id,name:u.name,role:u.role,...p.voxelPos}})
- }
-}
-if(m.type==='voxelEdit'&&voxelPeers.has(p.id)){
- const t=now(),x=m.x,y=m.y,z=m.z,block=m.block;
- if(t-(p.voxelEditAt||0)<160||![x,y,z].every(Number.isInteger)||Math.abs(x)>11||Math.abs(z)>11||y<0||y>10||!VOXEL_TYPES.has(block)){emit(ws,{type:'voxelError',message:'Ação inválida ou rápida demais'});return}
- const edits=voxelWorld().edits,key=x+','+y+','+z;
- if(Object.keys(edits).length>=1300&&!Object.hasOwn(edits,key)){emit(ws,{type:'voxelError',message:'Limite de blocos alterados neste mundo'});return}
- p.voxelEditAt=t;edits[key]=block;save();voxelBroadcast({type:'voxelBlock',x,y,z,block,by:u.name});
-}
-
-if(m.type==='create'&&(u.role==='child'||u.role==='admin')){voxelDepart(p);leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=m.game==='pong'?'pong':m.game==='race'?'race':'pong';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
+if(m.type==='create'&&(u.role==='child'||u.role==='admin')){leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=m.game==='pong'?'pong':m.game==='race'?'race':'pong';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){
- voxelDepart(p);
  const code=m.code.toUpperCase(),r0=rooms.get(code);
  const playing=u.role==='child'||m.mode==='player';
  if(!r0||r0.finished||(playing&&!r0.players.has(u.id)&&(r0.started||r0.players.size>=2))){emit(ws,{type:'error',message:'Sala indisponível ou completa'});return}
@@ -211,7 +179,7 @@ if(m.type==='voice-off'){p.voiceActive=false;for(const q of voiceMembers())emit(
 if(m.type==='peers'){emit(ws,{type:'peers',items:voiceList(p)})}
 if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<14000){const recipient=peers.get(m.to);if(recipient?.voiceActive&&voiceEligible(recipient))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 });
-ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}voxelDepart(p);leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
+ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

@@ -158,11 +158,105 @@ async function chooseChildPhoto(u){
 function base64ToUint8(str){const pad='='.repeat((4-str.length%4)%4),b=atob((str+pad).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(b,ch=>ch.charCodeAt(0))}
 async function setupPush(){try{if(!('serviceWorker'in navigator)||!('PushManager'in window)||!('Notification'in window))throw Error('Este navegador não suporta Web Push. No iPhone, instale a PWA na Tela de Início.');const config=await api('push/key');if(!config.enabled)throw Error('Push ainda não configurado no servidor');const permission=await Notification.requestPermission();if(permission!=='granted')throw Error('Permissão não concedida');const registration=await navigator.serviceWorker.ready;let sub=await registration.pushManager.getSubscription();if(!sub)sub=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:base64ToUint8(config.key)});await api('push/subscribe','POST',{subscription:sub.toJSON()});notify('Notificações Push ativadas neste aparelho!')}catch(e){notify(e.message)}}
 function showAdminRoom(){if(!room)return;app.innerHTML=box(renderTop()+'<section class="panel narrow stack"><h2>'+ico('headset')+' Sala '+esc(room.code)+'</h2><p>Você entrou como administrador. Todos verão sua presença na chamada.</p><button id="voice">Entrar na voz</button><p id="voiceStatus">Microfone desligado</p><button class="ghost" id="leave">Sair da sala</button></section>');bindLogout();$('#voice').onclick=toggleVoice;$('#leave').onclick=()=>{send({type:'leave'});stopVoice();room=null;admin()}}
-function toggleMute(){if(!voiceStream)return;muted=!muted;for(const t of voiceStream.getAudioTracks())t.enabled=!muted;const b=$('#mute');if(b)b.textContent=muted?'Reativar microfone':'Silenciar microfone';const st=$('#voiceStatus');if(st)st.textContent=muted?'Microfone silenciado':'Microfone ligado'}
-async function toggleVoice(){if(voiceStream){stopVoice();return}try{voiceStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});muted=false;const mute=$('#mute');if(mute)mute.disabled=false;$('#voice').textContent='Desligar voz';$('#voiceStatus').textContent='Microfone ligado — você está na chamada';send({type:'peers'});send({type:'voice-ready'})}catch(e){notify('Permissão de microfone negada ou indisponível')}}
-function stopVoice(){voiceStream?.getTracks().forEach(t=>t.stop());voiceStream=null;muted=false;const mute=$('#mute');if(mute)mute.disabled=true;for(const id of [...connections.keys()])hangupPeer(id);const b=$('#voice');if(b)b.textContent=me?.role==='admin'?'Entrar na voz':'Ativar voz';const st=$('#voiceStatus');if(st)st.textContent='Microfone desligado'}
-function hangupPeer(id){connections.get(id)?.close();connections.delete(id);remoteAudio.get(id)?.remove();remoteAudio.delete(id)}
-async function maybeCall(p){if(!voiceStream||connections.has(p.id)||p.id<myId)return;try{const pc=makePc(p.id);const offer=await pc.createOffer();await pc.setLocalDescription(offer);send({type:'signal',to:p.id,kind:'offer',data:pc.localDescription})}catch(e){notify('Não foi possível iniciar o áudio')}}
-function makePc(id){if(connections.has(id))return connections.get(id);const pc=new RTCPeerConnection({iceServers});connections.set(id,pc);for(const tr of voiceStream?.getTracks()||[])pc.addTrack(tr,voiceStream);pc.onicecandidate=e=>{if(e.candidate)send({type:'signal',to:id,kind:'ice',data:e.candidate})};pc.ontrack=e=>{let a=remoteAudio.get(id);if(!a){a=document.createElement('audio');a.autoplay=true;a.playsInline=true;document.body.append(a);remoteAudio.set(id,a)}a.srcObject=e.streams[0];a.play().catch(()=>{})};return pc}
-async function handleSignal(m){if(!voiceStream)return;try{const pc=makePc(m.from);if(m.kind==='offer'){await pc.setRemoteDescription(m.data);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);send({type:'signal',to:m.from,kind:'answer',data:pc.localDescription})}if(m.kind==='answer')await pc.setRemoteDescription(m.data);if(m.kind==='ice')await pc.addIceCandidate(m.data)}catch(e){console.warn('WebRTC',e)}}
+function ensureVoiceDock(){
+ const el=$('#voiceDock');if(!el)return;
+ if(!me){el.hidden=true;el.innerHTML='';return}
+ el.hidden=false;
+ if(!$('#familyVoiceButton')){el.innerHTML='<div class="family-voice-panel"><button id="familyVoiceButton" type="button" aria-label="Ativar ou desligar conversa por voz">Conversar</button><div class="family-voice-info"><strong id="familyVoiceTitle">Conversa da família</strong><span id="familyVoicePeople">Toque para conversar</span></div><button id="familyVoiceMute" type="button" disabled>Silenciar</button></div>';$('#familyVoiceButton').onclick=toggleVoice;$('#familyVoiceMute').onclick=toggleMute}
+ updateVoiceDock();
+}
+function updateVoiceDock(){
+ const el=$('#voiceDock');if(!el||!me)return;
+ const on=Boolean(voiceStream),ready=ws?.readyState===1;
+ const b=$('#familyVoiceButton'),mute=$('#familyVoiceMute'),info=$('#familyVoicePeople'),title=$('#familyVoiceTitle');
+ if(b){b.textContent=on?'Sair da voz':'Conversar';b.classList.toggle('connected',on);b.disabled=!ready&&!on}
+ if(mute){mute.disabled=!on;mute.textContent=muted?'Reativar':'Silenciar'}
+ if(title)title.textContent=on?(muted?'Microfone silenciado':'Microfone ligado'):'Conversa da família';
+ if(info)info.textContent=!ready?'Reconectando...':on?((voiceOnline.filter(p=>p.id!==myId).length)+' mais na conversa'):voiceOnline.length+' online na voz';
+ const oldButton=$('#voice');if(oldButton)oldButton.textContent=on?'Desligar voz':'Ativar voz';
+ const oldMute=$('#mute');if(oldMute){oldMute.disabled=!on;oldMute.textContent=muted?'Reativar microfone':'Silenciar microfone'}
+ const oldStatus=$('#voiceStatus');if(oldStatus)oldStatus.textContent=on?(muted?'Microfone silenciado':'Microfone ligado — família conectada'):'Microfone desligado';
+}
+function toggleMute(){if(!voiceStream)return;muted=!muted;for(const t of voiceStream.getAudioTracks())t.enabled=!muted;updateVoiceDock()}
+let voiceStarting=false;
+async function toggleVoice(){
+ if(voiceStream){stopVoice();return}
+ if(voiceStarting)return;
+ if(!me||ws?.readyState!==1){notify('Aguarde a conexão com a família');return}
+ voiceStarting=true;
+ try{
+  const config=me.role==='admin'||me.voiceEnabled!==false;
+  if(!config){notify('Voz desativada pelo responsável');return}
+  const media=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
+  if(!me){media.getTracks().forEach(t=>t.stop());return}
+  voiceStream=media;muted=false;
+  for(const track of media.getTracks())track.addEventListener('ended',()=>{if(voiceStream===media)stopVoice()},{once:true});
+  send({type:'voice-ready'});send({type:'peers'});
+  updateVoiceDock();
+  notify('Conversa com a família ativada');
+ }catch(e){console.warn('Permissão de áudio',e);notify('Para conversar, permita o uso do microfone nas configurações do navegador')}
+ finally{voiceStarting=false;updateVoiceDock()}
+}
+function stopVoice(){
+ const media=voiceStream;voiceStream=null;muted=false;
+ if(ws?.readyState===1)send({type:'voice-off'});
+ if(media)media.getTracks().forEach(t=>t.stop());
+ for(const id of [...connections.keys()])hangupPeer(id);
+ updateVoiceDock();
+}
+function hangupPeer(id){
+ const pc=connections.get(id);connections.delete(id);iceQueues.delete(id);
+ try{pc?.close()}catch{}
+ const audio=remoteAudio.get(id);if(audio){audio.srcObject=null;audio.remove()}remoteAudio.delete(id)
+}
+async function maybeCall(p){
+ if(!voiceStream||!p?.id||!myId||p.id===myId||myId>p.id||connections.has(p.id))return;
+ try{
+  const pc=makePc(p.id),offer=await pc.createOffer();if(connections.get(p.id)!==pc)return;
+  await pc.setLocalDescription(offer);
+  send({type:'signal',to:p.id,kind:'offer',data:pc.localDescription});
+ }catch(e){console.warn('Início de voz',e);hangupPeer(p.id)}
+}
+function makePc(id){
+ if(connections.has(id))return connections.get(id);
+ const pc=new RTCPeerConnection({iceServers});
+ connections.set(id,pc);iceQueues.set(id,[]);
+ for(const tr of voiceStream?.getTracks()||[])pc.addTrack(tr,voiceStream);
+ pc.onicecandidate=e=>{if(e.candidate)send({type:'signal',to:id,kind:'ice',data:e.candidate})};
+ pc.ontrack=e=>{
+  let audio=remoteAudio.get(id);
+  if(!audio){audio=document.createElement('audio');audio.autoplay=true;audio.playsInline=true;audio.setAttribute('aria-label','Áudio de participante');document.body.append(audio);remoteAudio.set(id,audio)}
+  audio.srcObject=e.streams[0];audio.play().catch(()=>{updateVoiceDock();notify('Toque em Conversar novamente se não ouvir o áudio')});
+ };
+ pc.oniceconnectionstatechange=()=>{
+  if(!voiceStream||connections.get(id)!==pc)return;
+  if(pc.iceConnectionState==='failed'){hangupPeer(id);send({type:'voice-ready'});send({type:'peers'})}
+  if(pc.iceConnectionState==='disconnected'){
+   setTimeout(()=>{if(connections.get(id)===pc&&pc.iceConnectionState==='disconnected'){hangupPeer(id);send({type:'voice-ready'});send({type:'peers'})}},5000)
+  }
+ };
+ return pc;
+}
+async function handleSignal(m){
+ if(!voiceStream||!m?.from)return;
+ try{
+  const pc=makePc(m.from);
+  if(m.kind==='offer'){
+   if(pc.signalingState!=='stable'){if(myId<m.from)return;await pc.setLocalDescription({type:'rollback'})}
+   await pc.setRemoteDescription(m.data);
+   const queue=iceQueues.get(m.from)||[];iceQueues.set(m.from,[]);
+   for(const candidate of queue)await pc.addIceCandidate(candidate).catch(()=>{});
+   const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
+   send({type:'signal',to:m.from,kind:'answer',data:pc.localDescription})
+  }else if(m.kind==='answer'){
+   if(pc.signalingState!=='have-local-offer')return;
+   await pc.setRemoteDescription(m.data);
+   const queue=iceQueues.get(m.from)||[];iceQueues.set(m.from,[]);
+   for(const candidate of queue)await pc.addIceCandidate(candidate).catch(()=>{});
+  }else if(m.kind==='ice'){
+   if(pc.remoteDescription)await pc.addIceCandidate(m.data).catch(()=>{});
+   else{const queue=iceQueues.get(m.from)||[];if(queue.length<40)queue.push(m.data);iceQueues.set(m.from,queue)}
+  }
+ }catch(e){console.warn('Falha na sinalização WebRTC',e)}
+}
 (async()=>{try{const x=await api('me');me=x.user;connect();home();ensureVoiceDock()}catch{login();ensureVoiceDock()}if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{})})();

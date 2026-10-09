@@ -1,0 +1,23 @@
+[Unit]
+Description=GamesForChildren - PWA family games
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gamesforchildren
+Group=gamesforchildren
+WorkingDirectory=/home/gamesforchildren/apps/games-for-children
+Environment=NODE_ENV=production
+Environment=PORT=3100
+ExecStart=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/node /home/gamesforchildren/apps/games-for-children/server.cjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/gamesforchildren/apps/games-for-children
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

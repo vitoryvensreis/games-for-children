@@ -53,15 +53,30 @@ function leaveRoom(p){if(!p.room)return;const code=p.room;p.room=null;p.playing=
 function ensureRoom(p,code){const r=rooms.get(code);if(!r||r.finished)return null;if(!r.players.has(p.user.id)&&p.playing&&(r.players.size>=2||r.started))return null;if(p.room!==code)leaveRoom(p);p.room=code;if(p.playing)r.players.add(p.user.id);return r}
 function roomState(r){return {type:'roomState',code:r.code,game:r.game,started:r.started,remaining:Math.max(0,Math.ceil((r.endAt-now())/1000)),players:[...r.players].map(id=>{const u=state.users.find(u=>u.id===id);return {id,name:u?.name,score:r.scores[id]||0,lane:r.lanes[id]||1}})}}
 function finish(r){if(r.finished)return;r.finished=true;const ranking=[...r.players].map(id=>({name:state.users.find(u=>u.id===id)?.name||'Jogador',score:r.scores[id]||0})).sort((a,b)=>b.score-a.score);state.games.push({id:uuid(),at:now(),players:ranking});state.games=state.games.slice(-300);save();broadcastRoom(r,{type:'finished',ranking});report()}
-function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;if(r.game==='pong')r.pong={x:.5,y:.5,vx:.008,vy:.006,paddles:{},points:{},lastTick:now()};for(const q of peers.values())if(q.room===r.code)emit(q.ws,{...roomState(r),mode:q.playing?'player':'spectator'})}
+function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;if(r.game==='pong')r.pong={x:.5,y:.5,vx:(Math.random()<.5?-1:1)*.52,vy:(Math.random()<.5?-1:1)*.29,paddles:{},lastTick:now()};for(const q of peers.values())if(q.room===r.code)emit(q.ws,{...roomState(r),mode:q.playing?'player':'spectator'})}
 function gameTick(){const t=now();for(const r of rooms.values()){if(!r.started||r.finished)continue;if(t>=r.endAt){finish(r);continue}
-if(r.game==='pong'){const g=r.pong;const ids=[...r.players];const dt=Math.min(2.5,(t-g.lastTick)/125);g.lastTick=t;if(ids.length===1){g.paddles.ai??=.5;g.paddles.ai+=Math.sign(g.y-g.paddles.ai)*Math.min(.024*dt,Math.abs(g.y-g.paddles.ai))}g.x+=g.vx*dt;g.y+=g.vy*dt;if(g.y<=.035||g.y>=.965)g.vy*=-1;const left=g.paddles[ids[0]]??.5,right=ids[1]?(g.paddles[ids[1]]??.5):g.paddles.ai;if(g.x<.045&&g.vx<0){if(Math.abs(g.y-left)<.15){g.x=.045;g.vx=Math.abs(g.vx)*1.015}else{r.scores[ids[1]||ids[0]]=(r.scores[ids[1]||ids[0]]||0)+1;g.x=.5;g.y=.5;g.vx=.008}}if(g.x>.955&&g.vx>0){if(Math.abs(g.y-right)<.15){g.x=.955;g.vx=-Math.abs(g.vx)*1.015}else{r.scores[ids[0]]=(r.scores[ids[0]]||0)+1;g.x=.5;g.y=.5;g.vx=-.008}}broadcastRoom(r,{type:'frame',game:'pong',remaining:Math.ceil((r.endAt-t)/1000),players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),ball:{x:g.x,y:g.y},aiPaddle:g.paddles.ai??.5});continue}
+if(r.game==='pong'){
+ const g=r.pong,ids=[...r.players];
+ const dt=Math.min(.12,Math.max(.001,(t-g.lastTick)/1000));g.lastTick=t;
+ if(ids.length===1){g.paddles.ai??=.5;const d=g.y-g.paddles.ai;g.paddles.ai+=Math.sign(d)*Math.min(.73*dt,Math.abs(d))}
+ g.x+=g.vx*dt;g.y+=g.vy*dt;
+ if(g.y<.025){g.y=.025;g.vy=Math.abs(g.vy)}
+ if(g.y>.975){g.y=.975;g.vy=-Math.abs(g.vy)}
+ const left=g.paddles[ids[0]]??.5,right=ids[1]?(g.paddles[ids[1]]??.5):(g.paddles.ai??.5);
+ function bounce(dir,paddle){g.x=dir===1?.045:.955;g.vx=dir*Math.min(1.05,Math.abs(g.vx)*1.045);g.vy=Math.max(-.75,Math.min(.75,g.vy+(g.y-paddle)*1.4))}
+ function reset(dir){g.x=.5;g.y=.25+Math.random()*.5;g.vx=dir*.52;g.vy=(Math.random()<.5?-1:1)*(.24+Math.random()*.13)}
+ if(g.x<=.045&&g.vx<0){if(Math.abs(g.y-left)<=.123)bounce(1,left);else{const winner=ids[1]||ids[0];r.scores[winner]=(r.scores[winner]||0)+1;reset(1)}}
+ if(g.x>=.955&&g.vx>0){if(Math.abs(g.y-right)<=.123)bounce(-1,right);else{r.scores[ids[0]]=(r.scores[ids[0]]||0)+1;reset(-1)}}
+ broadcastRoom(r,{type:'frame',game:'pong',remaining:Math.ceil((r.endAt-t)/1000),
+ players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),
+ ball:{x:g.x,y:g.y,vx:g.vx,vy:g.vy},aiPaddle:g.paddles.ai??.5});continue}
+
 if(t>=r.nextObstacle){r.spawn++;const lane=Math.floor(Math.random()*3);r.obstacles.push({id:r.spawn,lane,at:t});r.nextObstacle=t+780}
 for(const o of r.obstacles){if(o.done||t-o.at<2400)continue;o.done=true;for(const id of r.players){if(r.lanes[id]===o.lane)r.scores[id]=Math.max(0,(r.scores[id]||0)-5);else r.scores[id]=(r.scores[id]||0)+10}}
 r.obstacles=r.obstacles.filter(o=>t-o.at<3000);
 broadcastRoom(r,{type:'frame',remaining:Math.ceil((r.endAt-t)/1000),players:[...r.players].map(id=>({id,lane:r.lanes[id]||1,score:r.scores[id]||0,ackSeq:r.ack?.[id]||0})),obstacles:r.obstacles.map(o=>({lane:o.lane,progress:(t-o.at)/2400}))});
 }}
-setInterval(gameTick,125).unref();
+setInterval(gameTick,40).unref();
 const publicDir=path.join(ROOT,'public');
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;

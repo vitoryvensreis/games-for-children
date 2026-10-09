@@ -63,7 +63,7 @@ jobs:
             exit 1
           fi
       - name: Empacotar aplicação
-        run: tar -czf release.tar.gz server.cjs package.json public
+        run: tar -czf release.tar.gz server.cjs package.json public database
       - name: Enviar servidor
         env:
           HOST: ${{ secrets.VPS_HOST }}

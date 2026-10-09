@@ -93,6 +93,7 @@ if(m.type==='lane'&&p.room&&u.role==='child'){const r=rooms.get(p.room);if(r&&r.
 if(m.type==='leave')leaveRoom(p);
 if(m.type==='signal'&&p.room&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<6500){if(u.role==='child'&&!u.voiceEnabled)return;const recipient=peers.get(m.to);if(recipient&&recipient.room===p.room&&(recipient.user.role==='admin'||recipient.user.voiceEnabled))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 if(m.type==='peers'&&p.room){emit(ws,{type:'peers',items:[...peers.values()].filter(q=>q.room===p.room&&q!==p).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}
+if(m.type==='voice-ready'&&p.room&&(u.role==='admin'||u.voiceEnabled)){for(const q of peers.values())if(q!==p&&q.room===p.room)emit(q.ws,{type:'voiceReady',id:p.id,name:u.name,role:u.role})}
 });
 ws.on('close',()=>{leaveRoom(p);peers.delete(p.id);touch(s);save();report()})});
 setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();

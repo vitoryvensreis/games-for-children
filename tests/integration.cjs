@@ -30,7 +30,7 @@ test('login, perfis, WebSocket e salas',async()=>{
   assert.equal(unauthorizedPhoto.status,401);
   const child=await request('login','POST',{name:'Piloto',password:'1234'});assert.equal(child.res.status,200);
   const socket=await wsConnect(child.cookie);
-  const roomMessage=once(socket,'roomState');socket.send(JSON.stringify({type:'create',solo:false}));const r=await roomMessage;assert.equal(r.game,'race');assert.equal(r.started,false);
+  const roomMessage=once(socket,'roomState');socket.send(JSON.stringify({type:'create',game:'race',solo:false}));const r=await roomMessage;assert.equal(r.game,'race');assert.equal(r.started,false);
   const progress=once(socket,'frame');
   const adminWS=await wsConnect(adminCookie);
   const online=await request('admin/overview','GET',null,adminCookie);
@@ -44,7 +44,7 @@ test('login, perfis, WebSocket e salas',async()=>{
   const spectatorFrame=once(adminWS,'frame');const viewed=await spectatorFrame;assert.equal(viewed.players.length,2);
   const nextFrame=once(socket,'frame');socket.send(JSON.stringify({type:'lane',lane:2,seq:1}));const moved=await nextFrame;assert.equal(moved.players.find(p=>p.id===c.data.user.id).lane,2);assert.equal(moved.players.find(p=>p.id===c.data.user.id).ackSeq,1);
   const rename=await request('admin/users/'+second.data.user.id,'POST',{name:'Segundo Piloto',password:'5678'},adminCookie);assert.equal(rename.res.status,200);
-  const adminSolo=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',solo:true}));const soloRoom=await adminSolo;assert.equal(soloRoom.mode,'player');assert.equal(soloRoom.players[0].id,a.data.user.id);const pongState=once(adminWS,'roomState',m=>m.game==='pong');adminWS.send(JSON.stringify({type:'create',game:'pong',solo:true}));const pong=await pongState;assert.equal(pong.game,'pong');const pongServing=once(adminWS,'frame',m=>m.game==='pong'&&m.phase==='serve');const serve=await pongServing;
+  const adminSolo=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'create',game:'race',solo:true}));const soloRoom=await adminSolo;assert.equal(soloRoom.mode,'player');assert.equal(soloRoom.players[0].id,a.data.user.id);const pongState=once(adminWS,'roomState',m=>m.game==='pong');adminWS.send(JSON.stringify({type:'create',game:'pong',solo:true}));const pong=await pongState;assert.equal(pong.game,'pong');const pongServing=once(adminWS,'frame',m=>m.game==='pong'&&m.phase==='serve');const serve=await pongServing;
   assert.equal(serve.ball.x,.5,'Bola precisa partir do centro');
   assert.equal(serve.ball.y,.5);
   assert.equal(serve.round,1);

@@ -98,8 +98,37 @@ jobs:
           test "$(wc -c < public/classicube/default.zip)" -gt 10000
           head -c 4 public/classicube/ClassiCube.wasm | od -An -tx1 | tr -d ' ' | grep -q '^0061736d'
           sha256sum public/classicube/ClassiCube.js public/classicube/ClassiCube.wasm public/classicube/default.zip
+      - name: Preparar SDK .NET para MCGalaxy
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restaurar MCGalaxy privado em cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/mcgalaxy
+          key: gfc-mcgalaxy-dotnet8-420d0b2-v1
+      - name: Compilar servidor privado MCGalaxy (fonte oficial fixada)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -x vendor/mcgalaxy/MCGalaxyCLI; then
+            echo "MCGalaxy encontrado no cache."
+          else
+            mkdir -p vendor/mcgalaxy
+            git clone --no-checkout --filter=blob:none https://github.com/ClassiCube/MCGalaxy.git /tmp/gfc-mcgalaxy
+            cd /tmp/gfc-mcgalaxy
+            git fetch --depth 1 origin 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
+            git checkout --detach 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
+            dotnet publish CLI/MCGalaxyCLI_dotnet8.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o "$GITHUB_WORKSPACE/vendor/mcgalaxy"
+            cp LICENSE "$GITHUB_WORKSPACE/vendor/mcgalaxy/GPL-3.0-LICENSE"
+            cp LICENSE.txt "$GITHUB_WORKSPACE/vendor/mcgalaxy/THIRD-PARTY-LICENSES"
+            cd "$GITHUB_WORKSPACE"
+            chmod +x vendor/mcgalaxy/MCGalaxyCLI
+          fi
+          test -x vendor/mcgalaxy/MCGalaxyCLI
+          file vendor/mcgalaxy/MCGalaxyCLI
       - name: Empacotar aplicação
-        run: tar -czf release.tar.gz server.cjs package.json public database
+        run: tar -czf release.tar.gz server.cjs package.json public database vendor/mcgalaxy
       - name: Enviar servidor
         env:
           HOST: ${{ secrets.VPS_HOST }}

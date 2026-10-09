@@ -82,7 +82,7 @@ jobs:
             if test -d public; then cp -a public backup/public; fi
             if test -f package.json; then cp package.json backup/package.json; fi
             tar -xzf release.tar.gz
-            /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund
+            PATH=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin:$PATH /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund
             if sudo -n /usr/bin/systemctl restart games-for-children.service; then
               for i in 1 2 3 4 5; do
                 if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q ok; then

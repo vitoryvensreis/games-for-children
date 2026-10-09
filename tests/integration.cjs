@@ -101,5 +101,5 @@ test('login, perfis, WebSocket e salas',async()=>{
   socket.close();
   const state=await request('admin/overview','GET',null,adminCookie);
   assert.equal(state.res.status,200);assert.ok(state.data.users.some(u=>u.name==='Piloto'));
- }finally{proc?.kill('SIGTERM');rmSync(dir,{recursive:true,force:true})}
+ }finally{if(proc){proc.kill('SIGTERM');await Promise.race([new Promise(r=>proc.once('exit',r)),new Promise(r=>setTimeout(r,1500))])}rmSync(dir,{recursive:true,force:true,maxRetries:8,retryDelay:120})}
 });

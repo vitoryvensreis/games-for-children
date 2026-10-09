@@ -29,6 +29,15 @@ test('login, perfis, WebSocket e salas',async()=>{
   const unauthorizedPhoto=await fetch(base+'/api/photos/'+c.data.user.id);
   assert.equal(unauthorizedPhoto.status,401);
   const child=await request('login','POST',{name:'Piloto',password:'1234'});assert.equal(child.res.status,200);
+  const cubeStatus=await request('classicube/status','GET',null,child.cookie);
+  assert.equal(cubeStatus.res.status,200);
+  assert.equal(cubeStatus.data.mode,'local-client');
+  const notLoggedIn=await fetch(base+'/classicube/index.html');
+  assert.equal(notLoggedIn.status,401);
+  const cubePage=await fetch(base+'/classicube/index.html',{headers:{Cookie:child.cookie}});
+  assert.equal(cubePage.status,200);
+  assert.match(await cubePage.text(),/ClassiCube.js/);
+
   const socket=await wsConnect(child.cookie);
   const roomMessage=once(socket,'roomState');socket.send(JSON.stringify({type:'create',game:'race',solo:false}));const r=await roomMessage;assert.equal(r.game,'race');assert.equal(r.started,false);
   const progress=once(socket,'frame');
@@ -38,6 +47,23 @@ test('login, perfis, WebSocket e salas',async()=>{
   const second=await request('admin/users','POST',{name:'Piloto Dois',password:'4567'},adminCookie);assert.equal(second.res.status,201);
   const loginTwo=await request('login','POST',{name:'Piloto Dois',password:'4567'});assert.equal(loginTwo.res.status,200);
   const secondWS=await wsConnect(loginTwo.cookie);
+  // Global family voice works even when players are in different game rooms.
+  const voiceReady=once(adminWS,'voiceReady',m=>m.name==='Piloto');
+  adminWS.send(JSON.stringify({type:'voice-ready'}));
+  socket.send(JSON.stringify({type:'voice-ready'}));
+  const announcement=await voiceReady;assert.equal(announcement.name,'Piloto');
+  const peerList=once(socket,'peers',m=>m.items.some(x=>x.name==='Administrador'));
+  socket.send(JSON.stringify({type:'peers'}));
+  const globalPeers=await peerList;
+  const parentId=globalPeers.items.find(x=>x.name==='Administrador').id;
+  const relay=once(adminWS,'signal',m=>m.kind==='ice');
+  socket.send(JSON.stringify({type:'signal',to:parentId,kind:'ice',data:{candidate:'test-candidate'}}));
+  const signaled=await relay;assert.equal(signaled.name,'Piloto');
+  const voiceGone=once(adminWS,'peerLeft');
+  socket.send(JSON.stringify({type:'voice-off'}));
+  const leftVoice=await voiceGone;assert.equal(leftVoice.id,signaled.from);
+  adminWS.send(JSON.stringify({type:'voice-off'}));
+
   const secondRoom=once(secondWS,'roomState');secondWS.send(JSON.stringify({type:'join',code:r.code}));
   const joined=await secondRoom;assert.equal(joined.players.length,2);const frame=await progress;assert.ok(frame.remaining>0);
   const watch=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'join',code:r.code,mode:'spectator'}));const spectator=await watch;assert.equal(spectator.mode,'spectator');assert.equal(spectator.players.length,2);

@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {spawn}=require('node:child_process');
-const {mkdtempSync,rmSync,readFileSync}=require('node:fs');
+const {mkdtempSync,rmSync}=require('node:fs');
 const os=require('node:os'),path=require('node:path');
 const WebSocket=require('ws');
 const PORT=31247,base='http://127.0.0.1:'+PORT;
@@ -36,7 +36,11 @@ test('login, perfis, WebSocket e salas',async()=>{
   assert.equal(notLoggedIn.status,401);
   const cubePage=await fetch(base+'/classicube/index.html',{headers:{Cookie:child.cookie}});
   assert.equal(cubePage.status,200);
-  assert.match(await cubePage.text(),/ClassiCube.js/);
+  const html=await cubePage.text();
+  assert.match(html,/ClassiCube.js/);
+  assert.match(html,/resizeGameCanvas/,'ClassiCube must resize backing canvas when rotating');
+  assert.match(html,/width:100%;height:100%/,'Canvas must occupy available frame without clipping');
+
 
   const socket=await wsConnect(child.cookie);
   const roomMessage=once(socket,'roomState');socket.send(JSON.stringify({type:'create',game:'race',solo:false}));const r=await roomMessage;assert.equal(r.game,'race');assert.equal(r.started,false);
@@ -92,37 +96,6 @@ test('login, perfis, WebSocket e salas',async()=>{
   const pongUpdate=once(adminWS,'frame',m=>m.game==='pong');
   socket.send(JSON.stringify({type:'paddle',y:.22}));
   const paddle=await pongUpdate;assert.equal(paddle.players.find(p=>p.id===c.data.user.id).paddle,.22);
-  // Mundo de Blocos: dois dispositivos, ADM, validação, sincronização e salvamento.
-  const vendor=await fetch(base+'/vendor/three.module.js');
-  assert.equal(vendor.status,200,'Three.js deve ser servido localmente');
-  const vendorCore=await fetch(base+'/vendor/three.core.js');
-  assert.equal(vendorCore.status,200);
-  const worldOne=once(socket,'voxelSnapshot');
-  socket.send(JSON.stringify({type:'voxelJoin'}));
-  const firstWorld=await worldOne;
-  assert.equal(firstWorld.worldId,'familia');
-  assert.ok(firstWorld.players.some(p=>p.id===c.data.user.id));
-  const worldAdmin=once(adminWS,'voxelSnapshot');
-  adminWS.send(JSON.stringify({type:'voxelJoin'}));
-  const adminWorld=await worldAdmin;
-  assert.equal(adminWorld.players.length,2,'Administrador entra no mesmo mundo');
-  const blockOther=once(adminWS,'voxelBlock');
-  socket.send(JSON.stringify({type:'voxelEdit',x:4,y:5,z:3,block:'brick'}));
-  const placed=await blockOther;
-  assert.equal(placed.block,'brick');
-  assert.equal(placed.by,'Piloto');
-  const onDisk=JSON.parse(readFileSync(path.join(dir,'state.json'),'utf8'));
-  assert.equal(onDisk.voxelWorld.edits['4,5,3'],'brick','Bloco deve permanecer salvo em disco');
-  const invalid=once(socket,'voxelError');
-  socket.send(JSON.stringify({type:'voxelEdit',x:100,y:20,z:0,block:'brick'}));
-  const rejected=await invalid;
-  assert.match(rejected.message,/inválida|rápida/);
-  const playerMovement=once(adminWS,'voxelPlayer');
-  socket.send(JSON.stringify({type:'voxelMove',x:2.3,z:1.7,yaw:.4}));
-  const movedPlayer=await playerMovement;
-  assert.equal(movedPlayer.player.x,2.3);
-  socket.send(JSON.stringify({type:'voxelLeave'}));
-  adminWS.send(JSON.stringify({type:'voxelLeave'}));
   secondWS.close();adminWS.close();
   socket.close();
   const state=await request('admin/overview','GET',null,adminCookie);

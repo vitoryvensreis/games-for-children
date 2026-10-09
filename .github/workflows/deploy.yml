@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs
       - run: node --test tests/integration.cjs
 
   deploy:

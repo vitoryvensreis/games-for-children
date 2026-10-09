@@ -59,23 +59,26 @@ function leaveRoom(p){if(!p.room)return;const code=p.room;p.room=null;p.playing=
 function ensureRoom(p,code){const r=rooms.get(code);if(!r||r.finished)return null;if(!r.players.has(p.user.id)&&p.playing&&(r.players.size>=2||r.started))return null;if(p.room!==code)leaveRoom(p);p.room=code;if(p.playing)r.players.add(p.user.id);return r}
 function roomState(r){return {type:'roomState',code:r.code,game:r.game,started:r.started,remaining:Math.max(0,Math.ceil((r.endAt-now())/1000)),players:[...r.players].map(id=>{const u=state.users.find(u=>u.id===id);return {id,name:u?.name,score:r.scores[id]||0,lane:r.lanes[id]||1}})}}
 function finish(r){if(r.finished)return;r.finished=true;const ranking=[...r.players].map(id=>({name:state.users.find(u=>u.id===id)?.name||'Jogador',score:r.scores[id]||0})).sort((a,b)=>b.score-a.score);state.games.push({id:uuid(),at:now(),players:ranking});state.games=state.games.slice(-300);save();broadcastRoom(r,{type:'finished',ranking});report()}
-function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;if(r.game==='pong')r.pong={x:.5,y:.5,vx:(Math.random()<.5?-1:1)*.52,vy:(Math.random()<.5?-1:1)*.29,paddles:{},lastTick:now()};for(const q of peers.values())if(q.room===r.code)emit(q.ws,{...roomState(r),mode:q.playing?'player':'spectator'})}
+function start(r){if(r.started)return;r.started=true;r.endAt=now()+60000;r.nextObstacle=now()+1000;r.spawn=0;if(r.game==='pong')r.pong={x:.5,y:.5,vx:0,vy:0,serveDirection:Math.random()<.5?-1:1,serveAt:now()+1100,round:1,paddles:{},lastTick:now()};for(const q of peers.values())if(q.room===r.code)emit(q.ws,{...roomState(r),mode:q.playing?'player':'spectator'})}
 function gameTick(){const t=now();for(const r of rooms.values()){if(!r.started||r.finished)continue;if(t>=r.endAt){finish(r);continue}
 if(r.game==='pong'){
  const g=r.pong,ids=[...r.players];
- const dt=Math.min(.12,Math.max(.001,(t-g.lastTick)/1000));g.lastTick=t;
- if(ids.length===1){g.paddles.ai??=.5;const d=g.y-g.paddles.ai;g.paddles.ai+=Math.sign(d)*Math.min(.73*dt,Math.abs(d))}
- g.x+=g.vx*dt;g.y+=g.vy*dt;
- if(g.y<.025){g.y=.025;g.vy=Math.abs(g.vy)}
- if(g.y>.975){g.y=.975;g.vy=-Math.abs(g.vy)}
- const left=g.paddles[ids[0]]??.5,right=ids[1]?(g.paddles[ids[1]]??.5):(g.paddles.ai??.5);
- function bounce(dir,paddle){g.x=dir===1?.045:.955;g.vx=dir*Math.min(1.05,Math.abs(g.vx)*1.045);g.vy=Math.max(-.75,Math.min(.75,g.vy+(g.y-paddle)*1.4))}
- function reset(dir){g.x=.5;g.y=.25+Math.random()*.5;g.vx=dir*.52;g.vy=(Math.random()<.5?-1:1)*(.24+Math.random()*.13)}
- if(g.x<=.045&&g.vx<0){if(Math.abs(g.y-left)<=.123)bounce(1,left);else{const winner=ids[1]||ids[0];r.scores[winner]=(r.scores[winner]||0)+1;reset(1)}}
- if(g.x>=.955&&g.vx>0){if(Math.abs(g.y-right)<=.123)bounce(-1,right);else{r.scores[ids[0]]=(r.scores[ids[0]]||0)+1;reset(-1)}}
- broadcastRoom(r,{type:'frame',game:'pong',remaining:Math.ceil((r.endAt-t)/1000),
- players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),
- ball:{x:g.x,y:g.y,vx:g.vx,vy:g.vy},aiPaddle:g.paddles.ai??.5});continue}
+ const dt=Math.min(.075,Math.max(0,(t-g.lastTick)/1000));g.lastTick=t;
+ const serving=t<g.serveAt;
+ const leftId=ids[0],rightId=ids[1];
+ if(ids.length===1){g.paddles.ai??=.5;const delta=g.y-g.paddles.ai;g.paddles.ai+=Math.sign(delta)*Math.min(.68*dt,Math.abs(delta))}
+ if(!serving){
+  if(g.vx===0){g.vx=g.serveDirection*.58;g.vy=(Math.random()<.5?-1:1)*(.22+Math.random()*.16)}
+  g.x+=g.vx*dt;g.y+=g.vy*dt;
+  if(g.y<=.025){g.y=.025;g.vy=Math.abs(g.vy)}
+  if(g.y>=.975){g.y=.975;g.vy=-Math.abs(g.vy)}
+  const left=g.paddles[leftId]??.5,right=rightId?(g.paddles[rightId]??.5):g.paddles.ai;
+  function bounce(dir,paddle){g.x=dir===1?.05:.95;g.vx=dir*Math.min(1.10,Math.abs(g.vx)*1.045);g.vy=Math.max(-.72,Math.min(.72,g.vy+(g.y-paddle)*1.15))}
+  function point(winner,dir){r.scores[winner]=(r.scores[winner]||0)+1;g.round++;g.x=.5;g.y=.5;g.vx=0;g.vy=0;g.serveDirection=dir;g.serveAt=t+1250}
+  if(g.x<=.05&&g.vx<0){if(Math.abs(g.y-left)<=.115)bounce(1,left);else point(rightId||leftId,1)}
+  if(g.x>=.95&&g.vx>0){if(Math.abs(g.y-right)<=.115)bounce(-1,right);else point(leftId,-1)}
+ }
+ broadcastRoom(r,{type:'frame',game:'pong',roomCode:r.code,remaining:Math.ceil((r.endAt-t)/1000),players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),ball:{x:g.x,y:g.y,vx:g.vx,vy:g.vy},round:g.round,phase:t<g.serveAt?'serve':'play',serveRemaining:Math.max(0,Math.ceil((g.serveAt-t)/1000)),aiPaddle:g.paddles.ai??.5});continue}
 
 if(t>=r.nextObstacle){r.spawn++;const lane=Math.floor(Math.random()*3);r.obstacles.push({id:r.spawn,lane,at:t});r.nextObstacle=t+780}
 for(const o of r.obstacles){if(o.done||t-o.at<2400)continue;o.done=true;for(const id of r.players){if(r.lanes[id]===o.lane)r.scores[id]=Math.max(0,(r.scores[id]||0)-5);else r.scores[id]=(r.scores[id]||0)+10}}
@@ -170,7 +173,7 @@ if(m.type==='voxelEdit'&&voxelPeers.has(p.id)){
  p.voxelEditAt=t;edits[key]=block;save();voxelBroadcast({type:'voxelBlock',x,y,z,block,by:u.name});
 }
 
-if(m.type==='create'&&(u.role==='child'||u.role==='admin')){voxelDepart(p);leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=['race','pong'].includes(m.game)?m.game:'race';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
+if(m.type==='create'&&(u.role==='child'||u.role==='admin')){voxelDepart(p);leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=m.game==='pong'?'pong':m.game==='race'?'race':'pong';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){
  voxelDepart(p);
  const code=m.code.toUpperCase(),r0=rooms.get(code);

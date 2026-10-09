@@ -13,8 +13,37 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 #logmsg{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);max-width:76vw;padding:8px 12px;font-size:12px;text-align:center;background:#111b3cdd;border:1px solid #ffffff44;border-radius:11px;color:white;pointer-events:none;z-index:5}
 #error{position:fixed;inset:0;display:none;justify-content:center;align-items:center;z-index:10;padding:22px;text-align:center;background:#151a46}
 #error a{color:#ffe27e}
+
+#mobileGamePad[hidden]{display:none!important}
+#mobileGamePad{position:fixed;inset:0;z-index:6;pointer-events:none;overflow:hidden}
+.cc-pad{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 9px);display:grid;gap:4px;pointer-events:none;touch-action:none}
+.cc-pad button{pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;min-height:38px;min-width:51px;border:2px solid #ffffffe5;border-radius:12px;background:#1a2b45b8;color:#fff;font:900 13px system-ui,sans-serif;box-shadow:0 3px 8px #071631a6;padding:6px;backdrop-filter:blur(4px)}
+.cc-pad button:active,.cc-pad button.is-down{background:#35bc91e6;transform:translateY(1px)}
+.cc-pad-left{left:calc(env(safe-area-inset-left,0px) + 10px);grid-template-columns:repeat(3,minmax(44px,53px));grid-template-rows:repeat(2,40px)}
+.cc-pad-left .pad-up{grid-column:2;grid-row:1}
+.cc-pad-left .pad-left{grid-column:1;grid-row:2}
+.cc-pad-left .pad-down{grid-column:2;grid-row:2}
+.cc-pad-left .pad-right{grid-column:3;grid-row:2}
+.cc-pad-right{right:calc(env(safe-area-inset-right,0px) + 10px);grid-template-columns:repeat(2,minmax(58px,76px));grid-template-rows:repeat(2,43px)}
+.cc-pad-right .cc-jump{grid-column:2;grid-row:1;background:#395b9fc9}
+.cc-pad-right .cc-place{grid-column:1;grid-row:2;background:#21885fc9}
+.cc-pad-right .cc-break{grid-column:2;grid-row:2;background:#a54845c9}
+@media(max-height:420px){.cc-pad{bottom:calc(env(safe-area-inset-bottom,0px) + 5px)}.cc-pad-left{grid-template-rows:repeat(2,35px);grid-template-columns:repeat(3,48px)}.cc-pad-right{grid-template-rows:repeat(2,35px)}.cc-pad button{min-height:33px;font-size:11px}}
+@media(pointer:fine){#mobileGamePad{display:none!important}}
 </style>
-</head><body><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div>
+</head><body><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div><div id="mobileGamePad" role="group" aria-label="Controles do jogo" hidden>
+<div class="cc-pad cc-pad-left" aria-label="Movimentação">
+<button data-key="KeyW" data-code="87" class="pad-up" aria-label="Andar para frente">▲</button>
+<button data-key="KeyA" data-code="65" class="pad-left" aria-label="Andar à esquerda">◀</button>
+<button data-key="KeyS" data-code="83" class="pad-down" aria-label="Andar para trás">▼</button>
+<button data-key="KeyD" data-code="68" class="pad-right" aria-label="Andar à direita">▶</button>
+</div>
+<div class="cc-pad cc-pad-right" aria-label="Ações">
+<button data-key="Space" data-code="32" class="cc-jump" aria-label="Pular">PULAR</button>
+<button data-mouse="2" class="cc-place" aria-label="Colocar bloco">COLOCAR</button>
+<button data-mouse="0" class="cc-break" aria-label="Quebrar bloco">QUEBRAR</button>
+</div>
+</div>
 <script>
 (async()=>{
 const status=document.getElementById('logmsg'), canvas=document.getElementById('canvas'), error=document.getElementById('error');
@@ -52,4 +81,30 @@ try{
 }catch(e){status.style.display='none';error.style.display='flex';error.firstElementChild.textContent=e.message}
 })();
 </script>
-</body></html>
+<script>
+(function(){
+const controls=document.getElementById('mobileGamePad');
+if(!matchMedia('(pointer:coarse)').matches)return;
+controls.hidden=false;
+const gameCanvas=document.getElementById('canvas');
+const active=new Map();
+function keyEvent(kind,key,code){const down=kind==='keydown';const keyText=key==='Space'?' ':key.replace('Key','').toLowerCase();const evt=new KeyboardEvent(kind,{key:keyText,code,bubbles:true,cancelable:true});Object.defineProperty(evt,'keyCode',{get:()=>Number(key==='Space'?32:key.charCodeAt(3))});Object.defineProperty(evt,'which',{get:()=>evt.keyCode});window.dispatchEvent(evt)}
+function mouseEvent(kind,button){gameCanvas.dispatchEvent(new MouseEvent(kind,{button,buttons:kind==='mousedown'?(button===2?2:1):0,bubbles:true,cancelable:true,view:window}))}
+function release(button){const state=active.get(button);if(!state)return;active.delete(button);button.classList.remove('is-down');if(state.key)keyEvent('keyup',state.key);else mouseEvent('mouseup',state.mouse)}
+function press(e){e.preventDefault();e.stopPropagation();const button=e.currentTarget;if(active.has(button))return;
+ button.setPointerCapture?.(e.pointerId);
+ const key=button.dataset.key,mouse=button.dataset.mouse;
+ if(key){active.set(button,{key});keyEvent('keydown',key)}
+ else if(mouse!==undefined){active.set(button,{mouse:Number(mouse)});mouseEvent('mousedown',Number(mouse))}
+ button.classList.add('is-down');
+}
+for(const button of controls.querySelectorAll('button')){
+ button.addEventListener('pointerdown',press,{passive:false});
+ for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,e=>{e.preventDefault();e.stopPropagation();release(button)},{passive:false});
+ button.addEventListener('contextmenu',e=>e.preventDefault());
+}
+for(const name of ['touchstart','touchmove','touchend','touchcancel'])controls.addEventListener(name,e=>{e.preventDefault();e.stopPropagation()},{passive:false});
+window.addEventListener('blur',()=>{for(const b of [...active.keys()])release(b)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)for(const b of [...active.keys()])release(b)});
+})();
+</script></body></html>

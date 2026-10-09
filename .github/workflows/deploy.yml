@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/voxel.js && node --check public/gorillas.js && node --check public/snake-rules.js
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/voxel.js && node --check public/snake-rules.js
       - run: node --test tests/integration.cjs tests/snake.cjs
 
   deploy:
@@ -62,6 +62,19 @@ jobs:
             echo "::error::TCP_PORT_UNREACHABLE: runner não alcança SSH da VPS"
             exit 1
           fi
+      - name: Baixar cliente ClassiCube para hospedagem local
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public/classicube
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 100 --proto '=https' --tlsv1.2 \
+            "https://cs.classicube.net/client/latest/ClassiCube.js" -o public/classicube/ClassiCube.js
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 100 --proto '=https' --tlsv1.2 \
+            "https://classicube.net/static/default.zip" -o public/classicube/default.zip
+          test "$(wc -c < public/classicube/ClassiCube.js)" -gt 100000
+          test "$(wc -c < public/classicube/default.zip)" -gt 10000
+          head -c 2 public/classicube/default.zip | od -An -tx1 | tr -d ' ' | grep -q '^504b'
+          sha256sum public/classicube/ClassiCube.js public/classicube/default.zip
       - name: Empacotar aplicação
         run: tar -czf release.tar.gz server.cjs package.json public database
       - name: Enviar servidor

@@ -23,7 +23,7 @@ jobs:
 
   deploy:
     needs: validate
-    if: ${{ vars.ENABLE_DEPLOY == 'true' }}
+    if: ${{ vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:

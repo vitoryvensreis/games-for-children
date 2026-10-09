@@ -40,6 +40,8 @@ test('login, perfis, WebSocket e salas',async()=>{
   const secondWS=await wsConnect(loginTwo.cookie);
   const secondRoom=once(secondWS,'roomState');secondWS.send(JSON.stringify({type:'join',code:r.code}));
   const joined=await secondRoom;assert.equal(joined.players.length,2);const frame=await progress;assert.ok(frame.remaining>0);
+  const watch=once(adminWS,'roomState');adminWS.send(JSON.stringify({type:'join',code:r.code,mode:'spectator'}));const spectator=await watch;assert.equal(spectator.mode,'spectator');assert.equal(spectator.players.length,2);
+  const spectatorFrame=once(adminWS,'frame');const viewed=await spectatorFrame;assert.equal(viewed.players.length,2);
   const nextFrame=once(socket,'frame');socket.send(JSON.stringify({type:'lane',lane:2,seq:1}));const moved=await nextFrame;assert.equal(moved.players.find(p=>p.id===c.data.user.id).lane,2);assert.equal(moved.players.find(p=>p.id===c.data.user.id).ackSeq,1);
   const rename=await request('admin/users/'+second.data.user.id,'POST',{name:'Segundo Piloto',password:'5678'},adminCookie);assert.equal(rename.res.status,200);
   secondWS.close();adminWS.close();

@@ -44,6 +44,11 @@ function readBody(req){return new Promise((resolve,reject)=>{let text='';req.on(
 async function pushAdmins(title,body){if(!PUSH_READY)return;const targets=state.pushSubscriptions.filter(s=>state.users.some(u=>u.id===s.userId&&u.role==='admin'&&u.enabled));await Promise.allSettled(targets.map(async entry=>{try{await webpush.sendNotification(entry.subscription,JSON.stringify({title,body,url:'/'}),{TTL:90,urgency:'normal'})}catch(err){if(err.statusCode===404||err.statusCode===410){state.pushSubscriptions=state.pushSubscriptions.filter(s=>s.endpoint!==entry.endpoint);save()}else console.error('Push falhou:',err.statusCode||err.message)}}))}
 function track(u,type){state.events.unshift({id:uuid(),userId:u.id,name:u.name,type,at:now()});state.events=state.events.slice(0,1000);save();admins({type:'notice',text:u.name+': '+type});if(u.role==='child'&&['online','offline','entrou','desconectado pelo ADM'].includes(type))void pushAdmins('GamesForChildren',u.name+' — '+type)}
 const peers=new Map(), rooms=new Map(), voxelPeers=new Map();
+function voiceEligible(p){return p.ws.readyState===1&&(p.user.role==='admin'||p.user.voiceEnabled===true)}
+function voiceMembers(){return [...peers.values()].filter(p=>p.voiceActive&&voiceEligible(p))}
+function voiceList(p){return voiceMembers().filter(q=>q!==p).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))}
+function voicePresence(){for(const p of peers.values())if(voiceEligible(p))emit(p.ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}
+
 const VOXEL_TYPES=new Set(['air','grass','dirt','stone','wood','leaves','sand','brick','glass']);
 function voxelWorld(){state.voxelWorld??={version:1,edits:{}};state.voxelWorld.edits??={};return state.voxelWorld}
 function voxelUsers(){return [...voxelPeers.values()].map(p=>({id:p.user.id,name:p.user.name,role:p.user.role,x:p.voxelPos?.x??0,z:p.voxelPos?.z??4,yaw:p.voxelPos?.yaw??0}))}
@@ -87,10 +92,17 @@ broadcastRoom(r,{type:'frame',remaining:Math.ceil((r.endAt-t)/1000),players:[...
 }}
 setInterval(gameTick,40).unref();
 const publicDir=path.join(ROOT,'public');
+const CLASSICUBE_DIR=path.join(publicDir,'classicube');
+const CLASSICUBE_JS=path.join(CLASSICUBE_DIR,'ClassiCube.js');
+const CLASSICUBE_TEXTURES=path.join(CLASSICUBE_DIR,'default.zip');
+
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;
 res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options','DENY');
 if(pathname==='/api/health')return json(res,200,{ok:true,service:'games-for-children'});
+if(pathname==='/classicube/index.html'){if(!checkSession(req)){res.writeHead(401);return res.end('Login necessário')} }
+if(pathname==='/static/default.zip')return fs.readFile(CLASSICUBE_TEXTURES,(err,b)=>{if(err){res.writeHead(404);return res.end('Pacote de textura não instalado')}res.writeHead(200,{'Content-Type':'application/zip','Cache-Control':'public, max-age=3600'});res.end(b)});
+
 if(/^\/vendor\/three\.(module|core)\.js$/.test(pathname)){
  const name=pathname.slice('/vendor/'.length),asset=path.join(ROOT,'node_modules','three','build',name);
  return fs.readFile(asset,(err,b)=>{if(err){res.writeHead(404);return res.end('Módulo 3D indisponível')};res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'public, max-age=86400','X-Content-Type-Options':'nosniff'});res.end(b)})
@@ -107,6 +119,7 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
+if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'local-client',multiplayerConfigured:false});
 if(pathname==='/api/heartbeat'&&req.method==='POST'){const was=activeUser(u);touch(s);s.lastSeen=now();save();if(!was&&u.role==='child')track(u,'online');report();return json(res,200,{ok:true,online:true})}
 if(pathname.startsWith('/api/photos/')&&req.method==='GET'){const id=pathname.slice('/api/photos/'.length),target=state.users.find(x=>x.id===id);if(!target||!target.photo||(u.role!=='admin'&&u.id!==id))return json(res,404,{error:'Foto indisponível'});const match=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(target.photo);if(!match)return json(res,404,{error:'Foto inválida'});res.writeHead(200,{'Content-Type':'image/'+match[1],'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});return res.end(Buffer.from(match[2],'base64'))}
 if(pathname==='/api/voice/config'&&req.method==='GET')return json(res,200,{iceServers:ICE_SERVERS,turnConfigured:ICE_SERVERS.length>1});
@@ -127,7 +140,7 @@ if(Object.prototype.hasOwnProperty.call(b,'photo')){
  else {const p=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(b.photo||'');if(!p||p[2].length>180000||Buffer.from(p[2],'base64').length>110000)return json(res,400,{error:'Foto inválida ou muito grande (máximo 110 KB)'});child.photo=b.photo}
 }
 for(const key of ['enabled','loginEnabled','voiceEnabled'])if(typeof b[key]==='boolean')child[key]=b[key];
-if(!child.voiceEnabled){for(const peer of peers.values())if(peer.user.id===child.id)emit(peer.ws,{type:'voiceBlocked'})}
+if(!child.voiceEnabled){for(const peer of peers.values())if(peer.user.id===child.id){peer.voiceActive=false;emit(peer.ws,{type:'voiceBlocked'})}voicePresence()}
 if(Number.isInteger(b.dailyLimit)&&b.dailyLimit>=0&&b.dailyLimit<=1440)child.dailyLimit=b.dailyLimit;
 if(!child.enabled||usage(child)>=child.dailyLimit*60000){child.version++;for(const a of state.sessions.filter(a=>a.userId===child.id&&!a.revoked))end(a)}
 save();report();return json(res,200,{user:userInfo(child)})}
@@ -150,7 +163,7 @@ server.on('upgrade',(req,socket,head)=>{
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))
 });
-wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});report();
+wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});emit(ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))});report();
 ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
 if(m.type==='lobby')lobby();
 if(m.type==='voxelJoin'){
@@ -192,11 +205,12 @@ if(m.type==='join'&&typeof m.code==='string'){
 if(m.type==='paddle'&&p.room&&p.playing){const r=rooms.get(p.room);if(r?.game==='pong'&&r.started&&!r.finished&&Number.isFinite(m.y)){r.pong.paddles[u.id]=Math.max(.13,Math.min(.87,m.y))}}
 if(m.type==='lane'&&p.room&&p.playing){const r=rooms.get(p.room);if(r&&r.started&&!r.finished&&r.players.has(u.id)&&Number.isInteger(m.lane)&&m.lane>=0&&m.lane<=2){r.lanes[u.id]=m.lane;if(Number.isSafeInteger(m.seq)&&m.seq>=0){r.ack??={};r.ack[u.id]=m.seq}}}
 if(m.type==='leave')leaveRoom(p);
-if(m.type==='signal'&&p.room&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<6500){if(u.role==='child'&&!u.voiceEnabled)return;const recipient=peers.get(m.to);if(recipient&&recipient.room===p.room&&(recipient.user.role==='admin'||recipient.user.voiceEnabled))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
-if(m.type==='peers'&&p.room){emit(ws,{type:'peers',items:[...peers.values()].filter(q=>q.room===p.room&&q!==p).map(q=>({id:q.id,name:q.user.name,role:q.user.role}))})}
-if(m.type==='voice-ready'&&p.room&&(u.role==='admin'||u.voiceEnabled)){for(const q of peers.values())if(q!==p&&q.room===p.room)emit(q.ws,{type:'voiceReady',id:p.id,name:u.name,role:u.role})}
+if(m.type==='voice-ready'&&voiceEligible(p)){p.voiceActive=true;emit(ws,{type:'peers',items:voiceList(p)});for(const q of voiceMembers())if(q!==p)emit(q.ws,{type:'voiceReady',id:p.id,name:u.name,role:u.role});voicePresence()}
+if(m.type==='voice-off'){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id});voicePresence()}
+if(m.type==='peers'){emit(ws,{type:'peers',items:voiceList(p)})}
+if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<14000){const recipient=peers.get(m.to);if(recipient?.voiceActive&&voiceEligible(recipient))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 });
-ws.on('close',()=>{voxelDepart(p);leaveRoom(p);peers.delete(p.id);touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
+ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}voxelDepart(p);leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

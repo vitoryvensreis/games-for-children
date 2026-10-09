@@ -12,7 +12,7 @@ if(m.type==='lobby')renderLobby(m.rooms);
 if(m.type==='logout'){me=null;room=null;stopVoice();login();notify('Acesso encerrado pelo administrador')}
 if(m.type==='voiceBlocked'){stopVoice();notify('O administrador desligou o chat de voz')}
 if(m.type==='roomState'){const previous=room?.code;room=m;if(previous!==m.code){desiredLane=1;inputSeq=0;lastLaneInput=0;frame=null}if(m.mode==='player'||(me?.role==='child')){if(m.game==='pong'){if(previous!==m.code||!$('#pongCanvas'))pong()}else if(previous!==m.code||!$('#road'))race();else updateRaceStatus()}else{if(m.game==='pong'){if(previous!==m.code||!$('#pongCanvas'))pong()}else if(previous!==m.code||!$('#road'))spectate();else updateRaceStatus()}send({type:'peers'})}
-if(m.type==='frame'){frame=m;if(room?.game==='pong')drawPongFrame(m);if(room?.mode==='spectator')renderSpectatorScore(m);const el=$('#clock');if(el)el.textContent=m.remaining+'s';const mine=m.players.find(p=>p.id===me?.id);if(mine){if(Number.isInteger(mine.ackSeq)&&mine.ackSeq===inputSeq)desiredLane=mine.lane;const points=$('#points');if(points)points.textContent=mine.score} }
+if(m.type==='frame'&&((room?.game==='pong')===(m.game==='pong'))){frame=m;if(room?.game==='pong')drawPongFrame(m);if(room?.mode==='spectator')renderSpectatorScore(m);const el=$('#clock');if(el)el.textContent=m.remaining+'s';const mine=m.players.find(p=>p.id===me?.id);if(mine){if(Number.isInteger(mine.ackSeq)&&mine.ackSeq===inputSeq)desiredLane=mine.lane;const points=$('#points');if(points)points.textContent=mine.score} }
 if(m.type==='finished'){const lines=m.ranking.map((p,i)=>(i+1)+'º '+p.name+' — '+p.score+' pontos').join(' | ');notify('Fim da corrida! '+lines);const el=$('#finish');if(el){el.textContent=lines;el.style.display='flex'}}
 if(m.type==='error')notify(m.message);
 if(m.type==='notice')notify(m.text);
@@ -33,13 +33,13 @@ function pong(){
  $('#back').onclick=()=>{cancelAnimationFrame(pongRaf);pongPadDirection=0;send({type:'leave'});stopVoice();room=null;home()};
  $('#voice').onclick=toggleVoice;$('#mute').onclick=toggleMute;
  const canvas=$('#pongCanvas');
- const setPaddle=y=>{pongLocalY=Math.max(.13,Math.min(.87,y));const n=performance.now();if(n-pongLastSend>30){pongLastSend=n;send({type:'paddle',y:pongLocalY})}};
+ const setPaddle=y=>{if(room?.mode==='spectator')return;pongLocalY=Math.max(.13,Math.min(.87,y));const n=performance.now();if(n-pongLastSend>30){pongLastSend=n;send({type:'paddle',y:pongLocalY})}};
  const touch=e=>{e.preventDefault();const r=canvas.getBoundingClientRect();setPaddle((e.clientY-r.top)/r.height)};
  canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture?.(e.pointerId);touch(e)});
  canvas.addEventListener('pointermove',e=>{if(e.buttons||e.pressure)touch(e)});
  const bind=(id,d)=>{const button=$(id);button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture?.(e.pointerId);pongPadDirection=d},{passive:false});for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,()=>{if(pongPadDirection===d)pongPadDirection=0})};
  bind('#pongUp',-1);bind('#pongDown',1);
- updateRaceStatus();function animate(){if(!$('#pongCanvas')||room?.game!=='pong')return;if(pongPadDirection&&room?.started)setPaddle(pongLocalY+pongPadDirection*.012);paintPong();pongRaf=requestAnimationFrame(animate)}animate();
+ updateRaceStatus();function animate(){if(!$('#pongCanvas')||room?.game!=='pong')return;if(pongPadDirection&&room?.started&&room?.mode!=='spectator')setPaddle(pongLocalY+pongPadDirection*.012);paintPong();pongRaf=requestAnimationFrame(animate)}animate();
 }
 function drawPongFrame(m){
  if(room?.game!=='pong')return;

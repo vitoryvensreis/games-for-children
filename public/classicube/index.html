@@ -69,10 +69,23 @@ try{
  const response=await fetch('/api/me',{credentials:'same-origin'});
  if(!response.ok)throw Error('É necessário entrar no GamesForChildren.');
  const user=(await response.json()).user;
- const username=(user.name||'Jogador').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_]/g,'').slice(0,16)||'Jogador';
- // Apenas mundo criativo local: o servidor privado multiplayer exige MCGalaxy/WSS em uma implantação futura.
+ const responseWorld=await fetch('/api/classicube/status',{credentials:'same-origin'});
+ if(!responseWorld.ok)throw Error('Mundo da família não disponível');
+ const config=await responseWorld.json();
+ const username=config.playerName||'Jogador';
+ if(!config.multiplayerConfigured){throw Error('O mundo compartilhado ainda está iniciando. Aguarde alguns segundos e tente novamente.')}
+ // The Emscripten ClassiCube webclient always connects using its own WebSocket.
+ // Redirect only the ClassiCube protocol to our cookie-authenticated, same-origin gateway.
+ const NativeWebSocket=window.WebSocket;
+ function FamilyWebSocket(url,protocols){
+  if(protocols==='ClassiCube')return new NativeWebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws?classicube=1','ClassiCube');
+  return new NativeWebSocket(url,protocols);
+ }
+ FamilyWebSocket.prototype=NativeWebSocket.prototype;
+ Object.setPrototypeOf(FamilyWebSocket,NativeWebSocket);
+ window.WebSocket=FamilyWebSocket;
  window.Module={
- preRun:[],postRun:[],arguments:[username],canvas,print:(...args)=>console.log(...args),printErr:(...args)=>console.warn(...args),
+ preRun:[],postRun:[],arguments:[username,'',location.hostname,'443'],canvas,print:(...args)=>console.log(...args),printErr:(...args)=>console.warn(...args),
  setStatus:text=>{status.textContent=text;if(!text||text==='All downloads complete.')setTimeout(()=>status.style.display='none',1200)},
  totalDependencies:0,
  monitorRunDependencies(left){this.totalDependencies=Math.max(this.totalDependencies,left);this.setStatus(left?'Preparando arquivos... '+(this.totalDependencies-left)+'/'+this.totalDependencies:'All downloads complete.')}

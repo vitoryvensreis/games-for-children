@@ -123,8 +123,11 @@ jobs:
             PATH=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin:$PATH /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund
             if sudo -n /usr/bin/systemctl restart games-for-children.service; then
               for i in 1 2 3 4 5; do
-                if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q ok; then
-                  echo DEPLOY_HEALTH_OK
+                if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q ok \
+                    && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/classicube/ClassiCube.js \
+                    && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/classicube/ClassiCube.wasm \
+                    && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/static/default.zip; then
+                  echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK
                   exit 0
                 fi
                 sleep 2

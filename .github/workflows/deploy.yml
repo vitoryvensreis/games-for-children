@@ -46,6 +46,20 @@ jobs:
           actual="$(ssh-keygen -lf ~/.ssh/known_hosts -E sha256 | awk 'NR==1 {print $2}')"
           test "$actual" = "$FP"
           ssh-keygen -F "$HOST" -f ~/.ssh/known_hosts >/dev/null
+      - name: Diagnosticar TCP SSH da VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -eu
+          echo "Testando acesso TCP externo à VPS..."
+          if timeout 18 bash -c 'echo > /dev/tcp/"$1"/"$2"' _ "$VPS_HOST" "$VPS_PORT"; then
+            echo "TCP_PORT_OPEN"
+          else
+            echo "::error::TCP_PORT_UNREACHABLE: runner não alcança SSH da VPS"
+            exit 1
+          fi
       - name: Enviar servidor
         env:
           HOST: ${{ secrets.VPS_HOST }}

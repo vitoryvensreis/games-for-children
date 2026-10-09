@@ -23,6 +23,11 @@ test('login, perfis, WebSocket e salas',async()=>{
   let a=await request('login','POST',{name:'Administrador',password:'senha-forte-teste-123456'});
   assert.equal(a.res.status,200);const adminCookie=a.cookie;
   const c=await request('admin/users','POST',{name:'Piloto',password:'1234'},adminCookie);assert.equal(c.res.status,201);
+  const photo='data:image/png;base64,'+Buffer.from('fake-photo').toString('base64');
+  const savePhoto=await request('admin/users/'+c.data.user.id,'POST',{photo},adminCookie);
+  assert.equal(savePhoto.res.status,200);
+  const unauthorizedPhoto=await fetch(base+'/api/photos/'+c.data.user.id);
+  assert.equal(unauthorizedPhoto.status,401);
   const child=await request('login','POST',{name:'Piloto',password:'1234'});assert.equal(child.res.status,200);
   const socket=await wsConnect(child.cookie);
   const roomMessage=once(socket,'roomState');socket.send(JSON.stringify({type:'create',solo:true}));const r=await roomMessage;assert.equal(r.game,'race');assert.equal(r.started,false);

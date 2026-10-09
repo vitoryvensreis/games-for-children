@@ -141,7 +141,7 @@ if(Object.prototype.hasOwnProperty.call(b,'photo')){
  else {const p=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(b.photo||'');if(!p||p[2].length>180000||Buffer.from(p[2],'base64').length>110000)return json(res,400,{error:'Foto inválida ou muito grande (máximo 110 KB)'});child.photo=b.photo}
 }
 for(const key of ['enabled','loginEnabled','voiceEnabled'])if(typeof b[key]==='boolean')child[key]=b[key];
-if(!child.voiceEnabled){for(const peer of peers.values())if(peer.user.id===child.id){peer.voiceActive=false;emit(peer.ws,{type:'voiceBlocked'})}voicePresence()}
+if(!child.voiceEnabled){for(const peer of peers.values())if(peer.user.id===child.id){peer.voiceActive=false;emit(peer.ws,{type:'voiceBlocked'});for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:peer.id})}voicePresence()}
 if(Number.isInteger(b.dailyLimit)&&b.dailyLimit>=0&&b.dailyLimit<=1440)child.dailyLimit=b.dailyLimit;
 if(!child.enabled||usage(child)>=child.dailyLimit*60000){child.version++;for(const a of state.sessions.filter(a=>a.userId===child.id&&!a.revoked))end(a)}
 save();report();return json(res,200,{user:userInfo(child)})}

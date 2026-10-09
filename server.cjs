@@ -170,8 +170,9 @@ if(m.type==='voxelEdit'&&voxelPeers.has(p.id)){
  p.voxelEditAt=t;edits[key]=block;save();voxelBroadcast({type:'voxelBlock',x,y,z,block,by:u.name});
 }
 
-if(m.type==='create'&&(u.role==='child'||u.role==='admin')){leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=['race','pong'].includes(m.game)?m.game:'race';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
+if(m.type==='create'&&(u.role==='child'||u.role==='admin')){voxelDepart(p);leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=['race','pong'].includes(m.game)?m.game:'race';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){
+ voxelDepart(p);
  const code=m.code.toUpperCase(),r0=rooms.get(code);
  const playing=u.role==='child'||m.mode==='player';
  if(!r0||r0.finished||(playing&&!r0.players.has(u.id)&&(r0.started||r0.players.size>=2))){emit(ws,{type:'error',message:'Sala indisponível ou completa'});return}

@@ -41,3 +41,34 @@ body:has(.race-screen){overflow:hidden}
 .lobby-room button{background:#12af9d;box-shadow:0 4px 0 #087c6f}
 details{margin-top:18px}summary{cursor:pointer;font-weight:800;margin-bottom:12px}
 @media(max-width:420px){.race-top{height:60px;padding:6px}.race-top button{font-size:12px;padding:8px}.race-score{gap:6px;font-size:14px}.race-controls{height:96px}.race-controls button .icon{width:40px;height:40px}}
+
+
+/* Arcade fullscreen v2 - vence os estilos antigos */
+html:has(.race-screen),body:has(.race-screen){height:100%;overflow:hidden;overscroll-behavior:none}
+#app:has(.race-screen){position:fixed;inset:0;z-index:9999;overflow:hidden}
+.race-screen{position:fixed;inset:0;width:100vw;height:100dvh;z-index:9999;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:#13204f;color:#fff;overflow:hidden;touch-action:manipulation}
+.race-top{height:clamp(54px,9dvh,74px);padding:7px clamp(8px,2vw,20px);flex-shrink:0;display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,#22235b,#121840);border-bottom:3px solid #ffc83c;box-shadow:0 4px 15px #060b2a88;z-index:4}
+.race-brand{display:flex;flex-direction:column;color:#ffcb35;line-height:.95;font-size:11px;letter-spacing:2px;font-weight:900;text-shadow:1px 3px #642a68}.race-brand strong{font-size:28px;letter-spacing:0}
+.race-exit{background:#32366b!important;min-width:45px;flex:0 0 auto}
+.race-score{margin:auto;display:flex;gap:8px;align-items:center}
+.race-metric{display:flex!important;align-items:center;justify-content:center;background:#060d32aa;border:1px solid #6675b9;border-radius:12px;padding:8px 9px;min-width:64px;color:#fff;font-size:clamp(12px,3.6vw,18px)}
+.race-metric .icon{color:#ffcc39}
+.race-sound{display:flex;gap:5px;align-items:center}
+.race-sound button{padding:8px!important;min-width:41px;font-size:11px;background:#1978c1;box-shadow:none}
+.race-track{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;background:linear-gradient(180deg,#46baf0 0%,#a9edff 23%,#59c676 24%,#2d9b59 100%)}
+.race-track canvas{position:relative;z-index:2;display:block;width:min(100%,650px);height:100%;background:transparent;object-fit:fill}
+.race-sky{position:absolute;inset:0 0 auto;height:29%;background:linear-gradient(180deg,#42b0ee,#bcf3ff)}
+.race-sun{position:absolute;width:80px;height:80px;border-radius:50%;background:#fff2a5;top:16%;right:19%;box-shadow:0 0 50px #fff4bd}
+.race-cloud{position:absolute;width:100px;height:22px;border-radius:50px;background:#ffffffb0;top:35%;left:10%}.race-cloud.two{left:68%;top:62%;width:65px}
+.race-horizon{position:absolute;bottom:0;height:11%;width:100%;background:repeating-linear-gradient(90deg,#397eb8 0 17px,#5794c2 17px 28px)}
+.race-edge{display:none}
+.race-controls{height:clamp(92px,15dvh,132px);flex:0 0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(55px,100px) minmax(0,1fr);align-items:center;gap:12px;padding:10px 12px;background:linear-gradient(180deg,#1f245a,#10163d);border-top:3px solid #ffd45b;z-index:4}
+.race-controls button{width:100%;max-width:none;height:100%;min-height:66px;display:flex;flex-direction:column;gap:0;justify-content:center;align-items:center;color:#222a4b;background:linear-gradient(#ffe86d,#ffaf26);border:2px solid #fff2a7;box-shadow:0 5px 0 #b15f1e;border-radius:20px;touch-action:none;user-select:none;-webkit-user-select:none}
+.race-controls button .icon{width:40px;height:40px}.race-controls button span{font-size:10px;letter-spacing:1px;font-weight:900}
+.race-control-center{text-align:center;display:flex;flex-direction:column;gap:5px;align-items:center}
+.race-control-center strong{font-size:11px;line-height:1.2;color:#ffd862}
+.race-control-center small{font-size:10px;line-height:1.3;color:#baceec}
+.race-overlay{z-index:3;background:#080e35ab;backdrop-filter:blur(5px)}
+.wait-card{border:3px solid #ffca46;box-shadow:0 8px 0 #65368a;padding:25px 22px}
+.wait-label{display:inline-block;color:#ef607e;font-size:11px;letter-spacing:3px;margin-bottom:12px}
+@media(max-width:390px){.race-brand{display:none}.race-top{gap:5px}.race-score{gap:4px}.race-metric{padding:6px;min-width:52px}.race-sound button{min-width:36px}.race-controls{gap:8px;padding:8px}.race-controls button span{font-size:9px}}

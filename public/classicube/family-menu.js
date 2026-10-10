@@ -39,9 +39,9 @@
      '<span class="family-hint">Nenhum amigo jogando agora. Peça para ele abrir o Minecraft.</span>')+'</div></section>'+
     '<section class="family-section"><h3>Minha casinha</h3><div class="family-row"><button type="button" class="family-action family-primary" data-action="home" '+(myHome?'':'disabled')+'>Ir para minha casa</button></div><p class="family-hint">'+(myHome?escape(myHome.title)+'. Seus blocos estão protegidos contra alterações das outras crianças.':'Peça ao ADM para escolher uma casa para você.')+'</p></section>'+
     '<section class="family-section"><h3>Portais para outros mundos</h3><div class="family-row"><button type="button" class="family-action" data-action="vila">Vila da Família</button><button type="button" class="family-action" data-action="aventura">Mundo Aventura</button><button type="button" class="family-action family-primary" data-action="exploracao">Exploração maior</button></div></section>'+
-    '<section class="family-section"><h3>Mineração e ferramentas</h3>'+
-    '<p class="family-hint">Explore cavernas, minere pedra, carvão, ferro e ouro. Use materiais encontrados para criar equipamentos.</p>'+
-    '<p class="family-hint">Mochila: madeira '+Number(bag.wood||0)+' · pedra '+Number(bag.stone||0)+' · ferro '+Number(bag.iron||0)+' · ouro '+Number(bag.gold||0)+'</p>'+
+    '<section class="family-section"><h3>Construção criativa e equipamentos</h3>'+
+    '<p class="family-hint">Todos os blocos são gratuitos! Toque em BLOCOS para abrir o inventário original com texturas. Minere somente se quiser explorar.</p>'+
+    '<p class="family-hint">Recursos opcionais: madeira '+Number(bag.wood||0)+' · pedra '+Number(bag.stone||0)+' · ferro '+Number(bag.iron||0)+' · ouro '+Number(bag.gold||0)+'</p>'+
     '<div class="family-row"><button type="button" class="family-action family-primary" data-action="mining">Ir para Mineração</button>'+
     '<button type="button" class="family-action" data-action="backpack">Minha mochila</button>'+
     '<button type="button" class="family-action" data-action="craft" data-item="picareta madeira">Picareta madeira</button>'+
@@ -52,9 +52,9 @@
     '<button type="button" class="family-action" data-action="craft" data-item="espada ferro">Espada ferro</button>'+
     '<button type="button" class="family-action" data-action="craft" data-item="armadura ferro">Armadura ferro</button>'+
     '<button type="button" class="family-action" data-action="craft" data-item="armadura ouro">Armadura ouro</button></div>'+
-    '<p class="family-hint">Picaretas desbloqueiam minerais. Espadas e armaduras são colecionáveis por enquanto: ainda não aparecem equipadas no personagem.</p></section>'+
+    '<p class="family-hint">Picaretas, espadas e armaduras são colecionáveis gratuitos. Não precisa fabricar nada para construir e quebrar blocos.</p></section>'+
     '<section class="family-section"><h3>Criar portais no mundo</h3>'+
-    '<p class="family-hint">Na Mineração ou Exploração, escolha um terreno livre e plano. Cada portal custa 8 pedras e 2 ferros.</p>'+
+    '<p class="family-hint">Na Mineração ou Exploração, escolha um terreno plano e livre. Os portais são gratuitos.</p>'+
     '<div class="family-row"><button type="button" class="family-action" data-action="portal" data-target="vila">Portal Vila</button>'+
     '<button type="button" class="family-action" data-action="portal" data-target="exploracao">Portal Exploração</button>'+
     '<button type="button" class="family-action" data-action="portal" data-target="mineracao">Portal Mineração</button></div></section>'+
@@ -70,8 +70,13 @@
     ' | Missões em dupla: '+Number(data.adventures?.coopWins||0)+'</p>'+
     '<p class="family-hint">Meta em dupla: duas crianças completam a caça para ganhar mais cinco estrelas cada.</p>'+
     '<p class="family-hint">'+(data.adventures?.own?.mode?'Missão ativa: '+escape(data.adventures.own.mode)+' — pista '+(Number(data.adventures.own.stage||0)+1)+'/3':'Escolha uma aventura para começar')+'</p></section>'+
-    '<section class="family-section"><h3>Minha aparência</h3><div class="family-row">'+
-    Object.entries(data.skins).map(([id,title])=>'<button type="button" class="family-action" data-action="skin" data-skin="'+escape(id)+'">'+escape(title)+'</button>').join('')+'</div><p class="family-hint">Selecione uma cor segura para seu personagem.</p></section>';
+    '<section class="family-section"><h3>Skins do personagem</h3><p class="family-hint">Escolha uma aparência segura, visível para toda a família.</p>'+
+    '<div class="skin-picker">'+
+    Object.entries(data.skins).filter(([id])=>/^[a-z]{2,16}$/.test(id)).map(([id,title])=>{
+      const selected=data.players.some(player=>player.me&&player.skin===id);
+      return '<button type="button" class="skin-option'+(selected?' selected':'')+'" data-action="skin" data-skin="'+escape(id)+'" aria-pressed="'+selected+'">'+
+       '<span class="skin-face" style="background-image:url(/api/minecraft/skins/'+encodeURIComponent(id)+'.png)"></span><span>'+escape(title)+'</span></button>';
+    }).join('')+'</div></section>';
    content.querySelectorAll('button[data-action]').forEach(button=>button.onclick=async()=>{
     const action=button.dataset.action;
     if(action==='friend'){if(command('/familia amigo '+button.dataset.player)){message('Indo encontrar seu amigo!');close()}}
@@ -89,7 +94,7 @@
      try{
       const r=await fetch('/api/minecraft/skin',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({skin:button.dataset.skin})});
       if(!r.ok)throw Error((await r.json()).error||'Não foi possível alterar a aparência');
-      if(command('/familia pele '+button.dataset.skin))message('Visual selecionado!');
+      if(command('/familia pele '+button.dataset.skin)){message('Skin atualizada!');refresh()}
      }catch(e){message(e.message)}
     }
    });
@@ -98,10 +103,12 @@
  function close(){
   visible=false;panel.hidden=true;opener.setAttribute('aria-expanded','false');
   if(poll){clearInterval(poll);poll=null}
+  window.GFCMobileControls?.releaseAll?.()
   if(window.matchMedia('(pointer:fine)').matches)requestAnimationFrame(()=>document.getElementById('canvas')?.focus({preventScroll:true}));
  }
  opener.onclick=()=>{
   if(visible){close();return}
+  window.GFCMobileControls?.releaseAll?.();
   visible=true;panel.hidden=false;opener.setAttribute('aria-expanded','true');
   refresh();poll=setInterval(refresh,7000);
  };

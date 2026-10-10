@@ -70,3 +70,12 @@ node --test tests/integration.cjs
 - Portais físicos são montados em terreno livre e plano nos mapas Exploração/Mineração; exigem 8 pedras e 2 ferros (ADM isento). O plugin usa portais persistidos no banco do MCGalaxy: os backups também devem incluir esse banco, além dos arquivos .lvl.
 - Ovelhas, porcos e galinhas caminham pelo servidor; validar comportamento no Safari/PWA iOS.
 - Perfis infantis, controle parental e autenticação existentes foram preservados.
+
+
+## Minecraft — livre construção, inventário e controles mobile (10/10/2026)
+- Todos os blocos podem ser colocados e quebrados sem ferramentas obrigatórias, consumo de recursos ou limite artificial de mineração. A proteção das casas e o bloqueio parental global continuam ativos.
+- A coleta de minerais agora é apenas um contador opcional. Equipamentos e portais fabricáveis são gratuitos. Espadas e armaduras continuam itens decorativos, sem combate 3D.
+- O botão BLOCOS em /classicube/ abre o inventário nativo do ClassiCube 1.3.8 (tecla B), com grade de texturas e seleção de bloco para hotbar.
+- Controles touch usam os atalhos oficiais: Z alterna voo, Q sobe, E desce, Espaço pula, mouse esquerdo quebra e direito coloca. Toques contínuos repetem a ação e liberam no cancelamento.
+- Oito skins self-hosted de 64x32 com preview pixelado no menu FAMÍLIA, sem upload arbitrário nem URLs externas.
+- Validar em iPhone PWA: abrir inventário/selecionar bloco, quebrar/colocar, alternar voo, subir/descer e liberar botão. O painel parental, os mundos e o multiplayer não foram modificados.

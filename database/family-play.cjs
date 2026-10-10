@@ -9,12 +9,16 @@ const ROOMS=Object.freeze([
  {id:3,title:'Casa Amarela',x0:69,x1:88,z0:122,z1:141,spawn:{x:87,y:45,z:131}},
  {id:4,title:'Casa Rosa',x0:109,x1:131,z0:121,z1:140,spawn:{x:119,y:45,z:122}}
 ]);
-const SKINS=Object.freeze({azul:'Azul',verde:'Verde',rosa:'Rosa',roxo:'Roxo'});
+const SKINS=Object.freeze({azul:'Explorador Azul',verde:'Aventureiro Verde',rosa:'Rosa',roxo:'Roxo',laranja:'Laranja',amarelo:'Dourado',preto:'Sombra',ciano:'Gelo'});
 const palette=Object.freeze({
  azul:{shirt:[48,116,225],hair:[65,40,30],pants:[35,61,127]},
  verde:{shirt:[30,171,116],hair:[43,31,28],pants:[27,83,61]},
  rosa:{shirt:[231,95,159],hair:[93,48,42],pants:[129,55,112]},
- roxo:{shirt:[131,83,207],hair:[64,49,34],pants:[60,54,121]}
+ roxo:{shirt:[131,83,207],hair:[64,49,34],pants:[60,54,121]},
+ laranja:{shirt:[238,130,45],hair:[72,41,30],pants:[49,74,109]},
+ amarelo:{shirt:[239,195,54],hair:[80,53,33],pants:[74,71,47]},
+ preto:{shirt:[46,52,69],hair:[30,28,32],pants:[28,30,42]},
+ ciano:{shirt:[54,190,209],hair:[48,61,71],pants:[42,78,105]}
 });
 function playerName(u){
  const clean=String(u.name).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]/g,'').slice(0,11)||'Piloto';

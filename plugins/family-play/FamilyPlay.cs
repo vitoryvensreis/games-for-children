@@ -595,47 +595,19 @@ public sealed class FamilyPlay : Plugin {
   try{File.WriteAllLines(InventoryFile+".tmp",lines.ToArray());File.Move(InventoryFile+".tmp",InventoryFile,true);}
   catch(Exception e){Logger.Log(LogType.Warning,"Mining inventory save: "+e.Message);}
  }
+ // CREATIVE MODE: every block can be placed or removed without a pickaxe or cost.
+ // Keep optional statistics for gathering materials; never cancel building here.
  private static void MiningChange(Player p,ushort x,ushort y,ushort z,ushort block,bool placing,ref bool cancel){
-  if(cancel||p.level==null||p.level.MapName!="mineracao"||!IsAllowed(p)||IsParent(p))return;
+  if(cancel||placing||p.level==null||p.level.MapName!="mineracao"||!IsAllowed(p))return;
   ushort old=p.level.GetBlock(x,y,z);
-  MiningBag b=BagFor(p.name);
-  int type=placing?block:old;
-  if(placing){
-   // Only resource blocks need inventory; decorative Classic blocks remain
-   // available for children's creativity as a hybrid sandbox.
-   bool enough=true;
-   lock(Gate){
-    if(type==1||type==4){enough=b.Stone>0;if(enough)b.Stone--;}
-    else if(type==5||type==17){enough=b.Wood>0;if(enough)b.Wood--;}
-    else if(type==14){enough=b.Gold>0;if(enough)b.Gold--;}
-    else if(type==15){enough=b.Iron>0;if(enough)b.Iron--;}
-    else if(type==16){enough=b.Coal>0;if(enough)b.Coal--;}
-    if(enough)SaveBags();
-   }
-   if(!enough){cancel=true;p.RevertBlock(x,y,z);p.Message("&eMine mais recursos antes de construir com esse bloco.");}
-   return;
-  }
-  if(old==0||old==7||old==8||old==9||old==10||old==11)return;
-  int required=(old==14?3:old==15?2:(old==16||old==1||old==4?1:0));
   lock(Gate){
-   if(required>b.Tool){
-    cancel=true;p.RevertBlock(x,y,z);
-    p.Message("&eEssa rocha precisa de uma picareta melhor! Abra Familia > Fabricar.");
-    return;
-   }
-   // Rate limit unrealistic instant break macros, but preserve responsiveness.
-   long now=DateTime.UtcNow.Ticks,last;
-   if(lastMining.TryGetValue(p.name,out last)&&now-last<TimeSpan.TicksPerMillisecond*90){
-    cancel=true;p.RevertBlock(x,y,z);return;
-   }
-   lastMining[p.name]=now;
-   if(old==17||old==5)b.Wood++;
-   else if(old==1||old==4)b.Stone++;
-   else if(old==16)b.Coal++;
-   else if(old==15)b.Iron++;
-   else if(old==14)b.Gold++;
-   else if(old==18 && random.Next(4)==0)b.Apples++;
-   else if((old==2||old==3)&&random.Next(25)==0)b.Apples++;
+   MiningBag bag=BagFor(p.name);
+   if(old==17||old==5)bag.Wood++;
+   else if(old==1||old==4)bag.Stone++;
+   else if(old==16)bag.Coal++;
+   else if(old==15)bag.Iron++;
+   else if(old==14)bag.Gold++;
+   else if(old==18 && random.Next(4)==0)bag.Apples++;
    else return;
    SaveBags();
   }
@@ -649,7 +621,7 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&aMochila: &eMadeira "+b.Wood+" | Pedra "+b.Stone+" | Carvao "+b.Coal);
    p.Message("&aFerro "+b.Iron+" | Ouro "+b.Gold+" | Macas "+b.Apples);
    p.Message("&bPicareta: "+picks[b.Tool]+" | Espada: "+swords[b.Sword]+" | Armadura: "+armors[b.Armor]);
-   p.Message("&7Espadas e armaduras sao colecionaveis, sem combate nesta versao.");
+   p.Message("&7Todos os blocos sao gratuitos. Ferramentas e armaduras sao decorativas.");
   }
  }
  private static void Craft(Player p,string what){
@@ -663,25 +635,19 @@ public sealed class FamilyPlay : Plugin {
     int tier=material=="madeira"?1:material=="pedra"?2:material=="ferro"?3:0;
     if(tier==0){p.Message("&ePicareta: madeira, pedra ou ferro.");return;}
     if(b.Tool>=tier){p.Message("&eVoce ja tem uma picareta igual ou melhor.");return;}
-    int wood=tier==1?3:2,stone=tier==2?3:0,iron=tier==3?3:0;
-    if(b.Wood<wood||b.Stone<stone||b.Iron<iron){p.Message("&eReceita: "+wood+" madeiras, "+stone+" pedras, "+iron+" ferros.");return;}
-    b.Wood-=wood;b.Stone-=stone;b.Iron-=iron;b.Tool=tier;
-    p.Message("&aPicareta de "+material+" fabricada! Libera minerais mais fortes.");
+    b.Tool=tier;
+    p.Message("&aPicareta de "+material+" equipada! Construcao livre: todos os blocos disponiveis.");
    }else if(kind=="espada"){
     int tier=material=="madeira"?1:material=="pedra"?2:material=="ferro"?3:0;
     if(tier==0){p.Message("&eEspada: madeira, pedra ou ferro.");return;}
     if(b.Sword>=tier){p.Message("&eVoce ja tem uma espada igual ou melhor.");return;}
-    int wood=tier==1?2:1,stone=tier==2?2:0,iron=tier==3?2:0;
-    if(b.Wood<wood||b.Stone<stone||b.Iron<iron){p.Message("&eReceita: "+wood+" madeiras, "+stone+" pedras, "+iron+" ferros.");return;}
-    b.Wood-=wood;b.Stone-=stone;b.Iron-=iron;b.Sword=tier;
+    b.Sword=tier;
     p.Message("&aEspada de "+material+" fabricada e guardada na mochila! Item de colecao.");
    }else if(kind=="armadura"){
     int tier=material=="ferro"?1:material=="ouro"?2:0;
     if(tier==0){p.Message("&eArmadura: ferro ou ouro.");return;}
     if(b.Armor>=tier){p.Message("&eVoce ja tem uma armadura igual ou melhor.");return;}
-    int iron=tier==1?6:0,gold=tier==2?7:0;
-    if(b.Iron<iron||b.Gold<gold){p.Message("&eReceita: "+iron+" ferros e "+gold+" ouros.");return;}
-    b.Iron-=iron;b.Gold-=gold;b.Armor=tier;
+    b.Armor=tier;
     p.Message("&aArmadura de "+material+" fabricada e guardada na mochila! Item de colecao.");
    }else{p.Message("&eEscolha picareta, espada ou armadura.");return;}
    SaveBags();
@@ -717,11 +683,6 @@ public sealed class FamilyPlay : Plugin {
   }
   int dx=dest=="vila_familia"?102:191,dy=dest=="vila_familia"?47:50,dz=dest=="vila_familia"?106:190;
   lock(Gate){
-   MiningBag b=BagFor(p.name);
-   bool parent=IsParent(p);
-   if(!parent&&(b.Stone<8||b.Iron<2)){
-    p.Message("&ePara criar o portal, minere 8 pedras e 2 ferros.");return;
-   }
    try{
     for(int a=0;a<4;a++)for(int h=0;h<5;h++){
      ushort xx=(ushort)(x+a),yy=(ushort)(y+h),zz=(ushort)z;
@@ -729,7 +690,6 @@ public sealed class FamilyPlay : Plugin {
      lvl.Blockchange(xx,yy,zz,frame?(ushort)49:Block.Portal_Blue);
      if(!frame)Portal.Set(lvl.MapName,xx,yy,zz,(ushort)dx,(ushort)dy,(ushort)dz,dest);
     }
-    if(!parent){b.Stone-=8;b.Iron-=2;SaveBags();}
     p.Message("&aPortal criado! Atravesse o brilho azul para viajar.");
    }catch(Exception ex){
     Logger.Log(LogType.Warning,"Family portal creation: "+ex.Message);
@@ -921,11 +881,11 @@ public sealed class FamilyPlay : Plugin {
    if(cmd=="criar"){Craft(p,arg);return;}
    if(cmd=="portal"){CreatePortal(p,arg);return;}
    if(cmd=="hub"){GoToHub(p);return;}
-   if(cmd=="minerar"){if(MoveToWorld(p,"mineracao"))p.Message("&aBem-vindo ao Mundo Mineracao! Corte uma arvore e fabrique ferramentas.");return;}
+   if(cmd=="minerar"){if(MoveToWorld(p,"mineracao"))p.Message("&aMundo Criativo: todos os blocos liberados no inventario (B)!");return;}
    if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
    if(cmd=="premios"){ShowAdventures(p);return;}
    if(cmd=="pele") {
-    if(arg!="azul"&&arg!="verde"&&arg!="rosa"&&arg!="roxo"){p.Message("&eEscolha uma cor do menu Familia.");return;}
+    if(arg!="azul"&&arg!="verde"&&arg!="rosa"&&arg!="roxo"&&arg!="laranja"&&arg!="amarelo"&&arg!="preto"&&arg!="ciano"){p.Message("&eEscolha uma skin do menu Familia.");return;}
     string url="https://gamesforchildren.escotilhaprodutora.com/api/minecraft/skins/"+arg+".png";
     PlayerOperations.SetSkin(p,p.name,url);
     return;

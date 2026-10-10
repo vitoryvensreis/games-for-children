@@ -271,6 +271,10 @@ public sealed class FamilyPlay : Plugin {
   if(p.level==null)return;
   string world=p.level.MapName;
   if(world!="vila_familia"&&world!="aventura")return;
+  // The initial spawn briefly lands in the main world before the saved world
+  // is restored. Never overwrite the last exit location during that transfer.
+  SavedSpot restoring;
+  if(returningPlayers.Contains(p.name)&&savedSpots.TryGetValue(p.name,out restoring)&&restoring.World!=world)return;
   long tick=DateTime.UtcNow.Ticks,prior;
   if(!force&&lastSpotWrite.TryGetValue(p.name,out prior)&&tick-prior<TimeSpan.TicksPerSecond*8)return;
   lastSpotWrite[p.name]=tick;

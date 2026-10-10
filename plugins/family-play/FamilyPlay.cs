@@ -9,6 +9,7 @@ using MCGalaxy.Events;
 using MCGalaxy.Events.PlayerEvents;
 using MCGalaxy.Maths;
 using MCGalaxy.Bots;
+using MCGalaxy.Blocks.Extended;
 using MCGalaxy.Events.LevelEvents;
 using MCGalaxy.Tasks;
 
@@ -21,9 +22,8 @@ public sealed class FamilyPlay : Plugin {
  private static readonly string QuestFile = "properties/gfc-family-adventures.tsv";
  private static readonly string PositionFile = "properties/gfc-family-positions.tsv";
  private static readonly string GuideStatusFile = "properties/gfc-family-guides.status";
- private static readonly string SurvivalFile = "properties/gfc-survival.tsv";
- private static readonly string InventoryFile = "properties/gfc-mining-inventory.tsv";
- private sealed class MiningBag { public int Wood,Stone,Coal,Iron,Gold,Apples,Tool; }
+  private static readonly string InventoryFile = "properties/gfc-mining-inventory.tsv";
+ private sealed class MiningBag { public int Wood,Stone,Coal,Iron,Gold,Apples,Tool,Sword,Armor; }
  private static readonly Dictionary<string,MiningBag> bags=new Dictionary<string,MiningBag>(StringComparer.OrdinalIgnoreCase);
  private static readonly Dictionary<string,long> lastMining=new Dictionary<string,long>(StringComparer.OrdinalIgnoreCase);
  private static readonly string ClimateFile = "properties/gfc-climate.status";
@@ -32,8 +32,6 @@ public sealed class FamilyPlay : Plugin {
  private static readonly Dictionary<string,Position> botHomes=new Dictionary<string,Position>(StringComparer.OrdinalIgnoreCase);
  private static readonly Dictionary<string,bool> botPhases=new Dictionary<string,bool>(StringComparer.OrdinalIgnoreCase);
  private static readonly Dictionary<string,Position> lastBotPositions=new Dictionary<string,Position>(StringComparer.OrdinalIgnoreCase);
- private sealed class Vitals { public int Health=10,Hunger=10; public long Last=DateTime.UtcNow.Ticks; }
- private static readonly Dictionary<string,Vitals> vitals=new Dictionary<string,Vitals>(StringComparer.OrdinalIgnoreCase);
  private static readonly Random random=new Random();
 
  private sealed class SavedSpot { public string World;public int X,Y,Z;public byte Yaw,Pitch;public long Saved; }
@@ -71,7 +69,6 @@ public sealed class FamilyPlay : Plugin {
   Refresh(true);
   LoadAdventures();
   LoadSpots();
-  LoadVitals();
   LoadBags();
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
   OnBlockChangingEvent.Register(MiningChange, Priority.Low);
@@ -85,7 +82,7 @@ public sealed class FamilyPlay : Plugin {
   foreach(Level existing in LevelInfo.Loaded.Items)InstallGuides(existing);
   climateTimer=Server.MainScheduler.QueueRepeat(task=>UpdateClimate(),null,TimeSpan.FromSeconds(25));
   UpdateClimate();
-  wanderTimer=Server.MainScheduler.QueueRepeat(task=>WanderBots(),null,TimeSpan.FromSeconds(8));
+  wanderTimer=Server.MainScheduler.QueueRepeat(task=>WanderBots(),null,TimeSpan.FromSeconds(5));
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
@@ -96,7 +93,6 @@ public sealed class FamilyPlay : Plugin {
   OnLevelLoadedEvent.Unregister(InstallGuides);
   if(climateTimer!=null)Server.MainScheduler.Cancel(climateTimer);
   if(wanderTimer!=null)Server.MainScheduler.Cancel(wanderTimer);
-  SaveVitals();
   SaveBags();
   OnPlayerSpawningEvent.Unregister(RestoreSpotOnSpawn);
   OnJoinedLevelEvent.Unregister(RestorePreviousWorld);
@@ -268,8 +264,16 @@ public sealed class FamilyPlay : Plugin {
     bool reverse;
     botPhases.TryGetValue(key,out reverse);
     botPhases[key]=!reverse;
-    int dx=reverse?-2:3,dz=reverse?-2:2;
-    bot.TargetPos=new Position(home.X+dx*32,home.Y,home.Z+dz*32);
+    int dx=random.Next(-4,5),dz=random.Next(-4,5);
+    if(dx==0&&dz==0)dx=reverse?2:-2;
+    int x=home.X/32+dx,y=home.Y/32,z=home.Z/32+dz;
+    if(x>1&&z>1&&y>2&&x<level.Width-2&&z<level.Length-2&&y<level.Height-2
+       &&level.GetBlock((ushort)x,(ushort)y,(ushort)z)==Block.Air
+       &&level.GetBlock((ushort)x,(ushort)(y+1),(ushort)z)==Block.Air
+       &&(level.GetBlock((ushort)x,(ushort)(y-1),(ushort)z)!=Block.Air
+          ||level.GetBlock((ushort)x,(ushort)(y-2),(ushort)z)!=Block.Air)){
+     bot.TargetPos=new Position(home.X+dx*32,home.Y,home.Z+dz*32);
+    }
     bot.movement=true;
     bot.movementSpeed=bot.name.StartsWith("Guia_")?4:3;
    }
@@ -378,11 +382,11 @@ public sealed class FamilyPlay : Plugin {
    try{
     if(!File.Exists(InventoryFile))return;
     foreach(string line in File.ReadAllLines(InventoryFile)){
-     string[] p=line.Split('|');if(p.Length!=8||!users.ContainsKey(p[0]))continue;
-     int[] value=new int[7];bool ok=true;
-     for(int i=0;i<7;i++)if(!int.TryParse(p[i+1],out value[i])||value[i]<0||value[i]>100000){ok=false;break;}
+     string[] p=line.Split('|');if((p.Length!=8&&p.Length!=10)||!users.ContainsKey(p[0]))continue;
+     int[] value=new int[p.Length-1];bool ok=true;
+     for(int i=0;i<value.Length;i++)if(!int.TryParse(p[i+1],out value[i])||value[i]<0||value[i]>100000){ok=false;break;}
      if(!ok)continue;
-     bags[p[0]]=new MiningBag(){Wood=value[0],Stone=value[1],Coal=value[2],Iron=value[3],Gold=value[4],Apples=value[5],Tool=Math.Min(3,value[6])};
+     bags[p[0]]=new MiningBag(){Wood=value[0],Stone=value[1],Coal=value[2],Iron=value[3],Gold=value[4],Apples=value[5],Tool=Math.Min(3,value[6]),Sword=p.Length==10?Math.Min(3,value[7]):0,Armor=p.Length==10?Math.Min(2,value[8]):0};
     }
    }catch(Exception e){Logger.Log(LogType.Warning,"Mining inventory read: "+e.Message);}
   }
@@ -391,7 +395,7 @@ public sealed class FamilyPlay : Plugin {
   List<string> lines=new List<string>();
   foreach(KeyValuePair<string,MiningBag> item in bags){
    MiningBag b=item.Value;
-   lines.Add(item.Key+"|"+b.Wood+"|"+b.Stone+"|"+b.Coal+"|"+b.Iron+"|"+b.Gold+"|"+b.Apples+"|"+b.Tool);
+   lines.Add(item.Key+"|"+b.Wood+"|"+b.Stone+"|"+b.Coal+"|"+b.Iron+"|"+b.Gold+"|"+b.Apples+"|"+b.Tool+"|"+b.Sword+"|"+b.Armor);
   }
   try{File.WriteAllLines(InventoryFile+".tmp",lines.ToArray());File.Move(InventoryFile+".tmp",InventoryFile,true);}
   catch(Exception e){Logger.Log(LogType.Warning,"Mining inventory save: "+e.Message);}
@@ -444,29 +448,98 @@ public sealed class FamilyPlay : Plugin {
  private static void ShowBag(Player p){
   lock(Gate){
    MiningBag b=BagFor(p.name);
-   string pick=new[]{"Sem picareta","Picareta de madeira","Picareta de pedra","Picareta de ferro"}[b.Tool];
+   string[] picks={"Sem picareta","Madeira","Pedra","Ferro"};
+   string[] swords={"Sem espada","Madeira","Pedra","Ferro"};
+   string[] armors={"Sem armadura","Ferro","Ouro"};
    p.Message("&aMochila: &eMadeira "+b.Wood+" | Pedra "+b.Stone+" | Carvao "+b.Coal);
    p.Message("&aFerro "+b.Iron+" | Ouro "+b.Gold+" | Macas "+b.Apples);
-   p.Message("&bFerramenta: "+pick);
+   p.Message("&bPicareta: "+picks[b.Tool]+" | Espada: "+swords[b.Sword]+" | Armadura: "+armors[b.Armor]);
+   p.Message("&7Espadas e armaduras sao colecionaveis, sem combate nesta versao.");
   }
  }
  private static void Craft(Player p,string what){
+  string[] parts=(what??"").Trim().ToLowerInvariant().Split(new[]{' '},StringSplitOptions.RemoveEmptyEntries);
+  if(parts.Length<1||parts.Length>2){p.Message("&eEscolha picareta, espada ou armadura no menu Familia.");return;}
+  string kind=parts.Length==1?"picareta":parts[0];
+  string material=parts[parts.Length-1];
   lock(Gate){
-   MiningBag b=BagFor(p.name),old=b;
-   if(what=="madeira"){
-    if(b.Tool>=1){p.Message("&eVoce ja tem uma picareta de madeira ou melhor.");return;}
-    if(b.Wood<3){p.Message("&ePrecisa de 3 madeiras para criar a picareta.");return;}
-    b.Wood-=3;b.Tool=1;
-   }else if(what=="pedra"){
-    if(b.Tool>=2){p.Message("&eVoce ja tem uma picareta de pedra ou melhor.");return;}
-    if(b.Wood<2||b.Stone<3){p.Message("&ePrecisa de 2 madeiras e 3 pedras.");return;}
-    b.Wood-=2;b.Stone-=3;b.Tool=2;
-   }else if(what=="ferro"){
-    if(b.Tool>=3){p.Message("&eVoce ja tem uma picareta de ferro.");return;}
-    if(b.Wood<2||b.Iron<3){p.Message("&ePrecisa de 2 madeiras e 3 ferros.");return;}
-    b.Wood-=2;b.Iron-=3;b.Tool=3;
-   }else{p.Message("&eEscolha madeira, pedra ou ferro.");return;}
-   SaveBags();p.Message("&aPicareta fabricada! Agora voce minera materiais mais fortes.");
+   MiningBag b=BagFor(p.name);
+   if(kind=="picareta"){
+    int tier=material=="madeira"?1:material=="pedra"?2:material=="ferro"?3:0;
+    if(tier==0){p.Message("&ePicareta: madeira, pedra ou ferro.");return;}
+    if(b.Tool>=tier){p.Message("&eVoce ja tem uma picareta igual ou melhor.");return;}
+    int wood=tier==1?3:2,stone=tier==2?3:0,iron=tier==3?3:0;
+    if(b.Wood<wood||b.Stone<stone||b.Iron<iron){p.Message("&eReceita: "+wood+" madeiras, "+stone+" pedras, "+iron+" ferros.");return;}
+    b.Wood-=wood;b.Stone-=stone;b.Iron-=iron;b.Tool=tier;
+    p.Message("&aPicareta de "+material+" fabricada! Libera minerais mais fortes.");
+   }else if(kind=="espada"){
+    int tier=material=="madeira"?1:material=="pedra"?2:material=="ferro"?3:0;
+    if(tier==0){p.Message("&eEspada: madeira, pedra ou ferro.");return;}
+    if(b.Sword>=tier){p.Message("&eVoce ja tem uma espada igual ou melhor.");return;}
+    int wood=tier==1?2:1,stone=tier==2?2:0,iron=tier==3?2:0;
+    if(b.Wood<wood||b.Stone<stone||b.Iron<iron){p.Message("&eReceita: "+wood+" madeiras, "+stone+" pedras, "+iron+" ferros.");return;}
+    b.Wood-=wood;b.Stone-=stone;b.Iron-=iron;b.Sword=tier;
+    p.Message("&aEspada de "+material+" fabricada e guardada na mochila! Item de colecao.");
+   }else if(kind=="armadura"){
+    int tier=material=="ferro"?1:material=="ouro"?2:0;
+    if(tier==0){p.Message("&eArmadura: ferro ou ouro.");return;}
+    if(b.Armor>=tier){p.Message("&eVoce ja tem uma armadura igual ou melhor.");return;}
+    int iron=tier==1?6:0,gold=tier==2?7:0;
+    if(b.Iron<iron||b.Gold<gold){p.Message("&eReceita: "+iron+" ferros e "+gold+" ouros.");return;}
+    b.Iron-=iron;b.Gold-=gold;b.Armor=tier;
+    p.Message("&aArmadura de "+material+" fabricada e guardada na mochila! Item de colecao.");
+   }else{p.Message("&eEscolha picareta, espada ou armadura.");return;}
+   SaveBags();
+  }
+ }
+ // Persistent portals use MCGalaxy's real portal blocks and server-side DB.
+ // Children may build only in shared exploration/mining terrain, never homes.
+ private static void CreatePortal(Player p,string destination){
+  string dest=destination=="vila"?"vila_familia":destination=="exploracao"?"exploracao":destination=="mineracao"?"mineracao":"";
+  if(dest==""){p.Message("&eEscolha portal vila, exploracao ou mineracao.");return;}
+  if(p.level==null||(p.level.MapName!="exploracao"&&p.level.MapName!="mineracao")){
+   p.Message("&eCrie portais somente nos mundos Exploracao ou Mineracao.");return;
+  }
+  if(!buildingEnabled&&!IsParent(p)){p.Message("&eO responsavel desativou a construcao.");return;}
+  if(p.level.MapName==dest){p.Message("&eVoce ja esta nesse mundo.");return;}
+  int x=p.Pos.X/32+4,y=p.Pos.Y/32,z=p.Pos.Z/32+3;
+  Level lvl=p.level;
+  if(x<3||y<4||z<3||x+4>=lvl.Width||y+6>=lvl.Height||z+2>=lvl.Length){
+   p.Message("&eAfaste-se dos limites do mapa para criar o portal.");return;
+  }
+  // Entire 4x5 frame must be empty, above a solid and even base.
+  for(int a=0;a<4;a++)for(int h=0;h<5;h++){
+   ushort xx=(ushort)(x+a),yy=(ushort)(y+h),zz=(ushort)z;
+   if(lvl.GetBlock(xx,yy,zz)!=Block.Air){
+    p.Message("&eE necessario um espaco livre 4x5 perto de voce.");return;
+   }
+   if(lvl.GetBlock(xx,(ushort)(y-1),zz)==Block.Air){
+    p.Message("&eProcure um terreno plano para a base do portal.");return;
+   }
+  }
+  if(Portal.GetAllCoords(lvl.MapName).Count>=72){
+   p.Message("&eEste mundo tem muitos portais. Peca ajuda ao responsavel.");return;
+  }
+  int dx=dest=="vila_familia"?102:191,dy=dest=="vila_familia"?47:50,dz=dest=="vila_familia"?106:190;
+  lock(Gate){
+   MiningBag b=BagFor(p.name);
+   bool parent=IsParent(p);
+   if(!parent&&(b.Stone<8||b.Iron<2)){
+    p.Message("&ePara criar o portal, minere 8 pedras e 2 ferros.");return;
+   }
+   try{
+    for(int a=0;a<4;a++)for(int h=0;h<5;h++){
+     ushort xx=(ushort)(x+a),yy=(ushort)(y+h),zz=(ushort)z;
+     bool frame=(a==0||a==3||h==0||h==4);
+     lvl.Blockchange(xx,yy,zz,frame?(ushort)49:Block.Portal_Blue);
+     if(!frame)Portal.Set(lvl.MapName,xx,yy,zz,(ushort)dx,(ushort)dy,(ushort)dz,dest);
+    }
+    if(!parent){b.Stone-=8;b.Iron-=2;SaveBags();}
+    p.Message("&aPortal criado! Atravesse o brilho azul para viajar.");
+   }catch(Exception ex){
+    Logger.Log(LogType.Warning,"Family portal creation: "+ex.Message);
+    p.Message("&eErro ao criar o portal. Avise o responsavel.");
+   }
   }
  }
  private static void UpdateClimate(){
@@ -493,52 +566,11 @@ public sealed class FamilyPlay : Plugin {
   try{File.WriteAllText(ClimateFile,"phase="+names[phase]+"\nweather="+(raining?"chuva":"sol")+"\nupdated="+sec+"\n");}
   catch(Exception error){Logger.Log(LogType.Warning,"Climate update failed: "+error.Message);}
  }
- private static Vitals GetVitals(string player){
-  Vitals value;if(!vitals.TryGetValue(player,out value)){value=new Vitals();vitals[player]=value;}return value;
- }
- private static void LoadVitals(){
-  lock(Gate){
-   vitals.Clear();
-   try{
-    if(!File.Exists(SurvivalFile))return;
-    foreach(string line in File.ReadAllLines(SurvivalFile)){
-     string[] p=line.Split('|');
-     if(p.Length!=4||!users.ContainsKey(p[0]))continue;
-     int hp,food;long last;
-     if(!int.TryParse(p[1],out hp)||!int.TryParse(p[2],out food)||!long.TryParse(p[3],out last))continue;
-     vitals[p[0]]=new Vitals(){Health=Math.Max(1,Math.Min(10,hp)),Hunger=Math.Max(0,Math.Min(10,food)),Last=DateTime.UtcNow.Ticks};
-    }
-   }catch(Exception error){Logger.Log(LogType.Warning,"Could not load vitals: "+error.Message);}
-  }
- }
- private static void SaveVitals(){
-  lock(Gate){
-   List<string> lines=new List<string>();
-   foreach(KeyValuePair<string,Vitals> pair in vitals){
-    Vitals v=pair.Value;lines.Add(pair.Key+"|"+v.Health+"|"+v.Hunger+"|"+v.Last);
-   }
-   try{File.WriteAllLines(SurvivalFile+".tmp",lines.ToArray());File.Move(SurvivalFile+".tmp",SurvivalFile,true);}
-   catch(Exception error){Logger.Log(LogType.Warning,"Could not save vitals: "+error.Message);}
-  }
- }
- private static void UpdateVitals(Player p){
-  // Child-friendly simplified survival, not native Java/Bedrock combat.
-  // Deplete hunger gradually only while actively moving, never below 1 heart.
-  long now=DateTime.UtcNow.Ticks;Vitals v=GetVitals(p.name);
-  if(now-v.Last<TimeSpan.TicksPerMinute*3)return;
-  v.Last=now;
-  if(v.Hunger>0)v.Hunger--;
-  else if(v.Health>1)v.Health--;
-  SaveVitals();
-  if(v.Hunger<=3)p.Message("&eHora do lanche! Abra Familia para comer e recuperar energia.");
- }
-
-
  private static void InstallWildlife(Level lvl){
   // Wild animals are decorative, with simple walking paths. Never hostile.
-  string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago"};
-  string[] models={"sheep","pig","chicken","sheep"};
-  int[,] places=new int[,]{{187,207},{220,190},{183,167},{245,171}};
+  string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago","Porquinho_Rio","Galinha_Trilha","Ovelha_Colina","Porco_Bosque"};
+  string[] models={"sheep","pig","chicken","sheep","pig","chicken","sheep","pig"};
+  int[,] places=new int[,]{{187,207},{220,190},{183,167},{245,171},{206,232},{170,224},{257,207},{217,154}};
   int found=0;
   for(int n=0;n<names.Length;n++){
    bool exists=false;foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==names[n]){exists=true;break;}
@@ -624,7 +656,7 @@ public sealed class FamilyPlay : Plugin {
  private static void AdventureMove(Player p,Position next,byte yaw,byte pitch,ref bool cancel){
   if(cancel||p.level==null)return;
   if(!IsAllowed(p))return;
-  lock(Gate){SavePlayerSpot(p,next,yaw,pitch,false);UpdateVitals(p);}
+  lock(Gate){SavePlayerSpot(p,next,yaw,pitch,false);}
   if(!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   var coords=next.FeetBlockCoords;
   lock(Gate){
@@ -705,18 +737,9 @@ public sealed class FamilyPlay : Plugin {
     p.Message("&aGuia encontrado! Ele mostra um dos locais do desafio.");
     return;
    }
-   if(cmd=="comer"){
-    lock(Gate){
-     MiningBag bag=BagFor(p.name);
-     if(bag.Apples<1){p.Message("&eVoce precisa encontrar macas minerando folhas no Mundo Mineracao!");return;}
-     bag.Apples--;SaveBags();
-     Vitals v=GetVitals(p.name);v.Hunger=Math.Min(10,v.Hunger+4);v.Health=Math.Min(10,v.Health+1);SaveVitals();
-    }
-    p.Message("&aMaca consumida! Energia recuperada.");
-    return;
-   }
    if(cmd=="mochila"){ShowBag(p);return;}
    if(cmd=="criar"){Craft(p,arg);return;}
+   if(cmd=="portal"){CreatePortal(p,arg);return;}
    if(cmd=="minerar"){if(MoveToWorld(p,"mineracao"))p.Message("&aBem-vindo ao Mundo Mineracao! Corte uma arvore e fabrique ferramentas.");return;}
    if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
    if(cmd=="premios"){ShowAdventures(p);return;}
@@ -739,10 +762,12 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&T/familia tesouro &H- Caca ao tesouro");
    p.Message("&T/familia corrida &H- Circuito de exploracao");
    p.Message("&T/familia premios &H- Estrelas e medalhas");
-   p.Message("&T/familia comer &H- Consumir uma maca coletada");
    p.Message("&T/familia minerar &H- Minerar no novo mundo");
    p.Message("&T/familia mochila &H- Ver madeira, minerais e comida");
-   p.Message("&T/familia criar madeira &H- Fabricar picareta");
+   p.Message("&T/familia criar picareta madeira &H- Fabricar ferramentas");
+   p.Message("&T/familia criar espada ferro &H- Fabricar espada colecionavel");
+   p.Message("&T/familia criar armadura ouro &H- Fabricar armadura colecionavel");
+   p.Message("&T/familia portal vila &H- Construir portal no mundo");
    p.Message("&T/familia guia praca &H- Visitar NPCs da Vila");
   }
  }

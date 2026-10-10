@@ -91,35 +91,17 @@ function adventureStatus(u){
  ]};
 }
 
-function minecraftSurvival(u){
- const file=path.join(MCGALAXY_DIR,'properties','gfc-survival.tsv');
- let hearts=10,hunger=10;
+function minecraftMining(u){
+ let inventory={wood:0,stone:0,coal:0,iron:0,gold:0,apples:0,tool:0,sword:0,armor:0};
  try{
-  const lines=fs.readFileSync(file,'utf8').split(/\r?\n/);
-  const name=cubePlayerName(u);
-  const parts=lines.find(line=>line.startsWith(name+'|'))?.split('|');
-  if(parts?.length===4){hearts=Math.max(1,Math.min(10,Number(parts[1])||1));hunger=Math.max(0,Math.min(10,Number(parts[2])||0))}
- }catch{}
- let climate={phase:'Manhã',weather:'sol'};
- try{
-  const text=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-climate.status'),'utf8');
-  for(const line of text.split(/\r?\n/)){
-   const index=line.indexOf('=');if(index<0)continue;
-   const key=line.slice(0,index),value=line.slice(index+1);
-   if(key==='phase'&&/^[\wÀ-ÿ ]{1,25}$/.test(value))climate.phase=value;
-   if(key==='weather'&&(value==='sol'||value==='chuva'))climate.weather=value;
+  const rows=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-mining-inventory.tsv'),'utf8').split(/\r?\n/);
+  const p=rows.find(line=>line.startsWith(cubePlayerName(u)+'|'))?.split('|');
+  if(p&&(p.length===8||p.length===10)){
+   const v=p.slice(1).map(n=>Math.max(0,Number(n)||0));
+   inventory={wood:v[0],stone:v[1],coal:v[2],iron:v[3],gold:v[4],apples:v[5],tool:Math.min(3,v[6]),sword:Math.min(3,v[7]||0),armor:Math.min(2,v[8]||0)};
   }
  }catch{}
- let inventory={wood:0,stone:0,coal:0,iron:0,gold:0,apples:0,tool:0};
- try{
-  const lines=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-mining-inventory.tsv'),'utf8').split(/\r?\n/);
-  const p=lines.find(line=>line.startsWith(cubePlayerName(u)+'|'))?.split('|');
-  if(p?.length===8){
-   const v=p.slice(1).map(x=>Math.max(0,Number(x)||0));
-   inventory={wood:v[0],stone:v[1],coal:v[2],iron:v[3],gold:v[4],apples:v[5],tool:v[6]};
-  }
- }catch{}
- return {hearts,hunger,climate,inventory,simplified:true,miningEnabled:true};
+ return {inventory,mode:'creative-mining'};
 }
 function minecraftGuidesStatus(){
  const file=path.join(MCGALAXY_DIR,'properties','gfc-family-guides.status');
@@ -316,7 +298,7 @@ if(gameCover&&req.method==='GET'){
 
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
 if(pathname==='/api/minecraft/controls'&&req.method==='GET')return json(res,200,{controls:state.minecraftControls});
-if(pathname==='/api/minecraft/survival'&&req.method==='GET')return json(res,200,minecraftSurvival(u));
+if(pathname==='/api/minecraft/mining'&&req.method==='GET')return json(res,200,minecraftMining(u));
 if(pathname==='/api/minecraft/family'&&req.method==='GET'){
  const connected=new Set([...cubeSessions.keys()].filter(id=>cubeSessions.get(id)?.readyState===1));
  return json(res,200,{...familyInfo(state,u,connected),adventures:adventureStatus(u),multiplayerReady:mcgalaxyReady,familyFeaturesReady:mcgalaxyReady&&fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))});

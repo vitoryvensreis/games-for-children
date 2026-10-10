@@ -24,6 +24,8 @@
    const r=await fetch('/api/minecraft/family',{credentials:'same-origin',cache:'no-store'});
    if(!r.ok)throw Error('Faça login novamente para acessar a família');
    const data=await r.json();
+   const mined=await fetch('/api/minecraft/mining',{credentials:'same-origin',cache:'no-store'}).then(resp=>resp.ok?resp.json():null).catch(()=>null);
+   const bag=mined?.inventory||{};
    if(!visible)return;
    if(!data.familyFeaturesReady){
     content.innerHTML='<p class="family-hint">A conexão da família ainda está sendo preparada no servidor. Tente novamente em alguns segundos.</p>';
@@ -37,14 +39,25 @@
      '<span class="family-hint">Nenhum amigo jogando agora. Peça para ele abrir o Minecraft.</span>')+'</div></section>'+
     '<section class="family-section"><h3>Minha casinha</h3><div class="family-row"><button type="button" class="family-action family-primary" data-action="home" '+(myHome?'':'disabled')+'>Ir para minha casa</button></div><p class="family-hint">'+(myHome?escape(myHome.title)+'. Seus blocos estão protegidos contra alterações das outras crianças.':'Peça ao ADM para escolher uma casa para você.')+'</p></section>'+
     '<section class="family-section"><h3>Portais para outros mundos</h3><div class="family-row"><button type="button" class="family-action" data-action="vila">Vila da Família</button><button type="button" class="family-action" data-action="aventura">Mundo Aventura</button><button type="button" class="family-action family-primary" data-action="exploracao">Exploração maior</button></div></section>'+
-    '<section class="family-section"><h3>Sobrevivência e mineração</h3>'+
-    '<p class="family-hint">Explore cavernas, recolha madeira, carvão, ferro, ouro e maçãs. Quebre árvores para começar e fabrique picaretas.</p>'+
+    '<section class="family-section"><h3>Mineração e ferramentas</h3>'+
+    '<p class="family-hint">Explore cavernas, minere pedra, carvão, ferro e ouro. Use materiais encontrados para criar equipamentos.</p>'+
+    '<p class="family-hint">Mochila: madeira '+Number(bag.wood||0)+' · pedra '+Number(bag.stone||0)+' · ferro '+Number(bag.iron||0)+' · ouro '+Number(bag.gold||0)+'</p>'+
     '<div class="family-row"><button type="button" class="family-action family-primary" data-action="mining">Ir para Mineração</button>'+
     '<button type="button" class="family-action" data-action="backpack">Minha mochila</button>'+
-    '<button type="button" class="family-action" data-action="craft" data-item="madeira">Picareta madeira</button>'+
-    '<button type="button" class="family-action" data-action="craft" data-item="pedra">Picareta pedra</button>'+
-    '<button type="button" class="family-action" data-action="craft" data-item="ferro">Picareta ferro</button></div>'+
-    '<p class="family-hint">Receitas: madeira 3 troncos; pedra 2 madeiras + 3 pedras; ferro 2 madeiras + 3 ferros. Frutas devem ser coletadas.</p></section>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="picareta madeira">Picareta madeira</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="picareta pedra">Picareta pedra</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="picareta ferro">Picareta ferro</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="espada madeira">Espada madeira</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="espada pedra">Espada pedra</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="espada ferro">Espada ferro</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="armadura ferro">Armadura ferro</button>'+
+    '<button type="button" class="family-action" data-action="craft" data-item="armadura ouro">Armadura ouro</button></div>'+
+    '<p class="family-hint">Picaretas desbloqueiam minerais. Espadas e armaduras são colecionáveis por enquanto: ainda não aparecem equipadas no personagem.</p></section>'+
+    '<section class="family-section"><h3>Criar portais no mundo</h3>'+
+    '<p class="family-hint">Na Mineração ou Exploração, escolha um terreno livre e plano. Cada portal custa 8 pedras e 2 ferros.</p>'+
+    '<div class="family-row"><button type="button" class="family-action" data-action="portal" data-target="vila">Portal Vila</button>'+
+    '<button type="button" class="family-action" data-action="portal" data-target="exploracao">Portal Exploração</button>'+
+    '<button type="button" class="family-action" data-action="portal" data-target="mineracao">Portal Mineração</button></div></section>'+
     '<section class="family-section"><h3>Conhecer os guias da Vila</h3><p class="family-hint">Toque para visitar os personagens que mostram onde ficam as missões.</p><div class="family-row"><button type="button" class="family-action" data-action="guide" data-place="praca">Guia da Praça</button><button type="button" class="family-action" data-action="guide" data-place="ponte">Guia da Ponte</button><button type="button" class="family-action" data-action="guide" data-place="torre">Guia da Torre</button></div></section>'+
     '<section class="family-section"><h3>Aventuras e minijogos 3D</h3>'+
     '<p class="family-hint">Os guias da Praça, da Ponte e da Torre têm pistas. Visite os três locais com seu personagem para ganhar estrelas!</p>'+
@@ -56,7 +69,6 @@
     ' | Missões em dupla: '+Number(data.adventures?.coopWins||0)+'</p>'+
     '<p class="family-hint">Meta em dupla: duas crianças completam a caça para ganhar mais cinco estrelas cada.</p>'+
     '<p class="family-hint">'+(data.adventures?.own?.mode?'Missão ativa: '+escape(data.adventures.own.mode)+' — pista '+(Number(data.adventures.own.stage||0)+1)+'/3':'Escolha uma aventura para começar')+'</p></section>'+
-    '<section class="family-section"><h3>Energia e alimentação</h3><p class="family-hint">Sobrevivência infantil simplificada. A fome diminui devagar enquanto você explora. Não há combate ou morte por fome.</p><div class="family-row"><button type="button" class="family-action family-primary" data-action="eat">Comer lanche</button></div></section>'+
     '<section class="family-section"><h3>Minha aparência</h3><div class="family-row">'+
     Object.entries(data.skins).map(([id,title])=>'<button type="button" class="family-action" data-action="skin" data-skin="'+escape(id)+'">'+escape(title)+'</button>').join('')+'</div><p class="family-hint">Selecione uma cor segura para seu personagem.</p></section>';
    content.querySelectorAll('button[data-action]').forEach(button=>button.onclick=async()=>{
@@ -67,11 +79,11 @@
     else if(action==='guide'){const place=button.dataset.place;if(['praca','ponte','torre'].includes(place)&&command('/familia guia '+place)){message('Visitando o guia!');close()}}
     else if(action==='mining'){if(command('/familia minerar')){message('Entrando no Mundo Mineração!');close()}}
     else if(action==='backpack'){if(command('/familia mochila'))message('Recursos mostrados no chat do jogo.')}
-    else if(action==='craft'){const item=button.dataset.item;if(['madeira','pedra','ferro'].includes(item)&&command('/familia criar '+item))message('Confira a receita no chat do jogo.')}
+    else if(action==='craft'){const item=button.dataset.item;if(['picareta madeira','picareta pedra','picareta ferro','espada madeira','espada pedra','espada ferro','armadura ferro','armadura ouro'].includes(item)&&command('/familia criar '+item))message('Veja o resultado no chat do jogo.')}
+    else if(action==='portal'){const target=button.dataset.target;if(['vila','exploracao','mineracao'].includes(target)&&command('/familia portal '+target)){message('Veja o resultado no chat do jogo.');close()}}
     else if(action==='treasure'){if(command('/familia tesouro')){message('Procure o Guia da Praça!');close()}}
     else if(action==='sprint'){if(command('/familia corrida')){message('O circuito começou!');close()}}
     else if(action==='rewards'){if(command('/familia premios'))message('Veja suas estrelas no chat do jogo!')}
-    else if(action==='eat'){if(command('/familia comer')){message('Verifique se você tem maçãs na mochila!');close()}}
     else if(action==='skin'){
      try{
       const r=await fetch('/api/minecraft/skin',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({skin:button.dataset.skin})});

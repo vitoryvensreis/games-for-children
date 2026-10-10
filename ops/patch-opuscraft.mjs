@@ -96,7 +96,7 @@ patch('src/gui/screens/menus.ts',
  "    this.playBtn = this.add(new Button(cx - 154, this.height - 52, 150, 20, 'Play Selected World',",
  `    this.add(new Button(cx - 154, this.height - 77, 150, 20, 'Backup na VPS', () => {
       const selected = this.list.selected;
-      if (selected) void backupToVps(selected).then(()=>window.alert('Backup salvo na VPS')).catch(e=>window.alert(String(e)));
+      if (selected) void backupToVps(selected).then(saved=>{if(saved)window.alert('Backup salvo na VPS')}).catch(e=>window.alert(String(e)));
     }));
     this.add(new Button(cx + 4, this.height - 77, 150, 20, 'Restaurar da VPS', () => {
       void restoreFromVps().then(()=>{

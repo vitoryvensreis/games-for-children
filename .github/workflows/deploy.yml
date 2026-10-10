@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check database/exploration-world.cjs && node --check database/mining-world.cjs && node --check public/classicube/survival-hud.js && node --check public/classicube/family-menu.js
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check database/exploration-world.cjs && node --check database/mining-world.cjs && node --check public/classicube/family-menu.js
       - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs tests/minecraft-admin.cjs tests/expanded-minecraft.cjs tests/mining-survival.cjs
 
   deploy:

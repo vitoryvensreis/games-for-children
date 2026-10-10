@@ -28,22 +28,26 @@ test('Exploration creates its .lvl once, leaving user constructions untouched',(
   assert.equal(fs.readFileSync(first.path,'utf8'),'KEPT_CUSTOM_BLOCKS');
  }finally{fs.rmSync(root,{force:true,recursive:true})}
 });
-test('New Minecraft features use server-authoritative bot/weather/survival APIs',()=>{
+test('Creative mining uses server-authoritative wildlife, weather, equipment and portals',()=>{
  const plugin=fs.readFileSync(path.join(__dirname,'../plugins/family-play/FamilyPlay.cs'),'utf8');
  const server=fs.readFileSync(path.join(__dirname,'../server.cjs'),'utf8');
  const menu=fs.readFileSync(path.join(__dirname,'../public/classicube/family-menu.js'),'utf8');
- const hud=fs.readFileSync(path.join(__dirname,'../public/classicube/survival-hud.js'),'utf8');
+ const html=fs.readFileSync(path.join(__dirname,'../public/classicube/index.html'),'utf8');
  assert.match(plugin,/WalkInstruction\(\)\.Parse/);
  assert.match(plugin,/SetModel\(models\[a\]\)/);
  assert.match(plugin,/PlayerBot\.Add\(animal\)/);
  assert.match(plugin,/level\.Config\.Weather=raining\?1:0/);
  assert.match(plugin,/level\.Config\.SkyColor=sky\[phase\]/);
  assert.match(plugin,/player\.SendCurrentEnv\(\)/);
- assert.match(plugin,/gfc-survival\.tsv/);
- assert.match(plugin,/if\(cmd=="comer"\)/);
+ assert.match(plugin,/Portal\.Set\(lvl\.MapName/);
+ assert.match(plugin,/Block\.Portal_Blue/);
+ assert.match(plugin,/b\.Sword=tier/);
+ assert.match(plugin,/b\.Armor=tier/);
+ assert.doesNotMatch(plugin,/UpdateVitals/);
  assert.match(server,/installExplorationWorld/);
- assert.match(server,/api\/minecraft\/survival/);
+ assert.match(server,/api\/minecraft\/mining/);
  assert.match(menu,/data-action="exploracao"/);
- assert.match(menu,/\/familia comer/);
- assert.match(hud,/mc-vitals-icons/);
+ assert.match(menu,/data-action="portal"/);
+ assert.match(menu,/data-item="espada ferro"/);
+ assert.doesNotMatch(html,/mcVitals|survival-hud\.js/);
 });

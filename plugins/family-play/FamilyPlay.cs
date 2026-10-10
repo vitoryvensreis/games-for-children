@@ -10,6 +10,7 @@ using MCGalaxy.Events.PlayerEvents;
 using MCGalaxy.Maths;
 using MCGalaxy.Bots;
 using MCGalaxy.Events.LevelEvents;
+using MCGalaxy.Tasks;
 
 public sealed class FamilyPlay : Plugin {
  public override string name { get { return "FamilyPlay"; } }
@@ -20,6 +21,13 @@ public sealed class FamilyPlay : Plugin {
  private static readonly string QuestFile = "properties/gfc-family-adventures.tsv";
  private static readonly string PositionFile = "properties/gfc-family-positions.tsv";
  private static readonly string GuideStatusFile = "properties/gfc-family-guides.status";
+ private static readonly string SurvivalFile = "properties/gfc-survival.tsv";
+ private static readonly string ClimateFile = "properties/gfc-climate.status";
+ private SchedulerTask climateTimer;
+ private sealed class Vitals { public int Health=10,Hunger=10; public long Last=DateTime.UtcNow.Ticks; }
+ private static readonly Dictionary<string,Vitals> vitals=new Dictionary<string,Vitals>(StringComparer.OrdinalIgnoreCase);
+ private static readonly Random random=new Random();
+
  private sealed class SavedSpot { public string World;public int X,Y,Z;public byte Yaw,Pitch;public long Saved; }
  private static readonly Dictionary<string,SavedSpot> savedSpots = new Dictionary<string,SavedSpot>(StringComparer.OrdinalIgnoreCase);
  private static readonly Dictionary<string,long> lastSpotWrite = new Dictionary<string,long>(StringComparer.OrdinalIgnoreCase);
@@ -55,6 +63,7 @@ public sealed class FamilyPlay : Plugin {
   Refresh(true);
   LoadAdventures();
   LoadSpots();
+  LoadVitals();
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
   OnPlayerMoveEvent.Register(AdventureMove, Priority.Low);
   OnLevelLoadedEvent.Register(InstallGuides, Priority.Low);
@@ -64,6 +73,8 @@ public sealed class FamilyPlay : Plugin {
   OnPlayerDisconnectEvent.Register(TrackDisconnect,Priority.Low);
   // Main village may have loaded before this plugin subscribed to OnLevelLoaded.
   foreach(Level existing in LevelInfo.Loaded.Items)InstallGuides(existing);
+  climateTimer=Server.MainScheduler.QueueRepeat(task=>UpdateClimate(),null,TimeSpan.FromSeconds(25));
+  UpdateClimate();
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
@@ -71,6 +82,8 @@ public sealed class FamilyPlay : Plugin {
   OnBlockChangingEvent.Unregister(ProtectHouse);
   OnPlayerMoveEvent.Unregister(AdventureMove);
   OnLevelLoadedEvent.Unregister(InstallGuides);
+  if(climateTimer!=null)Server.MainScheduler.Cancel(climateTimer);
+  SaveVitals();
   OnPlayerSpawningEvent.Unregister(RestoreSpotOnSpawn);
   OnJoinedLevelEvent.Unregister(RestorePreviousWorld);
   OnPlayerConnectEvent.Unregister(RememberReturningPlayer);
@@ -186,8 +199,29 @@ public sealed class FamilyPlay : Plugin {
    guide.Owner="GamesForChildren";
    guide.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
    guide.SetYawPitch(0,0);
+   guide.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+2)*32+"",ground*32+"",(z+1)*32+"","0","0"}));
+   guide.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-1)*32+"",ground*32+"",(z-1)*32+"","0","0"}));
    PlayerBot.Add(guide);
    created++;found++;
+  }
+
+  // Peaceful ambient animals. These are actual ClassiCube model entities,
+  // not hostile modern Minecraft mobs, and they do not destroy blocks.
+  string[] critters=new string[]{"Ovelha_01","Ovelha_02","Porquinho_01","Porquinho_02","Galinha_01"};
+  string[] models=new string[]{"sheep","sheep","pig","pig","chicken"};
+  int[,] areas=new int[,]{{83,118},{113,120},{111,86},{76,117},{118,109}};
+  for(int a=0;a<critters.Length;a++){
+   bool exists=false;
+   foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==critters[a]){exists=true;break;}
+   if(exists)continue;
+   int x=areas[a,0],z=areas[a,1],ground=44;
+   for(int y=lvl.Height-5;y>1;y--)if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
+   PlayerBot animal=new PlayerBot(critters[a],lvl);
+   animal.Owner="GamesForChildren";animal.SetModel(models[a]);
+   animal.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+3)*32+"",ground*32+"",(z+2)*32+"","0","0"}));
+   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-2)*32+"","0","0"}));
+   PlayerBot.Add(animal);
   }
   // Written only after verification against real loaded bot entities, not on DLL compilation.
   try{File.WriteAllText(GuideStatusFile,"map="+lvl.MapName+"\ncount="+found+"\ncreated="+created+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
@@ -283,6 +317,71 @@ public sealed class FamilyPlay : Plugin {
   savedSpots[p.name]=v;SaveSpots();
  }
 
+
+ private static void UpdateClimate(){
+  // Whole-world classic map colors. No fake browser tint: MCGalaxy sends CPE
+  // environment packets that change sky, fog, clouds, sun, shadows and weather.
+  long sec=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+  int phase=(int)((sec/300)%4);
+  string[] names={"Manha","Tarde","Por do sol","Noite"};
+  string[] sky={"99CCFF","74B9FF","ECA376","182751"};
+  string[] cloud={"FFFFFF","F6F7FF","FCE5C1","515978"};
+  string[] light={"FFFFFF","FFFFFF","F5D5A9","A0AFC9"};
+  string[] shade={"9B9B9B","949CA9","856C79","515775"};
+  bool raining=(sec/420)%5==2;
+  foreach(Level level in LevelInfo.Loaded.Items){
+   if(level.MapName!="vila_familia"&&level.MapName!="exploracao")continue;
+   level.Config.SkyColor=sky[phase];
+   level.Config.CloudColor=cloud[phase];
+   level.Config.FogColor=sky[phase];
+   level.Config.LightColor=light[phase];
+   level.Config.ShadowColor=shade[phase];
+   level.Config.Weather=raining?1:0;
+   foreach(Player player in PlayerInfo.Online.Items)if(player.level==level)player.SendCurrentEnv();
+  }
+  try{File.WriteAllText(ClimateFile,"phase="+names[phase]+"\nweather="+(raining?"chuva":"sol")+"\nupdated="+sec+"\n");}
+  catch(Exception error){Logger.Log(LogType.Warning,"Climate update failed: "+error.Message);}
+ }
+ private static Vitals GetVitals(string player){
+  Vitals value;if(!vitals.TryGetValue(player,out value)){value=new Vitals();vitals[player]=value;}return value;
+ }
+ private static void LoadVitals(){
+  lock(Gate){
+   vitals.Clear();
+   try{
+    if(!File.Exists(SurvivalFile))return;
+    foreach(string line in File.ReadAllLines(SurvivalFile)){
+     string[] p=line.Split('|');
+     if(p.Length!=4||!users.ContainsKey(p[0]))continue;
+     int hp,food;long last;
+     if(!int.TryParse(p[1],out hp)||!int.TryParse(p[2],out food)||!long.TryParse(p[3],out last))continue;
+     vitals[p[0]]=new Vitals(){Health=Math.Max(1,Math.Min(10,hp)),Hunger=Math.Max(0,Math.Min(10,food)),Last=DateTime.UtcNow.Ticks};
+    }
+   }catch(Exception error){Logger.Log(LogType.Warning,"Could not load vitals: "+error.Message);}
+  }
+ }
+ private static void SaveVitals(){
+  lock(Gate){
+   List<string> lines=new List<string>();
+   foreach(KeyValuePair<string,Vitals> pair in vitals){
+    Vitals v=pair.Value;lines.Add(pair.Key+"|"+v.Health+"|"+v.Hunger+"|"+v.Last);
+   }
+   try{File.WriteAllLines(SurvivalFile+".tmp",lines.ToArray());File.Move(SurvivalFile+".tmp",SurvivalFile,true);}
+   catch(Exception error){Logger.Log(LogType.Warning,"Could not save vitals: "+error.Message);}
+  }
+ }
+ private static void UpdateVitals(Player p){
+  // Child-friendly simplified survival, not native Java/Bedrock combat.
+  // Deplete hunger gradually only while actively moving, never below 1 heart.
+  long now=DateTime.UtcNow.Ticks;Vitals v=GetVitals(p.name);
+  if(now-v.Last<TimeSpan.TicksPerMinute*3)return;
+  v.Last=now;
+  if(v.Hunger>0)v.Hunger--;
+  else if(v.Health>1)v.Health--;
+  SaveVitals();
+  if(v.Hunger<=3)p.Message("&eHora do lanche! Abra Familia para comer e recuperar energia.");
+ }
+
  // Real in-world quests: progress advances exclusively from server-validated player positions.
  private static Quest GetQuest(string player) {
   Quest q;if(!quests.TryGetValue(player,out q)){q=new Quest();quests[player]=q;}return q;
@@ -347,9 +446,10 @@ public sealed class FamilyPlay : Plugin {
   }
  }
  private static void AdventureMove(Player p,Position next,byte yaw,byte pitch,ref bool cancel){
-  if(cancel||p.level==null||!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
+  if(cancel||p.level==null)return;
   if(!IsAllowed(p))return;
-  lock(Gate){SavePlayerSpot(p,next,yaw,pitch,false);}
+  lock(Gate){SavePlayerSpot(p,next,yaw,pitch,false);UpdateVitals(p);}
+  if(!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   var coords=next.FeetBlockCoords;
   lock(Gate){
    Quest q=GetQuest(p.name);
@@ -428,6 +528,11 @@ public sealed class FamilyPlay : Plugin {
     p.Message("&aGuia encontrado! Ele mostra um dos locais do desafio.");
     return;
    }
+   if(cmd=="comer"){
+    lock(Gate){Vitals v=GetVitals(p.name);v.Hunger=Math.Min(10,v.Hunger+4);v.Health=Math.Min(10,v.Health+1);SaveVitals();}
+    p.Message("&aLanche gostoso! Energia recuperada.");
+    return;
+   }
    if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
    if(cmd=="premios"){ShowAdventures(p);return;}
    if(cmd=="pele") {
@@ -448,6 +553,7 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&T/familia tesouro &H- Caca ao tesouro");
    p.Message("&T/familia corrida &H- Circuito de exploracao");
    p.Message("&T/familia premios &H- Estrelas e medalhas");
+   p.Message("&T/familia comer &H- Recuperar energia e comida");
    p.Message("&T/familia guia praca &H- Visitar NPCs da Vila");
   }
  }

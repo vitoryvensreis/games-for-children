@@ -18,6 +18,12 @@ public sealed class FamilyPlay : Plugin {
  public override bool LoadAtStartup { get { return true; } }
  private static readonly string ConfigPath = "properties/gfc-family-policy.txt";
  private static readonly string QuestFile = "properties/gfc-family-adventures.tsv";
+ private static readonly string PositionFile = "properties/gfc-family-positions.tsv";
+ private static readonly string GuideStatusFile = "properties/gfc-family-guides.status";
+ private sealed class SavedSpot { public string World;public int X,Y,Z;public byte Yaw,Pitch;public long Saved; }
+ private static readonly Dictionary<string,SavedSpot> savedSpots = new Dictionary<string,SavedSpot>(StringComparer.OrdinalIgnoreCase);
+ private static readonly Dictionary<string,long> lastSpotWrite = new Dictionary<string,long>(StringComparer.OrdinalIgnoreCase);
+ private static readonly HashSet<string> returningPlayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
  private static readonly object Gate = new object();
  private static DateTime checkedAt = DateTime.MinValue;
  private static Dictionary<string, string> users = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -47,9 +53,15 @@ public sealed class FamilyPlay : Plugin {
  public override void Load(bool auto) {
   Refresh(true);
   LoadAdventures();
+  LoadSpots();
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
   OnPlayerMoveEvent.Register(AdventureMove, Priority.Low);
   OnLevelLoadedEvent.Register(InstallGuides, Priority.Low);
+  OnPlayerSpawningEvent.Register(RestoreSpotOnSpawn,Priority.High);
+  OnPlayerConnectEvent.Register(RememberReturningPlayer,Priority.Low);
+  OnPlayerDisconnectEvent.Register(TrackDisconnect,Priority.Low);
+  // Main village may have loaded before this plugin subscribed to OnLevelLoaded.
+  foreach(Level existing in LevelInfo.Loaded.Items)InstallGuides(existing);
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
@@ -57,6 +69,10 @@ public sealed class FamilyPlay : Plugin {
   OnBlockChangingEvent.Unregister(ProtectHouse);
   OnPlayerMoveEvent.Unregister(AdventureMove);
   OnLevelLoadedEvent.Unregister(InstallGuides);
+  OnPlayerSpawningEvent.Unregister(RestoreSpotOnSpawn);
+  OnPlayerConnectEvent.Unregister(RememberReturningPlayer);
+  OnPlayerDisconnectEvent.Unregister(TrackDisconnect);
+  try{File.Delete(GuideStatusFile);}catch{}
   Command.Unregister(family);
   try{File.Delete("properties/gfc-familyplay.ready");}catch{}
  }
@@ -146,10 +162,11 @@ public sealed class FamilyPlay : Plugin {
   if(lvl==null||!String.Equals(lvl.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   string[] names=new string[]{"Guia_Praca","Guia_Ponte","Guia_Torre"};
   int[,] spots=new int[,]{{92,100},{99,57},{142,88}};
+  int created=0,found=0;
   for(int n=0;n<names.Length;n++){
    bool exists=false;
    foreach(PlayerBot existing in lvl.Bots.Items){
-    if(existing.name.Equals(names[n],StringComparison.OrdinalIgnoreCase)){exists=true;break;}
+    if(existing.name.Equals(names[n],StringComparison.OrdinalIgnoreCase)){exists=true;found++;break;}
    }
    if(exists)continue;
    int x=spots[n,0],z=spots[n,1],ground=43;
@@ -161,8 +178,80 @@ public sealed class FamilyPlay : Plugin {
    guide.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
    guide.SetYawPitch(0,0);
    PlayerBot.Add(guide);
+   created++;found++;
+  }
+  // Written only after verification against real loaded bot entities, not on DLL compilation.
+  try{File.WriteAllText(GuideStatusFile,"map="+lvl.MapName+"\ncount="+found+"\ncreated="+created+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
+  catch(Exception e){Logger.Log(LogType.Warning,"FamilyPlay guide status: "+e.Message);}
+ }
+
+ private static bool ValidSpot(SavedSpot spot) {
+  return spot!=null&&(spot.World=="vila_familia"||spot.World=="aventura")&&
+         spot.X>=1&&spot.X<6144&&spot.Z>=1&&spot.Z<6144&&spot.Y>=1&&spot.Y<3072;
+ }
+ private static void LoadSpots(){
+  lock(Gate){
+   savedSpots.Clear();
+   try{
+    if(!File.Exists(PositionFile))return;
+    foreach(string line in File.ReadAllLines(PositionFile)){
+     string[] parts=line.Split('|');
+     if(parts.Length!=8||!users.ContainsKey(parts[0]))continue;
+     SavedSpot v=new SavedSpot();
+     v.World=parts[1];
+     if(!int.TryParse(parts[2],out v.X)||!int.TryParse(parts[3],out v.Y)||!int.TryParse(parts[4],out v.Z))continue;
+     if(!byte.TryParse(parts[5],out v.Yaw)||!byte.TryParse(parts[6],out v.Pitch)||!long.TryParse(parts[7],out v.Saved))continue;
+     if(ValidSpot(v))savedSpots[parts[0]]=v;
+    }
+   }catch(Exception e){Logger.Log(LogType.Warning,"FamilyPlay failed reading positions: "+e.Message);}
   }
  }
+ private static void SaveSpots(){
+  List<string> lines=new List<string>();
+  foreach(KeyValuePair<string,SavedSpot> item in savedSpots){
+   SavedSpot v=item.Value;
+   if(!ValidSpot(v))continue;
+   lines.Add(item.Key+"|"+v.World+"|"+v.X+"|"+v.Y+"|"+v.Z+"|"+v.Yaw+"|"+v.Pitch+"|"+v.Saved);
+  }
+  string temp=PositionFile+".tmp";
+  try{File.WriteAllLines(temp,lines.ToArray());File.Move(temp,PositionFile,true);}
+  catch(Exception e){Logger.Log(LogType.Warning,"FamilyPlay could not save positions: "+e.Message);}
+ }
+ private static void RememberReturningPlayer(Player p){
+  if(!IsAllowed(p))return;
+  lock(Gate){returningPlayers.Add(p.name);}
+ }
+ private static void RestoreSpotOnSpawn(Player p,ref Position pos,ref byte yaw,ref byte pitch,bool respawning){
+  if(respawning||!IsAllowed(p))return;
+  lock(Gate){
+   SavedSpot spot;
+   if(!returningPlayers.Contains(p.name)||!savedSpots.TryGetValue(p.name,out spot)||!ValidSpot(spot))return;
+   // Initial join spawns in main world. Map transfer is performed after the level loads.
+   if(p.level!=null && p.level.MapName.Equals(spot.World,StringComparison.OrdinalIgnoreCase)){
+    pos=new Position(spot.X,spot.Y,spot.Z);yaw=spot.Yaw;pitch=spot.Pitch;
+    returningPlayers.Remove(p.name);
+   }
+  }
+ }
+ private static void TrackDisconnect(Player p,string reason){
+  if(!IsAllowed(p))return;
+  lock(Gate){
+   SavePlayerSpot(p,p.Pos,p.Rot.RotY,p.Rot.HeadX,true);
+   returningPlayers.Remove(p.name);
+  }
+ }
+ private static void SavePlayerSpot(Player p,Position pos,byte yaw,byte pitch,bool force){
+  if(p.level==null)return;
+  string world=p.level.MapName;
+  if(world!="vila_familia"&&world!="aventura")return;
+  long tick=DateTime.UtcNow.Ticks,prior;
+  if(!force&&lastSpotWrite.TryGetValue(p.name,out prior)&&tick-prior<TimeSpan.TicksPerSecond*8)return;
+  lastSpotWrite[p.name]=tick;
+  SavedSpot v=new SavedSpot(){World=world,X=pos.X,Y=pos.Y,Z=pos.Z,Yaw=yaw,Pitch=pitch,Saved=tick};
+  if(!ValidSpot(v))return;
+  savedSpots[p.name]=v;SaveSpots();
+ }
+
  // Real in-world quests: progress advances exclusively from server-validated player positions.
  private static Quest GetQuest(string player) {
   Quest q;if(!quests.TryGetValue(player,out q)){q=new Quest();quests[player]=q;}return q;
@@ -229,6 +318,7 @@ public sealed class FamilyPlay : Plugin {
  private static void AdventureMove(Player p,Position next,byte yaw,byte pitch,ref bool cancel){
   if(cancel||p.level==null||!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   if(!IsAllowed(p))return;
+  lock(Gate){SavePlayerSpot(p,next,yaw,pitch,false);}
   var coords=next.FeetBlockCoords;
   lock(Gate){
    Quest q=GetQuest(p.name);

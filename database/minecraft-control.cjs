@@ -1,8 +1,8 @@
 'use strict';
 /** Safe administration of local MCGalaxy save files. Never accepts arbitrary paths. */
 const fs=require('node:fs'),path=require('node:path'),zlib=require('node:zlib'),crypto=require('node:crypto');
-const WORLDS=Object.freeze({vila_familia:'Vila da Família',aventura:'Mundo Aventura'});
-const BACKUP_PATTERN=/^(vila_familia|aventura)-(\d{8}T\d{6}Z)-([a-f0-9]{8})\.lvl$/;
+const WORLDS=Object.freeze({vila_familia:'Vila da Família',aventura:'Mundo Aventura',exploracao:'Mundo Exploração'});
+const BACKUP_PATTERN=/^(vila_familia|aventura|exploracao)-(\d{8}T\d{6}Z)-([a-f0-9]{8})\.lvl$/;
 function checkWorld(world){if(!Object.hasOwn(WORLDS,world))throw Error('Mundo não permitido');return world}
 function worldFile(dir,world){return path.join(dir,'levels',checkWorld(world)+'.lvl')}
 function verifyLevel(content){

@@ -108,6 +108,7 @@
  }
  opener.onclick=()=>{
   if(visible){close();return}
+  window.GFCMobileControls?.releaseAll?.();
   visible=true;panel.hidden=false;opener.setAttribute('aria-expanded','true');
   refresh();poll=setInterval(refresh,7000);
  };

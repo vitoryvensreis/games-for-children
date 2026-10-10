@@ -63,7 +63,7 @@ patch('src/main.ts',
     // One server-owned family world, never a LAN search or manual join-code form.
     // The upstream LAN list is intended for ad-hoc browser hosts and may be blocked
     // by production reverse proxies. Always connect directly to our private relay.
-    game.opts.renderDistance = Math.min(game.opts.renderDistance, 3); // iPhone: reduce initial chunk backlog.
+    game.opts.renderDistance = Math.min(game.opts.renderDistance, 2); // iPhone: reduce initial chunk backlog.
     await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
 

@@ -55,8 +55,9 @@ async function start(){
   page.on('console',msg=>{if(msg.type()==='error')log('Browser console:',msg.text().slice(0,300))});
   await page.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcHost=1',{waitUntil:'domcontentloaded',timeout:45000});
   await page.waitForFunction(()=>{const g=window.__game;return !!(g&&g.mode==='host'&&g.inWorld)},{timeout:150000,polling:1000});
+  if(!await save())throw Error('The family world did not save successfully to VPS IndexedDB');
   lastError='';
-  log('Family world is hosted and waiting for children');
+  log('Family world is hosted and backed up in IndexedDB');
  }catch(err){
   lastError=String(err?.message||err).slice(0,300);
   log('Unable to start:',lastError);

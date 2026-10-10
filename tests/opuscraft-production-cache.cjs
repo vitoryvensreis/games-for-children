@@ -13,7 +13,7 @@ test('Production OpusCraft never serves stale JavaScript/HTML and tracks build v
  assert.match(server,/GFC-BUILD-ID\.txt/);
  assert.match(build,/GFC-BUILD-ID\.txt/);
  assert.match(app,/status\.clientVersion/);
- assert.match(app,/Date\\.now\\(\\)/);
+ assert.ok(app.includes('Date.now()'));
 });
 
 test('OpusCraft websocket probe validates real world listing, not any /ws response',async()=>{

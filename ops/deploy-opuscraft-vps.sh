@@ -22,14 +22,16 @@ rollback(){
  sudo -n /usr/bin/systemctl restart games-for-children.service || true
 }
 trap rollback ERR
-sudo -n /usr/bin/systemctl stop games-for-children.service
-# Chromium must be stopped before copying its IndexedDB profile.
+# Deploy account is allowed to restart, but not to stop/start separately.
+# Keep the original process serving until its replacement has been installed.
+# A live snapshot is supplemental; the original persistent profile is never deleted.
+# The browser flushes its world during the permitted service restart.
 if test -d data/opuscraft/profile; then
  tar -czf backup/opuscraft-profile-latest.tar.gz -C data/opuscraft profile
 fi
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
-sudo -n /usr/bin/systemctl start games-for-children.service
+sudo -n /usr/bin/systemctl restart games-for-children.service
 ready=0
 for attempt in $(seq 1 110); do
  if curl -fsS --max-time 3 http://127.0.0.1:3100/api/health | grep -q '"ok":true' &&

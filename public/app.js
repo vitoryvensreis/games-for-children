@@ -45,7 +45,11 @@ async function openOpusCraft(){
   if(!status.available||!status.ready){notify('O mundo OpusCraft está iniciando na VPS; tente novamente em instantes.');return}
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
-  app.innerHTML='<main class="classicube-embed" id="cubeRoot" aria-label="ClassiCube em tela horizontal"><iframe id="classicubeFrame" src="/classicube/index.html" title="ClassiCube — jogo 3D" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe><button id="classicubeBack" class="classicube-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button><div id="classicubeRotate" class="classicube-rotate" aria-live="polite"><span class="rotate-illustration" aria-hidden="true">'+ico('gamepad')+'</span><strong>Vire o celular na horizontal</strong><p>Assim a tela inteira e os controles ficam visíveis.</p><button id="classicubeTryLandscape">Ativar tela horizontal</button></div></main>';
+  app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft em tela horizontal">'+
+  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?gfcJoin=1" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
+  '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
+  '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
+  '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
    // The launch button remains focused in the parent document on desktops.
@@ -58,8 +62,16 @@ async function openOpusCraft(){
   const sync=()=>{const portrait=window.innerHeight>window.innerWidth&&window.matchMedia('(pointer: coarse)').matches;root.classList.toggle('needs-landscape',portrait);overlay.hidden=!portrait;};
   sync();window.addEventListener('resize',sync);screen.orientation?.addEventListener?.('change',sync);
   $('#opuscraftTryLandscape').onclick=()=>{void fullscreen();sync()};
+  $('#familyChatToggle').onclick=()=>{const panel=$('#familyChatPanel');panel.hidden=!panel.hidden;renderFamilyChat();if(!panel.hidden)$('#familyChatInput').focus()};
+  $('#familyChatForm').onsubmit=e=>{e.preventDefault();const input=$('#familyChatInput'),message=input.value.trim();if(message&&send({type:'familyChat',text:message})){input.value='';input.blur()}};
+  renderFamilyChat();
   $('#opuscraftBack').onclick=async()=>{window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
  }catch(e){console.warn('OpusCraft:',e);notify('Não foi possível iniciar OpusCraft: '+e.message)}
+}
+function renderFamilyChat(){
+ const el=$('#familyChatHistory');if(!el)return;
+ el.innerHTML=familyMessages.slice(-45).map(m=>'<p><strong>'+esc(m.name)+'</strong> '+esc(m.text)+'</p>').join('')||'<p>Converse com os jogadores autorizados da família.</p>';
+ el.scrollTop=el.scrollHeight;
 }
 let pongPadDirection=0,pongLocalY=.5,pongLastSend=0,pongRaf=0,pongRender=null,pongVisual=null,pongCanvasObserver=null;
 function pong(){

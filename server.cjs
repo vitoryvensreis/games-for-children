@@ -14,6 +14,13 @@ const MCGALAXY_PORT=Number(process.env.MCGALAXY_PORT||25565);
 const MCGALAXY_DIR=path.join(ROOT,'vendor','mcgalaxy');
 let mcgalaxyProcess=null,mcgalaxyReady=false;
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
+const COVER_SLUGS=Object.freeze(['pong','snake','minecraft']);
+const COVER_DIR=path.join(DATA,'game-covers');
+fs.mkdirSync(COVER_DIR,{recursive:true,mode:0o700});
+const coverPath=slug=>path.join(COVER_DIR,slug+'.webp');
+const defaultCoverPath=slug=>path.join(ROOT,'public','assets','game-covers',slug+'.webp');
+function validCoverSlug(slug){return COVER_SLUGS.includes(slug)}
+
 let state={users:[],sessions:[],events:[],games:[]};
 try{state=JSON.parse(fs.readFileSync(DB,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e}
 for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[];
@@ -101,7 +108,7 @@ function setupMCGalaxy(){
 process.once('SIGTERM',()=>{try{mcgalaxyProcess?.stdin?.write('/save all\n');mcgalaxyProcess?.stdin?.write('stop\n')}catch{};setTimeout(()=>process.exit(0),3200).unref()});
 function userInfo(u){return {id:u.id,name:u.name,role:u.role,enabled:u.enabled,loginEnabled:u.loginEnabled,dailyLimit:u.dailyLimit,voiceEnabled:u.voiceEnabled,usedSeconds:Math.floor(usage(u)/1000),online:activeUser(u),hasPhoto:Boolean(u.photo)}}
 function json(res,status,obj,cookie){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end(JSON.stringify(obj))}
-function readBody(req){return new Promise((resolve,reject)=>{let text='';req.on('data',b=>{text+=b;if(text.length>20000){reject(Error('payload excessivo'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(Error('JSON inválido'))}});req.on('error',reject)})}
+function readBody(req,maxChars=20000){return new Promise((resolve,reject)=>{let text='';req.on('data',b=>{text+=b;if(text.length>maxChars){reject(Error('payload excessivo'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(Error('JSON inválido'))}});req.on('error',reject)})}
 async function pushAdmins(title,body){if(!PUSH_READY)return;const targets=state.pushSubscriptions.filter(s=>state.users.some(u=>u.id===s.userId&&u.role==='admin'&&u.enabled));await Promise.allSettled(targets.map(async entry=>{try{await webpush.sendNotification(entry.subscription,JSON.stringify({title,body,url:'/'}),{TTL:90,urgency:'normal'})}catch(err){if(err.statusCode===404||err.statusCode===410){state.pushSubscriptions=state.pushSubscriptions.filter(s=>s.endpoint!==entry.endpoint);save()}else console.error('Push falhou:',err.statusCode||err.message)}}))}
 function track(u,type){state.events.unshift({id:uuid(),userId:u.id,name:u.name,type,at:now()});state.events=state.events.slice(0,1000);save();admins({type:'notice',text:u.name+': '+type});if(u.role==='child'&&['online','offline','entrou','desconectado pelo ADM'].includes(type))void pushAdmins('GamesForChildren',u.name+' — '+type)}
 const peers=new Map(), rooms=new Map();
@@ -171,6 +178,12 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
+const gameCover=pathname.match(/^\/api\/game-covers\/(pong|snake|minecraft)$/);
+if(gameCover&&req.method==='GET'){
+ const slug=gameCover[1],custom=coverPath(slug),target=fs.existsSync(custom)?custom:defaultCoverPath(slug);
+ return fs.readFile(target,(err,b)=>{if(err){res.writeHead(404,{'Cache-Control':'no-store'});return res.end('Capa indisponível')};res.writeHead(200,{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});res.end(b)})
+}
+
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
 if(pathname==='/api/heartbeat'&&req.method==='POST'){const was=activeUser(u);touch(s);s.lastSeen=now();save();if(!was&&u.role==='child')track(u,'online');report();return json(res,200,{ok:true,online:true})}
 if(pathname.startsWith('/api/photos/')&&req.method==='GET'){const id=pathname.slice('/api/photos/'.length),target=state.users.find(x=>x.id===id);if(!target||!target.photo||(u.role!=='admin'&&u.id!==id))return json(res,404,{error:'Foto indisponível'});const match=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(target.photo);if(!match)return json(res,404,{error:'Foto inválida'});res.writeHead(200,{'Content-Type':'image/'+match[1],'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});return res.end(Buffer.from(match[2],'base64'))}
@@ -180,6 +193,27 @@ if(pathname==='/api/push/subscribe'&&req.method==='POST'){if(u.role!=='admin')re
 if(pathname==='/api/push/unsubscribe'&&req.method==='POST'){const b=await readBody(req);state.pushSubscriptions=state.pushSubscriptions.filter(x=>x.userId!==u.id||x.endpoint!==b.endpoint);save();return json(res,200,{ok:true})}
 if(pathname==='/api/logout'&&req.method==='POST'){end(s);return json(res,200,{ok:true},'gfc_sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0')}
 if(u.role!=='admin')return json(res,403,{error:'Acesso restrito'});
+if(pathname==='/api/admin/game-covers'&&req.method==='GET'){
+ return json(res,200,{covers:Object.fromEntries(COVER_SLUGS.map(slug=>[slug,{custom:fs.existsSync(coverPath(slug)),url:'/api/game-covers/'+slug}]))});
+}
+const coverEdit=pathname.match(/^\/api\/admin\/game-covers\/(pong|snake|minecraft)$/);
+if(coverEdit&&req.method==='POST'){
+ const slug=coverEdit[1],b=await readBody(req,220000);
+ if(b.image===null){
+  try{fs.unlinkSync(coverPath(slug))}catch(e){if(e.code!=='ENOENT')throw e}
+  return json(res,200,{ok:true,custom:false});
+ }
+ const match=/^data:image\/webp;base64,([A-Za-z0-9+/=]+)$/.exec(b.image||'');
+ if(!match||match[1].length>180000)return json(res,400,{error:'Envie uma capa WebP de até 120 KB'});
+ const data=Buffer.from(match[1],'base64');
+ if(data.length<200||data.length>120000||data.toString('ascii',0,4)!=='RIFF'||data.toString('ascii',8,12)!=='WEBP'){
+  return json(res,400,{error:'Arquivo WebP inválido ou maior que 120 KB'});
+ }
+ const target=coverPath(slug),temp=target+'.'+crypto.randomBytes(4).toString('hex')+'.tmp';
+ fs.writeFileSync(temp,data,{mode:0o600});fs.renameSync(temp,target);
+ return json(res,200,{ok:true,custom:true});
+}
+
 if(pathname==='/api/admin/overview'&&req.method==='GET')return json(res,200,{users:state.users.filter(x=>x.role==='child').map(userInfo),events:state.events.slice(0,50),games:state.games.slice(-30).reverse(),rooms:[...rooms.values()].map(r=>({code:r.code,game:r.game,players:[...r.players].map(id=>state.users.find(u=>u.id===id)?.name),started:r.started,finished:r.finished}))});
 if(pathname==='/api/admin/users'&&req.method==='POST'){const b=await readBody(req);const name=String(b.name||'').trim().slice(0,32),pass=String(b.password||'');if(name.length<2||pass.length<4||pass.length>100||state.users.some(u=>u.name.toLowerCase()===name.toLowerCase()))return json(res,400,{error:'Nome ou PIN inválido/duplicado'});const child={id:uuid(),name,role:'child',pass:password(pass),enabled:true,loginEnabled:true,dailyLimit:60,version:0,voiceEnabled:true};state.users.push(child);save();return json(res,201,{user:userInfo(child)})}
 const m=pathname.match(/^\/api\/admin\/users\/([a-f0-9-]+)(?:\/(kick))?$/);

@@ -8,9 +8,29 @@ function patch(file,find,replace){
  if(!s.includes(find)||s.indexOf(find)!==s.lastIndexOf(find))throw Error('Upstream changed; refusing to patch '+file);
  fs.writeFileSync(full,s.replace(find,replace));
 }
+patch('src/storage/worldStore.ts',
+ "const DB_NAME = 'mcreplica';",
+ `let DB_NAME = 'mcreplica';
+export function setWorldNamespace(userId: string): void {
+ if (dbp) throw new Error('World database already open: cannot change accounts');
+ if (!/^[a-f0-9-]{20,50}$/i.test(userId)) throw new Error('Invalid family profile');
+ DB_NAME = 'mcreplica-profile-' + userId;
+}`);
 patch('src/main.ts',
  "import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';",
  "import { openToLanOnceSpawned, joinFirstLanWorld, guestIdentity, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';");
+patch('src/main.ts',
+ "  const canvas = document.getElementById('gl') as HTMLCanvasElement;",
+ `  // Shared phones must not share solo worlds across different child accounts.
+  // Keep the original 'mcreplica' database for the VPS headless family host.
+  if (!params.has('gfcHost')) {
+    const r = await fetch('/api/me', { credentials:'same-origin', cache:'no-store' });
+    if (!r.ok) throw Error('Entre novamente na sua conta GamesNavagador');
+    const auth = await r.json() as { user?:{id:string} };
+    if (!auth.user?.id) throw Error('Conta familiar sem identificador');
+    setWorldNamespace(auth.user.id);
+  }
+  const canvas = document.getElementById('gl') as HTMLCanvasElement;`);
 patch('src/main.ts',
  "  installScreens(game);",
  `  installScreens(game);
@@ -37,7 +57,7 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta } from './storage/worldStore';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {

@@ -55,6 +55,44 @@ jobs:
           echo "Verified VPS-compatible WebGL2 game host, relay, and world save"
           curl -fsS http://127.0.0.1:4173/__health
           node ops/opuscraft-guest-smoke.cjs
+          # Test recovery using the SAME Chromium profile, never a newly generated world.
+          original_id="$(curl -fsS http://127.0.0.1:4173/__debug | node -e '
+            let s="";process.stdin.on("data",b=>s+=b).on("end",()=>{
+              const j=JSON.parse(s);
+              if(!j.world?.id || !j.world?.created)process.exit(2);
+              process.stdout.write(j.world.id+"|"+j.world.created)
+            })
+          ')"
+          echo "OPUSCRAFT_WORLD_BEFORE_RESTART $original_id"
+          kill -TERM "$HOST_PID"
+          wait "$HOST_PID" || true
+          node ops/opuscraft-host.cjs >/tmp/opuscraft-restarted.log 2>&1 &
+          HOST_PID=$!
+          recovered=0
+          for attempt in $(seq 1 95); do
+            if curl -fsS --max-time 3 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"ready":true' &&
+               curl -fsS --max-time 3 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"lastSave":"20'; then
+              recovered=1
+              break
+            fi
+            sleep 2
+          done
+          if test "$recovered" -ne 1; then
+            echo "OpusCraft did not restore after restart"
+            cat /tmp/opuscraft-restarted.log
+            exit 1
+          fi
+          restored_id="$(curl -fsS http://127.0.0.1:4173/__debug | node -e '
+            let s="";process.stdin.on("data",b=>s+=b).on("end",()=>{
+              const j=JSON.parse(s);process.stdout.write((j.world?.id||"")+"|"+(j.world?.created||""))
+            })
+          ')"
+          test "$original_id" = "$restored_id" || {
+            echo "World changed after process restart: before=$original_id after=$restored_id"
+            cat /tmp/opuscraft-restarted.log
+            exit 1
+          }
+          echo "OPUSCRAFT_WORLD_PERSISTENCE_AFTER_RESTART_OK $restored_id"
 
 
   deploy:

@@ -7,7 +7,7 @@ test('Native OpusCraft title, singleplayer and family server in multiplayer',()=
  const patch=read('ops/patch-opuscraft.mjs'),app=read('public/app.js');
  assert.match(patch,/Servidor da Familia - Entrar/);
  assert.match(patch,/enterFamilyServer/);
- assert.match(patch,/SelectWorldScreen/);
+ assert.match(patch,/WorldList/);
  assert.match(patch,/backupToVps/);
  assert.match(patch,/restoreFromVps/);
  assert.match(patch,/spectator/);
@@ -32,7 +32,7 @@ test('Teleport is authenticated, limited and same-world, and host uses native te
 test('Solo worlds have account-scoped VPS export/restore and retain local native autosave',()=>{
  const patch=read('ops/patch-opuscraft.mjs'),server=read('server.cjs'),transfer=read('ops/gfc-world-backup.ts'),build=read('ops/build-opuscraft.sh');
  assert.match(build,/gfc-world-backup\.ts/);
- assert.match(patch,/Create New World|CreateWorldScreen|Game Mode/);
+ assert.match(patch,/private mode: 'survival'/);
  assert.match(transfer,/exportWorld\(world\.id\)/);
  assert.match(transfer,/importWorld\(await file\.blob\(\)\)/);
  assert.match(server,/opusBackupDir\(u\)/);

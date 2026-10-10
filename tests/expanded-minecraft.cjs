@@ -43,7 +43,7 @@ test('New Minecraft features use server-authoritative bot/weather/survival APIs'
  assert.match(plugin,/if\(cmd=="comer"\)/);
  assert.match(server,/installExplorationWorld/);
  assert.match(server,/api\/minecraft\/survival/);
- assert.match(menu,/\/familia exploracao/);
+ assert.match(menu,/data-action="exploracao"/);
  assert.match(menu,/\/familia comer/);
  assert.match(hud,/mc-vitals-icons/);
 });

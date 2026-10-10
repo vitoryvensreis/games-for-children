@@ -89,11 +89,13 @@ test('login, perfis, WebSocket e salas',async()=>{
   const duoStart=once(adminWS,'roomState',m=>m.game==='pong'&&!m.started);
   adminWS.send(JSON.stringify({type:'create',game:'pong',solo:false}));
   const duo=await duoStart;assert.equal(duo.players.length,1);
+  // Subscribe before second player joins: roomState and start can arrive in the same network tick.
+  const startedPong=once(adminWS,'roomState',m=>m.game==='pong'&&m.started);
   const joinedPong=once(socket,'roomState',m=>m.game==='pong'&&m.players.length===2);
   socket.send(JSON.stringify({type:'join',code:duo.code}));
-  const multiplayer=await joinedPong;assert.equal(multiplayer.started,false);
-  const startedPong=once(adminWS,'roomState',m=>m.game==='pong'&&m.started);
-  const started=await startedPong;assert.equal(started.players.length,2);
+  const [multiplayer,started]=await Promise.all([joinedPong,startedPong]);
+  assert.equal(multiplayer.players.length,2);
+  assert.equal(started.players.length,2);
   const pongUpdate=once(adminWS,'frame',m=>m.game==='pong');
   socket.send(JSON.stringify({type:'paddle',y:.22}));
   const paddle=await pongUpdate;assert.equal(paddle.players.find(p=>p.id===c.data.user.id).paddle,.22);

@@ -1,5 +1,5 @@
 const ico=n=>'<svg class="icon" aria-hidden="true"><use href="/icons.svg#'+n+'"></use></svg>';
-const $=s=>document.querySelector(s),app=$('#app');let me=null,ws=null,room=null,voiceOnline=[],iceQueues=new Map(),turnReady=null,frame=null,myId=null,peerId=null,voiceStream=null,connections=new Map(),remoteAudio=new Map(),adminTimer=null,wsRetry=null,heartbeatTimer=null,muted=false,desiredLane=1,inputSeq=0,lastLaneInput=0,iceServers=[{urls:'stun:stun.l.google.com:19302'}];
+const $=s=>document.querySelector(s),app=$('#app');let me=null,ws=null,room=null,familyMessages=[],voiceOnline=[],iceQueues=new Map(),turnReady=null,frame=null,myId=null,peerId=null,voiceStream=null,connections=new Map(),remoteAudio=new Map(),adminTimer=null,wsRetry=null,heartbeatTimer=null,muted=false,desiredLane=1,inputSeq=0,lastLaneInput=0,iceServers=[{urls:'stun:stun.l.google.com:19302'}];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const box=s=>'<div class="app">'+s+'</div>',renderTop=()=>'<div class="top"><span class="brand">'+ico('gamepad')+' GamesForChildren</span><div class="row"><span class="pill">'+esc(me?.name)+'</span><button class="ghost" id="logout">Sair</button></div></div>';
 function notify(msg){const n=$('#toast');n.textContent=msg;n.style.display='block';setTimeout(()=>n.style.display='none',3500)}
@@ -12,6 +12,7 @@ if(m.type==='lobby')renderLobby(m.rooms);
 
 if(m.type==='logout'){me=null;room=null;stopVoice();login();ensureVoiceDock();notify('Acesso encerrado pelo administrador')}
 if(m.type==='voiceBlocked'){stopVoice();notify('O administrador desligou o chat de voz')}
+if(m.type==='familyChat'){familyMessages.push(m);familyMessages=familyMessages.slice(-60);renderFamilyChat()}
 if(m.type==='voicePresence'){voiceOnline=m.items||[];updateVoiceDock()}
 if(m.type==='roomState'){const previous=room?.code;room=m;if(previous!==m.code){desiredLane=1;inputSeq=0;lastLaneInput=0;frame=null}if(m.mode==='player'||(me?.role==='child')){if(m.game==='pong'){if(previous!==m.code||!$('#pongCanvas'))pong()}else if(previous!==m.code||!$('#road'))race();else updateRaceStatus()}else{if(m.game==='pong'){if(previous!==m.code||!$('#pongCanvas'))pong()}else if(previous!==m.code||!$('#road'))spectate();else updateRaceStatus()}send({type:'peers'})}
 if(m.type==='frame'&&room?.code===m.roomCode||m.type==='frame'&&room?.game==='race'&&m.game!=='pong'&&room){frame=m;if(room?.game==='pong')drawPongFrame(m);if(room?.mode==='spectator')renderSpectatorScore(m);const el=$('#clock');if(el)el.textContent=m.remaining+'s';const mine=m.players.find(p=>p.id===me?.id);if(mine){if(Number.isInteger(mine.ackSeq)&&mine.ackSeq===inputSeq)desiredLane=mine.lane;const points=$('#points');if(points)points.textContent=mine.score} }
@@ -26,9 +27,9 @@ if(m.type==='voiceReady'&&voiceStream)maybeCall({id:m.id,name:m.name});
 if(m.type==='signal')handleSignal(m);
 };socket.onerror=()=>{if(ws!==socket)return;const label=$('#connectionStatus');if(label)label.textContent='Falha na conexão em tempo real'};socket.onclose=()=>{if(ws!==socket)return;for(const id of [...connections.keys()])hangupPeer(id);updateVoiceDock();const label=$('#connectionStatus');if(label)label.textContent='Reconectando...';if(me){clearTimeout(wsRetry);wsRetry=setTimeout(()=>{if(me)connect()},2500)}}}
 function renderLobby(rooms){const el=$('#availableRooms');if(!el)return;rooms=rooms.filter(r=>r.game==='pong');el.innerHTML=rooms.length?rooms.map(r=>'<div class="lobby-room"><div><strong>'+esc(r.host)+'</strong><span> criou Pong Neon</span></div><button data-room="'+esc(r.code)+'">Entrar</button></div>').join(''):'<p class="hint">Nenhuma partida aguardando. Crie uma e convide um amigo!</p>';el.querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room}))}
-function home(){pongCanvasObserver?.disconnect();pongCanvasObserver=null;ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card game-card--cover card-pong"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card game-card--cover card-snake"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card game-card--cover card-minecraft"><span class="art">'+ico('gamepad')+'</span><h2>Minecraft</h2><p class="sub">Explore e construa em família no mundo de blocos 3D (versão ClassiCube).</p><button id="openClassiCube" class="success">Jogar Minecraft</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openClassiCube').onclick=openClassiCube;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
+function home(){pongCanvasObserver?.disconnect();pongCanvasObserver=null;ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card game-card--cover card-pong"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card game-card--cover card-snake"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card game-card--cover card-minecraft"><span class="art">'+ico('gamepad')+'</span><h2>Minecraft</h2><p class="sub">Explore o mundo familiar permanente com animais, construções e inventário — OpusCraft.</p><button id="openOpusCraft" class="success">Jogar Minecraft</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openOpusCraft').onclick=openOpusCraft;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
 
-async function openClassiCube(){
+async function openOpusCraft(){
  if(!me)return login();
  // O bloqueio de orientação só funciona em navegadores que permitem fullscreen.
  // Fazemos a tentativa no gesto de clique, antes de qualquer await.
@@ -40,25 +41,25 @@ async function openClassiCube(){
  };
  void fullscreen();
  try{
-  const status=await api('classicube/status');
-  if(!status.available){notify('ClassiCube indisponível na VPS. O jogo não será aberto incompleto.');return}
+  const status=await api('opuscraft/status');
+  if(!status.available||!status.ready){notify('O mundo OpusCraft está iniciando na VPS; tente novamente em instantes.');return}
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
   app.innerHTML='<main class="classicube-embed" id="cubeRoot" aria-label="ClassiCube em tela horizontal"><iframe id="classicubeFrame" src="/classicube/index.html" title="ClassiCube — jogo 3D" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe><button id="classicubeBack" class="classicube-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button><div id="classicubeRotate" class="classicube-rotate" aria-live="polite"><span class="rotate-illustration" aria-hidden="true">'+ico('gamepad')+'</span><strong>Vire o celular na horizontal</strong><p>Assim a tela inteira e os controles ficam visíveis.</p><button id="classicubeTryLandscape">Ativar tela horizontal</button></div></main>';
-  const gameFrame=$('#classicubeFrame');
+  const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
    // The launch button remains focused in the parent document on desktops.
    // Hand input control to the same-origin ClassiCube iframe after its navigation.
    if(window.matchMedia('(pointer:fine)').matches){
-    try{gameFrame.contentWindow.focus();gameFrame.contentDocument?.getElementById('canvas')?.focus({preventScroll:true})}catch{}
+    try{gameFrame.contentWindow.focus();gameFrame.contentDocument?.getElementById('gl')?.focus({preventScroll:true})}catch{}
    }
   });
-  const root=$('#cubeRoot'),overlay=$('#classicubeRotate');
+  const root=$('#cubeRoot'),overlay=$('#opuscraftRotate');
   const sync=()=>{const portrait=window.innerHeight>window.innerWidth&&window.matchMedia('(pointer: coarse)').matches;root.classList.toggle('needs-landscape',portrait);overlay.hidden=!portrait;};
   sync();window.addEventListener('resize',sync);screen.orientation?.addEventListener?.('change',sync);
-  $('#classicubeTryLandscape').onclick=()=>{void fullscreen();sync()};
-  $('#classicubeBack').onclick=async()=>{window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
- }catch(e){console.warn('ClassiCube:',e);notify('Não foi possível iniciar ClassiCube: '+e.message)}
+  $('#opuscraftTryLandscape').onclick=()=>{void fullscreen();sync()};
+  $('#opuscraftBack').onclick=async()=>{window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
+ }catch(e){console.warn('OpusCraft:',e);notify('Não foi possível iniciar OpusCraft: '+e.message)}
 }
 let pongPadDirection=0,pongLocalY=.5,pongLastSend=0,pongRaf=0,pongRender=null,pongVisual=null,pongCanvasObserver=null;
 function pong(){

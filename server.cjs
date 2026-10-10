@@ -53,7 +53,7 @@ function startFamilyAdventureWorld(){
  worldInitStarted=true;
  const levels=path.join(MCGALAXY_DIR,'levels');
  const world=path.join(levels,ADVENTURE_MAP+'.lvl');
- const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\\n')};
+ const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\n')};
  // No momento da primeira atualização preservamos "main" e criamos "aventura".
  // Se a geração já ocorreu antes, o MCGalaxy restaura o "main-name" salvo e NÃO regenera.
  if(!fs.existsSync(world)){
@@ -94,7 +94,7 @@ function setupMCGalaxy(){
  mcgalaxyProcess.stdout.on('data',d=>log('out',d));mcgalaxyProcess.stderr.on('data',d=>log('err',d));
  mcgalaxyProcess.on('error',e=>{mcgalaxyReady=false;console.error('[MCGalaxy] Falha na inicialização:',e.message)});
  mcgalaxyProcess.on('exit',(code)=>{mcgalaxyReady=false;mcgalaxyProcess=null;console.warn('[MCGalaxy] Encerrado, código',code)});
- const saveTimer=setInterval(()=>{if(mcgalaxyReady&&mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write('/save all\\n')},300000);saveTimer.unref();
+ const saveTimer=setInterval(()=>{if(mcgalaxyReady&&mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write('/save all\n')},300000);saveTimer.unref();
  const probe=setInterval(async()=>{if(!mcgalaxyProcess){clearInterval(probe);return}if(await cubePortReady()){mcgalaxyReady=true;clearInterval(probe);console.log('[MCGalaxy] Mundo privado disponível em localhost');startFamilyAdventureWorld();}},1500);probe.unref();
 }
 process.once('SIGTERM',()=>{try{mcgalaxyProcess?.stdin?.write('/save all\n');mcgalaxyProcess?.stdin?.write('stop\n')}catch{};setTimeout(()=>process.exit(0),3200).unref()});

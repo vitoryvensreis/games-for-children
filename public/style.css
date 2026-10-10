@@ -251,3 +251,12 @@ body:has(.pong-game) #app{position:fixed;inset:0;width:100%;height:100dvh;min-wi
 .admin-cover-actions>.hint{display:block;margin-bottom:9px}
 .admin-cover-actions .row{gap:7px}
 .admin-cover-actions button{font-size:12px;border-radius:11px;box-shadow:none;padding:9px 10px;min-height:37px}
+
+
+/* Private, parent-managed Minecraft house ownership */
+.minecraft-houses{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin:10px 0 24px}
+.minecraft-house{display:flex;flex-direction:column;gap:9px;border:1px solid #cfdaef;border-radius:17px;min-width:0}
+.minecraft-house strong{font-size:17px;color:#25385e}
+.minecraft-house label{font-size:12px;font-weight:800;color:#4d5c79}
+.minecraft-house select{width:100%;min-height:43px;margin-top:6px;background:#fff;color:#223552;border:2px solid #cad6ee;border-radius:12px;font:700 13px system-ui;padding:7px}
+.minecraft-house small{font-size:11px;color:#77849a;line-height:1.45}

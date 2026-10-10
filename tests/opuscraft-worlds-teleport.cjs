@@ -39,6 +39,6 @@ test('Solo worlds have account-scoped VPS export/restore and retain local native
  assert.match(server,/64\*1024\*1024/);
  assert.match(server,/400\*1024\*1024/);
  assert.match(server,/Buffer\.concat\(chunks\)/);
- assert.match(server,/data','opuscraft','backups/);
+ assert.ok(server.includes("path.join(DATA,'opuscraft','backups')"));
  assert.match(patch,/\/api\/me/);
 });

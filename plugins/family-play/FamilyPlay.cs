@@ -409,6 +409,21 @@ public sealed class FamilyPlay : Plugin {
     p.Message("&aPronto! Voce encontrou "+target.name);
     return;
    }
+   if(cmd=="guia"){
+    int index=arg=="praca"?0:arg=="ponte"?1:arg=="torre"?2:-1;
+    if(index<0){p.Message("&eEscolha Guia da Praca, Ponte ou Torre no menu Familia.");return;}
+    if(!MoveToWorld(p,"vila_familia"))return;
+    p.BlockUntilLoad(10);
+    int[,] places=new int[,]{{90,45,101},{102,43,58},{140,46,89}};
+    // Scan the actual terrain to avoid spawning inside a building or mountain.
+    int x=places[index,0],z=places[index,2],ground=places[index,1];
+    for(int y=p.level.Height-3;y>1;y--){
+     if(p.level.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
+    }
+    PlayerOperations.TeleportToCoords(p,Position.FromFeetBlockCoords(x,ground,z),p.Rot);
+    p.Message("&aGuia encontrado! Ele mostra um dos locais do desafio.");
+    return;
+   }
    if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
    if(cmd=="premios"){ShowAdventures(p);return;}
    if(cmd=="pele") {
@@ -429,6 +444,7 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&T/familia tesouro &H- Caca ao tesouro");
    p.Message("&T/familia corrida &H- Circuito de exploracao");
    p.Message("&T/familia premios &H- Estrelas e medalhas");
+   p.Message("&T/familia guia praca &H- Visitar NPCs da Vila");
   }
  }
 }

@@ -16,34 +16,22 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check database/exploration-world.cjs && node --check database/mining-world.cjs && node --check public/classicube/family-menu.js && node --check public/classicube/touch-controls.js
-      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs tests/minecraft-admin.cjs tests/expanded-minecraft.cjs tests/mining-survival.cjs tests/creative-controls.cjs
-      - name: Preparar SDK para compilação MCGalaxy no PR
-        if: github.event_name == 'pull_request'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-      - name: Verificar compilação real do plugin FamilyPlay
-        if: github.event_name == 'pull_request'
-        shell: bash
+      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-host.cjs && node --check ops/patch-opuscraft.mjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs
+      - name: Build pinned OpusCraft
+        run: bash ops/build-opuscraft.sh
+      - name: Validate compiled web assets
         run: |
-          set -euo pipefail
-          git clone --no-checkout --filter=blob:none https://github.com/ClassiCube/MCGalaxy.git /tmp/gfc-ci-mcgalaxy
-          cd /tmp/gfc-ci-mcgalaxy
-          git fetch --depth 1 origin 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-          git checkout --detach 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-          cd "$GITHUB_WORKSPACE"
-          dotnet build /tmp/gfc-ci-mcgalaxy/MCGalaxy/MCGalaxy_dotnet.csproj -c Release
-          lib="/tmp/gfc-ci-mcgalaxy/MCGalaxy/bin/Release/net6.0/MCGalaxy_.dll"
-          test -s "$lib"
-          dotnet build plugins/family-play/FamilyPlay.csproj -c Release -p:MCGALAXY_REFERENCE="$lib"
-
+          test -s public/opuscraft/index.html
+          test -s ops/opuscraft-relay.mjs
+          grep -q '/opuscraft/assets/' public/opuscraft/index.html
 
   deploy:
     needs: validate

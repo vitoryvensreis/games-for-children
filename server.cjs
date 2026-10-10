@@ -109,6 +109,8 @@ function setupMCGalaxy(){
  if(process.env.MCGALAXY_EXTERNAL==='true'){const check=setInterval(async()=>{if(await cubePortReady()){mcgalaxyReady=true;clearInterval(check)}},150);check.unref();return}
  const exec=path.join(MCGALAXY_DIR,'MCGalaxyCLI');if(!fs.existsSync(exec)||process.env.MCGALAXY_ENABLED==='false')return;
  syncFamilyPolicy();
+ // A stale marker must not be mistaken for a loaded plugin after a crash.
+ try{fs.unlinkSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))}catch(err){if(err.code!=='ENOENT')console.warn('[FamilyPlay] Marker:',err.message)}
  // Generate only once: MCGalaxy subsequently owns persistence and modifications.
  try{
   const village=installFamilyVillage(path.join(MCGALAXY_DIR,'levels'));
@@ -210,7 +212,7 @@ if(gameCover&&req.method==='GET'){
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
 if(pathname==='/api/minecraft/family'&&req.method==='GET'){
  const connected=new Set([...cubeSessions.keys()].filter(id=>cubeSessions.get(id)?.readyState===1));
- return json(res,200,{...familyInfo(state,u,connected),multiplayerReady:mcgalaxyReady});
+ return json(res,200,{...familyInfo(state,u,connected),multiplayerReady:mcgalaxyReady,familyFeaturesReady:mcgalaxyReady&&fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))});
 }
 const skinMatch=pathname.match(/^\/api\/minecraft\/skins\/(azul|verde|rosa|roxo)\.png$/);
 if(skinMatch&&req.method==='GET'){

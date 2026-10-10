@@ -10,6 +10,18 @@ const PORT=4182;
 const sockets=new Set();
 const wss=new WebSocketServer({noServer:true,perMessageDeflate:false});
 const errors=[];
+let stage='init',guestPage=null;
+const watchdog=setTimeout(()=>{
+ console.error('OPUSCRAFT_GUEST_TIMEOUT stage='+stage,errors.slice(-12));
+ process.exit(3);
+},150000);
+const diagnostics=setInterval(async()=>{
+ try{
+  const info=await guestPage?.evaluate(()=>({mode:window.__game?.mode,inWorld:window.__game?.inWorld,client:!!window.__game?.client}));
+  console.log('Guest smoke progress:',stage,JSON.stringify(info));
+ }catch{console.log('Guest smoke progress:',stage)}
+},12000);
+diagnostics.unref?.();
 const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
  if(u.pathname==='/api/opuscraft/identity'){
@@ -53,6 +65,7 @@ server.on('upgrade',(req,socket,head)=>{
  let browser;
  try{
   await new Promise((resolve,reject)=>server.listen(PORT,'127.0.0.1',e=>e?reject(e):resolve()));
+  stage='launch-browser';console.log('Guest smoke: launching guest browser');
   browser=await puppeteer.launch({
    executablePath:await chromium.executablePath(),
    headless:true,
@@ -60,11 +73,14 @@ server.on('upgrade',(req,socket,head)=>{
      '--ignore-gpu-blocklist','--disable-background-timer-throttling','--window-size=960,600'],
    defaultViewport:{width:960,height:600},protocolTimeout:180000
   });
-  const page=await browser.newPage();
+  stage='new-page';
+  const page=await browser.newPage();guestPage=page;
   page.on('pageerror',e=>errors.push('page: '+e.message));
   page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text().slice(0,240))});
+  stage='load-game';console.log('Guest smoke: loading game');
   await page.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcJoin=1',
     {waitUntil:'domcontentloaded',timeout:45000});
+  stage='join-world';console.log('Guest smoke: waiting for authenticated multiplayer login');
   await page.waitForFunction(()=>{
    const g=window.__game;
    return !!(g&&g.mode==='client'&&g.inWorld&&g.client);
@@ -81,8 +97,9 @@ server.on('upgrade',(req,socket,head)=>{
   if(errors.length)console.error('Diagnostics:',errors.slice(-20));
   process.exitCode=1;
  }finally{
-  try{await browser?.close()}catch{}
+  stage='cleanup';clearTimeout(watchdog);clearInterval(diagnostics);
+  try{await Promise.race([browser?.close(),new Promise(resolve=>setTimeout(resolve,6000))])}catch{}
   for(const ws of sockets)try{ws.terminate()}catch{}
-  wss.close();server.close();
+  wss.close();server.closeAllConnections?.();server.close();
  }
 })();

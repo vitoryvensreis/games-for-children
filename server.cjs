@@ -242,6 +242,8 @@ if(houseAssign&&req.method==='POST'){
  if(userId&&(!state.users.some(v=>v.id===userId&&v.role==='child'&&v.enabled)||Object.entries(state.minecraftHouses).some(([slot,uid])=>uid===userId&&Number(slot)!==id))){
   return json(res,400,{error:'Escolha uma criança ativa que ainda não tenha casa'});
  }
+ // Protect production records migrated from a snapshot without this optional field.
+ if(!state.minecraftHouses||typeof state.minecraftHouses!=='object'||Array.isArray(state.minecraftHouses))state.minecraftHouses={};
  state.minecraftHouses[id]=userId;save();
  return json(res,200,{ok:true,homes:familyInfo(state,u,new Set()).homes});
 }
@@ -357,5 +359,13 @@ if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&[
 });
 ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const [id,cube] of cubeSessions){const u=cube.user,s=cube.session;if(!s||!u||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){cube.close(4001,'Acesso da família encerrado');cubeSessions.delete(id)}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
-async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});ensureAdmin();setupMCGalaxy();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
+async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});
+ // MySQL can replace the local JSON snapshot with a legacy state lacking house metadata.
+ // Normalise after selecting the authoritative source, before handlers or MCGalaxy start.
+ const missingHomes=!state.minecraftHouses||typeof state.minecraftHouses!=='object'||Array.isArray(state.minecraftHouses);
+ const missingSkins=!state.minecraftSkins||typeof state.minecraftSkins!=='object'||Array.isArray(state.minecraftSkins);
+ if(missingHomes){state.minecraftHouses=null;initHomes(state)}
+ if(missingSkins)state.minecraftSkins={};
+ if(missingHomes||missingSkins)save();
+ ensureAdmin();setupMCGalaxy();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

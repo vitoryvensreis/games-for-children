@@ -262,11 +262,12 @@ jobs:
                             exit 1
                           fi
                           if test -s vendor/mcgalaxy/properties/gfc-family-portals.status \
-                               && grep -Eq "^entrances=[3-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-portals.status; then
+                               && grep -Eq "^entrances=([3-9]|[1-9][0-9]+)$" vendor/mcgalaxy/properties/gfc-family-portals.status; then
                             echo GFC_FAMILY_PORTAL_NETWORK_READY
                             cat vendor/mcgalaxy/properties/gfc-family-portals.status
                           else
                             echo "::error::Os portais físicos não foram instalados"
+                            cat vendor/mcgalaxy/properties/gfc-family-portals.status 2>/dev/null || true
                             /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
                             exit 1
                           fi

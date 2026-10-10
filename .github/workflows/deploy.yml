@@ -105,7 +105,7 @@ jobs:
           marker_z="$(echo "$block_expect" | cut -d'|' -f2)"
           marker_state="$(echo "$block_expect" | cut -d'|' -f3)"
           loaded="$(curl -fsS --max-time 10 "http://127.0.0.1:4173/__ci/world-block?mode=read&x=$marker_x&z=$marker_z")"
-          actual_state="$(printf '%s' "$loaded" | node -e 'let x="";process.stdin.on("data",b=>x+=b).on("end",()=>{const j=JSON.parse(x);if(!j.ok)process.exit(1);process.stdout.write(j.state)})')"
+          actual_state="$(printf '%s' "$loaded" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).state")"
           test "$actual_state" = "$marker_state" || { echo "Persistent chunk lost: before=$marker_state after=$actual_state"; exit 1; }
           echo "OPUSCRAFT_WORLD_BLOCK_SURVIVED_RESTART_OK at $marker_x,315,$marker_z state=$actual_state"
           echo "OPUSCRAFT_WORLD_PERSISTENCE_AFTER_RESTART_OK $restored_id"

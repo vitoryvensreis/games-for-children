@@ -46,8 +46,7 @@ patch('src/net/transport/webSocket.ts',
  "return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}/__mp?role=${role}`;",
  `// The headless VPS host keeps using the local relay. Family devices use
   // /ws, which is already supported by the site's production reverse proxy.
-  const local = /^(127\\.0\\.0\\.1|localhost)(:|$)/.test(loc.host);
-  const endpoint = local || role === 'host' ? '/__mp' : '/ws?opus=1';
+  const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
 // Static files are mounted behind the authenticated GamesNavagador iframe.

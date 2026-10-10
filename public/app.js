@@ -203,7 +203,7 @@ async function refreshMinecraftDashboard(){
  try{
   const data=await api('admin/minecraft/dashboard');if(!el.isConnected)return;
   const controls=data.controls||{};
-  const worldNames={vila_familia:'Vila da Família',aventura:'Mundo Aventura'};
+  const worldNames={vila_familia:'Vila da Família',aventura:'Mundo Aventura',exploracao:'Mundo Exploração'};
   const ready=data.ready&&data.pluginActive;
   el.innerHTML='<div class="minecraft-admin-summary">'+
     '<div class="panel"><strong>Servidor</strong><p>'+(data.ready?'Conectado':'Indisponível')+'</p></div>'+
@@ -230,7 +230,7 @@ async function refreshMinecraftDashboard(){
    if(confirm('Definir '+worldNames[world]+' como mundo inicial?'))minecraftAdminAction('main',{world});
   });
   el.querySelectorAll('[data-mc-restore]').forEach(btn=>btn.onclick=()=>{
-   const id=btn.dataset.mcRestore,world=id.startsWith('vila_familia-')?'vila_familia':'aventura';
+   const id=btn.dataset.mcRestore,world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('exploracao-')?'exploracao':'aventura';
    if(confirm('ATENÇÃO: Restaurar '+worldNames[world]+' a um backup antigo? Construções feitas depois daquela data deixarão de aparecer. Um backup da versão atual será criado primeiro.')){
     if(prompt('Digite RESTAURAR '+world+' para confirmar')==='RESTAURAR '+world)minecraftAdminAction('restore',{id,confirm:'RESTAURAR '+world});
    }

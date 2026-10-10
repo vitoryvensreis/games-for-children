@@ -373,7 +373,7 @@ if(pathname==='/api/admin/minecraft/command'&&req.method==='POST'){
   }catch(e){return json(res,400,{error:e.message})}
  }
  if(action==='restore'){
-  const id=String(b.id||''),world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('aventura-')?'aventura':id.startsWith('exploracao-')?'exploracao':'';
+  const id=String(b.id||''),world=Object.keys(WORLDS).find(name=>id.startsWith(name+'-'))||'';
   if(!BACKUP_PATTERN.test(id))return json(res,400,{error:'Identificador de backup inválido'});
   if(!WORLDS[world]||b.confirm!=='RESTAURAR '+world)return json(res,400,{error:'Confirmação inválida'});
   if(minecraftPlayersOverview().some(x=>x.online))return json(res,409,{error:'Peça às crianças para sair do Minecraft antes de restaurar'});

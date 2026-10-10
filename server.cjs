@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {NAME:FAMILY_VILLAGE,installFamilyVillage}=require('./database/family-village.cjs');
+const {ROOMS:FAMILY_HOMES,SKINS:FAMILY_SKINS,playerName:familyName,initHomes,familyInfo,writePolicy,makeSkin}=require('./database/family-play.cjs');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
 const net=require('node:net');
 const {spawn}=require('node:child_process');
@@ -25,12 +26,18 @@ function validCoverSlug(slug){return COVER_SLUGS.includes(slug)}
 let state={users:[],sessions:[],events:[],games:[]};
 try{state=JSON.parse(fs.readFileSync(DB,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e}
 for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[];
+initHomes(state);state.minecraftSkins??={};
 const VAPID_PUBLIC_KEY=process.env.VAPID_PUBLIC_KEY||'';
 if(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT){webpush.setVapidDetails(process.env.VAPID_SUBJECT,VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
 const PUSH_READY=Boolean(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
 const TURN_URLS=(process.env.TURN_URLS||'').split(',').map(v=>v.trim()).filter(Boolean);
 const ICE_SERVERS=[{urls:'stun:stun.l.google.com:19302'},...(TURN_URLS.length&&process.env.TURN_USERNAME&&process.env.TURN_PASSWORD?[{urls:TURN_URLS,username:process.env.TURN_USERNAME,credential:process.env.TURN_PASSWORD}]:[])];
-function save(){const tmp=DB+'.tmp';fs.writeFileSync(tmp,JSON.stringify(state),{mode:0o600});fs.renameSync(tmp,DB);sqlStore.persist(state)}
+function save(){const tmp=DB+'.tmp';fs.writeFileSync(tmp,JSON.stringify(state),{mode:0o600});fs.renameSync(tmp,DB);sqlStore.persist(state);syncFamilyPolicy()}
+function syncFamilyPolicy(){
+ if(process.env.MCGALAXY_ENABLED==='false'||process.env.MCGALAXY_EXTERNAL==='true')return;
+ if(!fs.existsSync(path.join(MCGALAXY_DIR,'MCGalaxyCLI')))return;
+ try{writePolicy(state,MCGALAXY_DIR)}catch(err){console.error('[FamilyPlay] Falha ao salvar permissões:',err.message)}
+}
 const uuid=()=>crypto.randomUUID(), now=()=>Date.now();
 const hash=(s,salt)=>crypto.scryptSync(String(s),salt,64).toString('hex');
 function password(pass){const salt=crypto.randomBytes(16).toString('hex');return salt+':'+hash(pass,salt)}
@@ -52,7 +59,7 @@ function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws
 function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=Math.min(t-s.lastTick,15000);s.lastTick=t;if(delta>0&&delta<16000){const k=localDay(t);s.daily??={};s.daily[k]=(s.daily[k]||0)+delta}}
 function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
 function end(s){touch(s);s.revoked=true;for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
-function cubePlayerName(u){const clean=u.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]/g,'').slice(0,11)||'Piloto';return clean+'_'+u.id.replace(/-/g,'').slice(0,4)}
+function cubePlayerName(u){return familyName(u)}
 function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
 // O gerador só roda caso o mapa ainda não exista. Nunca apagamos mapas ou blocos existentes.
 const ADVENTURE_MAP='aventura',ADVENTURE_SEED='481516',ADVENTURE_SIZE='192 96 192';
@@ -101,6 +108,7 @@ function startFamilyAdventureWorld(){
 function setupMCGalaxy(){
  if(process.env.MCGALAXY_EXTERNAL==='true'){const check=setInterval(async()=>{if(await cubePortReady()){mcgalaxyReady=true;clearInterval(check)}},150);check.unref();return}
  const exec=path.join(MCGALAXY_DIR,'MCGalaxyCLI');if(!fs.existsSync(exec)||process.env.MCGALAXY_ENABLED==='false')return;
+ syncFamilyPolicy();
  // Generate only once: MCGalaxy subsequently owns persistence and modifications.
  try{
   const village=installFamilyVillage(path.join(MCGALAXY_DIR,'levels'));
@@ -200,6 +208,23 @@ if(gameCover&&req.method==='GET'){
 }
 
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
+if(pathname==='/api/minecraft/family'&&req.method==='GET'){
+ const connected=new Set([...cubeSessions.keys()].filter(id=>cubeSessions.get(id)?.readyState===1));
+ return json(res,200,{...familyInfo(state,u,connected),multiplayerReady:mcgalaxyReady});
+}
+const skinMatch=pathname.match(/^\/api\/minecraft\/skins\/(azul|verde|rosa|roxo)\.png$/);
+if(skinMatch&&req.method==='GET'){
+ const bytes=makeSkin(skinMatch[1]);
+ res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'private, max-age=3600','X-Content-Type-Options':'nosniff'});
+ return res.end(bytes);
+}
+if(pathname==='/api/minecraft/skin'&&req.method==='POST'){
+ const b=await readBody(req),skin=String(b.skin||'');
+ if(!FAMILY_SKINS[skin])return json(res,400,{error:'Aparência indisponível'});
+ state.minecraftSkins[u.id]=skin;save();
+ return json(res,200,{ok:true,skin});
+}
+
 if(pathname==='/api/heartbeat'&&req.method==='POST'){const was=activeUser(u);touch(s);s.lastSeen=now();save();if(!was&&u.role==='child')track(u,'online');report();return json(res,200,{ok:true,online:true})}
 if(pathname.startsWith('/api/photos/')&&req.method==='GET'){const id=pathname.slice('/api/photos/'.length),target=state.users.find(x=>x.id===id);if(!target||!target.photo||(u.role!=='admin'&&u.id!==id))return json(res,404,{error:'Foto indisponível'});const match=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(target.photo);if(!match)return json(res,404,{error:'Foto inválida'});res.writeHead(200,{'Content-Type':'image/'+match[1],'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});return res.end(Buffer.from(match[2],'base64'))}
 if(pathname==='/api/voice/config'&&req.method==='GET')return json(res,200,{iceServers:ICE_SERVERS,turnConfigured:ICE_SERVERS.length>1});
@@ -208,6 +233,17 @@ if(pathname==='/api/push/subscribe'&&req.method==='POST'){if(u.role!=='admin')re
 if(pathname==='/api/push/unsubscribe'&&req.method==='POST'){const b=await readBody(req);state.pushSubscriptions=state.pushSubscriptions.filter(x=>x.userId!==u.id||x.endpoint!==b.endpoint);save();return json(res,200,{ok:true})}
 if(pathname==='/api/logout'&&req.method==='POST'){end(s);return json(res,200,{ok:true},'gfc_sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0')}
 if(u.role!=='admin')return json(res,403,{error:'Acesso restrito'});
+const houseAssign=pathname.match(/^\/api\/admin\/minecraft\/houses\/([1-4])$/);
+if(houseAssign&&req.method==='POST'){
+ const id=Number(houseAssign[1]),b=await readBody(req);
+ const userId=b.userId===null?'':String(b.userId||'');
+ if(userId&&(!state.users.some(v=>v.id===userId&&v.role==='child'&&v.enabled)||Object.entries(state.minecraftHouses).some(([slot,uid])=>uid===userId&&Number(slot)!==id))){
+  return json(res,400,{error:'Escolha uma criança ativa que ainda não tenha casa'});
+ }
+ state.minecraftHouses[id]=userId;save();
+ return json(res,200,{ok:true,homes:familyInfo(state,u,new Set()).homes});
+}
+
 if(pathname==='/api/admin/game-covers'&&req.method==='GET'){
  return json(res,200,{covers:Object.fromEntries(COVER_SLUGS.map(slug=>[slug,{custom:fs.existsSync(coverPath(slug)),url:'/api/game-covers/'+slug}]))});
 }

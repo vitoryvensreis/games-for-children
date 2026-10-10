@@ -5,6 +5,7 @@ const crypto=require('node:crypto');
 const {NAME:FAMILY_VILLAGE,installFamilyVillage}=require('./database/family-village.cjs');
 const {ROOMS:FAMILY_HOMES,SKINS:FAMILY_SKINS,playerName:familyName,initHomes,familyInfo,writePolicy,makeSkin}=require('./database/family-play.cjs');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
+const {WORLDS,makeBackup,listBackups,restoreOffline,checkWorld,safeSettings}=require('./database/minecraft-control.cjs');
 const net=require('node:net');
 const {spawn}=require('node:child_process');
 const {WebSocketServer}=require('ws');
@@ -14,6 +15,8 @@ const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
 const MCGALAXY_PORT=Number(process.env.MCGALAXY_PORT||25565);
 const MCGALAXY_DIR=path.join(ROOT,'vendor','mcgalaxy');
+const MINECRAFT_BACKUPS=path.join(DATA,'minecraft-backups');
+let minecraftMaintenance=false;
 let mcgalaxyProcess=null,mcgalaxyReady=false;
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
 const COVER_SLUGS=Object.freeze(['pong','snake','minecraft']);
@@ -26,7 +29,7 @@ function validCoverSlug(slug){return COVER_SLUGS.includes(slug)}
 let state={users:[],sessions:[],events:[],games:[]};
 try{state=JSON.parse(fs.readFileSync(DB,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e}
 for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[];
-initHomes(state);state.minecraftSkins??={};
+initHomes(state);state.minecraftSkins??={};state.minecraftControls=safeSettings({},state.minecraftControls||{});
 const VAPID_PUBLIC_KEY=process.env.VAPID_PUBLIC_KEY||'';
 if(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT){webpush.setVapidDetails(process.env.VAPID_SUBJECT,VAPID_PUBLIC_KEY,process.env.VAPID_PRIVATE_KEY)}
 const PUSH_READY=Boolean(VAPID_PUBLIC_KEY&&process.env.VAPID_PRIVATE_KEY&&process.env.VAPID_SUBJECT);
@@ -86,6 +89,46 @@ function adventureStatus(u){
  ]};
 }
 
+function minecraftGuidesStatus(){
+ const file=path.join(MCGALAXY_DIR,'properties','gfc-family-guides.status');
+ try{
+  const lines=fs.readFileSync(file,'utf8').split(/\r?\n/);
+  const count=Math.max(0,Math.min(3,Number(lines.find(line=>line.startsWith('count='))?.slice(6))||0));
+  return {count,ready:count===3};
+ }catch{return {count:0,ready:false}}
+}
+function minecraftPlayersOverview(){
+ let spotLines=[];try{spotLines=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-family-positions.tsv'),'utf8').split(/\r?\n/)}catch{}
+ const positions=new Map(spotLines.map(line=>line.split('|')).filter(x=>x.length===8).map(p=>[p[0],{world:p[1],x:Math.round(Number(p[2])/32),y:Math.round(Number(p[3])/32),z:Math.round(Number(p[4])/32),savedAt:Math.floor(Number(p[7])/10000)}]));
+ return state.users.filter(x=>x.enabled&&(x.role==='child'||x.role==='admin')).map(u=>({
+  name:u.name,role:u.role,id:u.id,online:cubeSessions.get(u.id)?.readyState===1,position:positions.get(cubePlayerName(u))||null
+ }));
+}
+function minecraftStatus(){
+ const guides=minecraftGuidesStatus();
+ const worlds=Object.entries(WORLDS).map(([id,title])=>{
+  const filename=path.join(MCGALAXY_DIR,'levels',id+'.lvl');
+  try{const st=fs.statSync(filename);return {id,title,exists:st.size>0,bytes:st.size,updatedAt:st.mtime.toISOString()}}catch{return {id,title,exists:false,bytes:0}}
+ });
+ const props=path.join(MCGALAXY_DIR,'properties','server.properties');
+ let main='vila_familia';try{const m=/^main-name\s*=\s*(\S+)/mi.exec(fs.readFileSync(props,'utf8'));if(m&&WORLDS[m[1]])main=m[1]}catch{}
+ return {ready:mcgalaxyReady,pluginActive:fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready')),guides,worlds,main,players:minecraftPlayersOverview(),backups:listBackups(MINECRAFT_BACKUPS),controls:state.minecraftControls,maintenance:minecraftMaintenance};
+}
+async function minecraftSave(){
+ if(!mcgalaxyReady||!mcgalaxyProcess?.stdin?.writable)throw Error('Servidor Minecraft indisponível');
+ mcgalaxyProcess.stdin.write('/save all\n');
+ await new Promise(done=>setTimeout(done,1400));
+}
+async function minecraftStop(){
+ const proc=mcgalaxyProcess;if(!proc)return;
+ mcgalaxyReady=false;
+ const wait=new Promise((resolve,reject)=>{
+  const timer=setTimeout(()=>reject(Error('Servidor demorou a parar')),16000);
+  proc.once('exit',()=>{clearTimeout(timer);resolve()});
+ });
+ proc.stdin.write('stop\n');
+ await wait;
+}
 function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
 // O gerador só roda caso o mapa ainda não exista. Nunca apagamos mapas ou blocos existentes.
 const ADVENTURE_MAP='aventura',ADVENTURE_SEED='481516',ADVENTURE_SIZE='192 96 192';
@@ -236,6 +279,7 @@ if(gameCover&&req.method==='GET'){
 }
 
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
+if(pathname==='/api/minecraft/controls'&&req.method==='GET')return json(res,200,{controls:state.minecraftControls});
 if(pathname==='/api/minecraft/family'&&req.method==='GET'){
  const connected=new Set([...cubeSessions.keys()].filter(id=>cubeSessions.get(id)?.readyState===1));
  return json(res,200,{...familyInfo(state,u,connected),adventures:adventureStatus(u),multiplayerReady:mcgalaxyReady,familyFeaturesReady:mcgalaxyReady&&fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))});
@@ -261,6 +305,58 @@ if(pathname==='/api/push/subscribe'&&req.method==='POST'){if(u.role!=='admin')re
 if(pathname==='/api/push/unsubscribe'&&req.method==='POST'){const b=await readBody(req);state.pushSubscriptions=state.pushSubscriptions.filter(x=>x.userId!==u.id||x.endpoint!==b.endpoint);save();return json(res,200,{ok:true})}
 if(pathname==='/api/logout'&&req.method==='POST'){end(s);return json(res,200,{ok:true},'gfc_sid=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0')}
 if(u.role!=='admin')return json(res,403,{error:'Acesso restrito'});
+if(pathname==='/api/admin/minecraft/dashboard'&&req.method==='GET')return json(res,200,minecraftStatus());
+if(pathname==='/api/admin/minecraft/controls'&&req.method==='POST'){
+ const input=await readBody(req);
+ state.minecraftControls=safeSettings(input,state.minecraftControls);
+ save();return json(res,200,{ok:true,controls:state.minecraftControls});
+}
+if(pathname==='/api/admin/minecraft/command'&&req.method==='POST'){
+ if(minecraftMaintenance)return json(res,409,{error:'Manutenção em andamento'});
+ const b=await readBody(req),action=String(b.action||'');
+ if(action==='save'){
+  try{await minecraftSave();return json(res,200,{ok:true,message:'Mundos salvos'})}catch(e){return json(res,503,{error:e.message})}
+ }
+ if(action==='backup'){
+  try{
+   const world=checkWorld(b.world);
+   await minecraftSave();
+   const file=makeBackup(MCGALAXY_DIR,MINECRAFT_BACKUPS,world);
+   return json(res,200,{ok:true,backup:file});
+  }catch(e){return json(res,400,{error:e.message})}
+ }
+ if(action==='main'){
+  if(!mcgalaxyReady||!mcgalaxyProcess?.stdin?.writable)return json(res,503,{error:'Servidor indisponível'});
+  try{
+   const world=checkWorld(b.world);
+   if(!fs.existsSync(path.join(MCGALAXY_DIR,'levels',world+'.lvl')))return json(res,404,{error:'Mundo inexistente'});
+   mcgalaxyProcess.stdin.write('/main '+world+'\n');
+   return json(res,200,{ok:true,world});
+  }catch(e){return json(res,400,{error:e.message})}
+ }
+ if(action==='restore'){
+  const id=String(b.id||''),world=id.split('-')[0]==='vila'?'vila_familia':id.startsWith('aventura-')?'aventura':'';
+  if(!WORLDS[world]||b.confirm!=='RESTAURAR '+world)return json(res,400,{error:'Confirmação inválida'});
+  if(minecraftPlayersOverview().some(x=>x.online))return json(res,409,{error:'Peça às crianças para sair do Minecraft antes de restaurar'});
+  if(!mcgalaxyReady||!mcgalaxyProcess)return json(res,503,{error:'Servidor indisponível'});
+  minecraftMaintenance=true;
+  try{
+   // Verify backup before stopping; restoration is performed only while MCGalaxy is offline.
+   const candidate=path.join(MINECRAFT_BACKUPS,id);
+   const backupTest=require('./database/minecraft-control.cjs').verifyLevel;
+   backupTest(fs.readFileSync(candidate));
+   await minecraftStop();
+   const emergency=makeBackup(MCGALAXY_DIR,MINECRAFT_BACKUPS,world);
+   const restored=restoreOffline(MCGALAXY_DIR,MINECRAFT_BACKUPS,id);
+   setupMCGalaxy();
+   return json(res,200,{ok:true,restored,emergencyBackup:emergency.id,message:'Mundo restaurado; servidor reiniciando'});
+  }catch(e){
+   if(!mcgalaxyProcess)try{setupMCGalaxy()}catch{}
+   return json(res,500,{error:'Restauração interrompida: '+e.message});
+  }finally{minecraftMaintenance=false}
+ }
+ return json(res,400,{error:'Ação não permitida'});
+}
 const houseAssign=pathname.match(/^\/api\/admin\/minecraft\/houses\/([1-4])$/);
 if(houseAssign&&req.method==='POST'){
  const id=Number(houseAssign[1]),b=await readBody(req);
@@ -392,6 +488,7 @@ async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data
  const missingSkins=!state.minecraftSkins||typeof state.minecraftSkins!=='object'||Array.isArray(state.minecraftSkins);
  if(missingHomes){state.minecraftHouses=null;initHomes(state)}
  if(missingSkins)state.minecraftSkins={};
+ state.minecraftControls=safeSettings({},state.minecraftControls||{});
  if(missingHomes||missingSkins)save();
  ensureAdmin();setupMCGalaxy();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

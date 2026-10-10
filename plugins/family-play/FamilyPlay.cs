@@ -181,7 +181,9 @@ public sealed class FamilyPlay : Plugin {
  // Three visible guide NPCs added to the existing village without changing its blocks.
  // They are safe to restore after restarts; the bot list is deduplicated by name.
  private static void InstallGuides(Level lvl){
-  if(lvl==null||!String.Equals(lvl.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
+  if(lvl==null)return;
+  if(String.Equals(lvl.MapName,"exploracao",StringComparison.OrdinalIgnoreCase)){InstallWildlife(lvl);return;}
+  if(!String.Equals(lvl.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   string[] names=new string[]{"Guia_Praca","Guia_Ponte","Guia_Torre"};
   int[,] spots=new int[,]{{92,100},{99,57},{142,88}};
   int created=0,found=0;
@@ -384,6 +386,29 @@ public sealed class FamilyPlay : Plugin {
   if(v.Hunger<=3)p.Message("&eHora do lanche! Abra Familia para comer e recuperar energia.");
  }
 
+
+ private static void InstallWildlife(Level lvl){
+  // Wild animals are decorative, with simple walking paths. Never hostile.
+  string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago"};
+  string[] models={"sheep","pig","chicken","sheep"};
+  int[,] places=new int[,]{{187,207},{220,190},{183,167},{245,171}};
+  int found=0;
+  for(int n=0;n<names.Length;n++){
+   bool exists=false;foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==names[n]){exists=true;break;}
+   if(exists){found++;continue;}
+   int x=places[n,0],z=places[n,1],ground=47;
+   for(int y=lvl.Height-5;y>1;y--){
+    if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
+   }
+   PlayerBot animal=new PlayerBot(names[n],lvl);
+   animal.Owner="GamesForChildren";animal.SetModel(models[n]);
+   animal.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+2)*32+"",ground*32+"",(z+1)*32+"","0","0"}));
+   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-1)*32+"","0","0"}));
+   PlayerBot.Add(animal);found++;
+  }
+  try{File.WriteAllText("properties/gfc-exploration-animals.status","count="+found+"\n");}catch{}
+ }
  // Real in-world quests: progress advances exclusively from server-validated player positions.
  private static Quest GetQuest(string player) {
   Quest q;if(!quests.TryGetValue(player,out q)){q=new Quest();quests[player]=q;}return q;

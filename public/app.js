@@ -214,14 +214,16 @@ async function refreshGameCovers(){
      const ratio=Math.min(1,960/img.width,720/img.height);
      canvas.width=Math.max(1,Math.round(img.width*ratio));
      canvas.height=Math.max(1,Math.round(img.height*ratio));
-     canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);img.close();
      let quality=.74,data='';
-     for(let i=0;i<5;i++){
-      data=canvas.toDataURL('image/webp',quality);
-      if(data.startsWith('data:image/webp;')&&data.length<160000)break;
-      quality-=.13;canvas.width=Math.max(240,Math.round(canvas.width*.82));canvas.height=Math.max(180,Math.round(canvas.height*.82));
+     for(let i=0;i<6;i++){
       canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+      data=canvas.toDataURL('image/webp',quality);
+      if(data.startsWith('data:image/webp;')&&data.length<158000)break;
+      quality=Math.max(.27,quality-.1);
+      canvas.width=Math.max(220,Math.round(canvas.width*.78));
+      canvas.height=Math.max(165,Math.round(canvas.height*.78));
      }
+     img.close();
      if(!data.startsWith('data:image/webp;')||data.length>160000)throw Error('Não foi possível compactar a imagem para 120 KB');
      await api('admin/game-covers/'+slug,'POST',{image:data});
      notify('Capa de '+GAME_COVER_NAMES[slug]+' atualizada!');refreshGameCovers();

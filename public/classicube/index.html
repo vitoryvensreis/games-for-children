@@ -133,6 +133,9 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 @media(pointer:coarse){#desktopControlsHint{display:none!important}}
 
 
+
+/* Personalize touch visibility without exposing original buttons behind the opaque base. */
+#familyPad .family-pad-right button,#familyPad .joystick-thumb{opacity:var(--mc-pad-opacity,1)}
 </style>
 </head><body><canvas id="canvas" tabindex="0" aria-label="Jogo Minecraft: use W A S D para andar, Espaço para pular e o mouse para olhar" oncontextmenu="event.preventDefault()"></canvas><div id="desktopControlsHint" hidden>Andar: W A S D &nbsp; | &nbsp; Pular: Espaço &nbsp; | &nbsp; Mouse: olhar</div><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div><div id="familyPad" role="group" aria-label="Controles para jogar no celular" hidden>
   <div class="family-pad-panel family-pad-left" aria-label="Joystick analógico para movimentar">
@@ -335,4 +338,20 @@ try{
  <div id="familyMessage" role="status" aria-live="polite"></div>
 </aside>
 <script src="/classicube/family-menu.js"></script>
+<script>
+(async function(){
+ if(!window.matchMedia('(pointer:coarse)').matches)return;
+ try{
+  const response=await fetch('/api/minecraft/controls',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)return;
+  const data=await response.json();
+  const p=data.controls||{},pad=document.getElementById('familyPad');
+  if(!pad)return;
+  const size=Math.max(100,Math.min(220,Number(p.padSize)||152));
+  const opacity=Math.max(45,Math.min(100,Number(p.padOpacity)||85));
+  pad.style.setProperty('--pad-size',size+'px');
+  pad.style.setProperty('--mc-pad-opacity',String(opacity/100));
+ }catch(e){console.warn('Controles personalizados indisponíveis',e)}
+})();
+</script>
 </body></html>

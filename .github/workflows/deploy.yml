@@ -228,12 +228,19 @@ jobs:
                       fi
                       for p in 1 2 3 4 5 6 7 8 9 10 11 12; do
                         if test -s vendor/mcgalaxy/properties/gfc-familyplay.ready; then
-                          if test -s vendor/mcgalaxy/properties/gfc-family-guides.status && grep -qx "count=3" vendor/mcgalaxy/properties/gfc-family-guides.status; then
-                            echo GFC_THREE_NPCS_CONFIRMED
+                          if test -s vendor/mcgalaxy/properties/gfc-family-guides.status && grep -qx "count=3" vendor/mcgalaxy/properties/gfc-family-guides.status && grep -qx "animals=5" vendor/mcgalaxy/properties/gfc-family-guides.status; then
+                            echo GFC_THREE_NPCS_AND_FIVE_PEACEFUL_ANIMALS_CONFIRMED
                             cat vendor/mcgalaxy/properties/gfc-family-guides.status
                           else
                             echo "::error::Os 3 NPCs da Vila não foram encontrados"
                             /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
+                            exit 1
+                          fi
+                          if test -s vendor/mcgalaxy/properties/gfc-climate.status && grep -q "^weather=" vendor/mcgalaxy/properties/gfc-climate.status; then
+                            echo GFC_WEATHER_DAY_NIGHT_ACTIVE
+                            cat vendor/mcgalaxy/properties/gfc-climate.status
+                          else
+                            echo "::error::Clima dinâmico não iniciou"
                             exit 1
                           fi
                           echo FAMILYPLAY_HOUSE_PROTECTION_ACTIVE

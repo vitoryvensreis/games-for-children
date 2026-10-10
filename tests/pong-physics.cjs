@@ -25,7 +25,7 @@ test('Pong: center of ball makes contact at the visible right paddle surface',()
 });
 
 test('Pong: high-speed swept collision cannot skip a racket between server ticks',()=>{
- const ball=g(.19,.5,-1.1,0);
+ const ball=g(.18,.5,-1.1,0);
  assert.equal(stepPongBall(ball,.075,.5,.5),'leftHit');
  assert.ok(ball.x>=PONG.LEFT_CONTACT);
 });

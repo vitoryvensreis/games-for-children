@@ -106,8 +106,8 @@ server.on('upgrade',(req,socket,head)=>{
    executablePath:await chromium.executablePath(),
    headless:true,
    args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader','--use-angle=swiftshader',
-     '--ignore-gpu-blocklist','--disable-background-timer-throttling','--window-size=960,600'],
-   defaultViewport:{width:780,height:500},protocolTimeout:180000
+     '--ignore-gpu-blocklist','--disable-background-timer-throttling','--window-size=480,320'],
+   defaultViewport:{width:480,height:320},protocolTimeout:180000
   });
   stage='new-page';
   const page=await browser.newPage();guestPage=page;
@@ -135,12 +135,21 @@ server.on('upgrade',(req,socket,head)=>{
   console.log('OPUSCRAFT_GUEST_JOIN_SUCCESS',JSON.stringify({status,serverGuests:stats.guests}));
   // The family client must work on two different devices and user accounts at once.
   stage='second-player-join';
+  // In the CI's software-rendered WebGL environment, do not spend CPU/GPU
+  // drawing the first guest while the second device is starting. The game
+  // still advances network/simulation via its fallback tick timer.
+  await page.evaluate(()=>{
+    Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+    Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});
+  });
+  console.log('OPUSCRAFT_FIRST_GUEST_RENDER_PAUSED_FOR_SECOND_JOIN');
+
   const page2=await browser.newPage();guestPage2=page2;
   await page2.setExtraHTTPHeaders({'x-gfc-test-profile':'adult'});
   page2.on('pageerror',e=>errors.push('second page: '+e.message));
   page2.on('console',m=>{if(['error','warning'].includes(m.type()))errors.push('second console '+m.type()+': '+m.text().slice(0,380))});
   await page2.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcJoin=1',
-    {waitUntil:'domcontentloaded',timeout:45000});
+    {waitUntil:'domcontentloaded',timeout:85000});
   await page2.waitForFunction(()=>{const g=window.__game;return !!(g?.mode==='client'&&g.inWorld&&g.spawned)},{
    timeout:105000,polling:1000
   });

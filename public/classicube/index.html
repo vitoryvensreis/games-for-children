@@ -134,6 +134,14 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 
 
 
+/* Compact edge controls: keep the game view unobstructed. */
+#familyInventoryBtn{position:fixed;z-index:35;top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + 220px);min-height:39px;padding:8px 13px;border:1px solid #c1ecc6;border-radius:12px;background:#166b55f2;color:white;font:900 12px system-ui,sans-serif;touch-action:manipulation}
+#familyFlight{position:absolute;right:calc(env(safe-area-inset-right,0px) + 3px);bottom:calc(env(safe-area-inset-bottom,0px) + var(--pad-size) + 10px);display:flex;align-items:center;justify-content:flex-end;gap:5px;pointer-events:none}
+#familyFlight button{pointer-events:auto;touch-action:none;min-width:44px;min-height:43px;padding:5px 7px;border:1px solid #bddaf5;border-radius:12px;background:#233b61e8;color:#fff;font:800 10px system-ui,sans-serif;box-shadow:0 3px 8px #0007;-webkit-tap-highlight-color:transparent}
+#familyFlight button.is-pressed{background:#325e97}
+#familyFlight button.is-flying{background:#196d67;border-color:#75f2d1}
+@media(max-width:580px){#familyInventoryBtn{left:calc(env(safe-area-inset-left,0px) + 211px);padding:8px 9px;font-size:11px}}
+
 /* Personalize touch visibility without exposing original buttons behind the opaque base. */
 #familyPad .family-pad-right button,#familyPad .joystick-thumb{opacity:var(--mc-pad-opacity,1)}
 </style>
@@ -151,6 +159,11 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
     <button type="button" data-key="Space" class="jump" aria-label="Pular"><span class="action-symbol" aria-hidden="true">↑</span><span class="action-label">PULAR</span></button>
     <button type="button" data-mouse="2" class="place" aria-label="Colocar bloco"><span class="action-symbol" aria-hidden="true">＋</span><span class="action-label">COLOCAR</span></button>
     <button type="button" data-mouse="0" class="break" aria-label="Quebrar bloco"><span class="action-symbol" aria-hidden="true">−</span><span class="action-label">QUEBRAR</span></button>
+  </div>
+  <div id="familyFlight" aria-label="Controles de voo">
+    <button type="button" data-key="KeyZ" aria-pressed="false" aria-label="Ativar ou desativar voo">✈ VOAR</button>
+    <button type="button" data-key="KeyQ" aria-label="Subir voando">↑ SUBIR</button>
+    <button type="button" data-key="KeyE" aria-label="Descer voando">↓ DESCER</button>
   </div>
 </div>
 <script>
@@ -220,117 +233,9 @@ try{
 }catch(e){status.style.display='none';error.style.display='flex';error.firstElementChild.textContent=e.message}
 })();
 </script>
-<script>
-/* Joystick analógico independente, com liberação garantida de teclas e ações. */
-(function(){
- const layer=document.getElementById('familyPad');
- const canvas=document.getElementById('canvas');
- const joystick=document.getElementById('familyJoystick');
- const thumb=document.getElementById('familyStick');
- if(!layer||!window.matchMedia('(pointer:coarse)').matches)return;
- layer.hidden=false;
- const active=new Map();
- const movement=new Set();
- let stickPointer=null;
- const NEUTRAL=0.32;
- function keyEvent(type,code){
-  const isSpace=code==='Space',num=isSpace?32:code.charCodeAt(3);
-  const ev=new KeyboardEvent(type,{key:isSpace?' ':code[3].toLowerCase(),code,bubbles:true,cancelable:true});
-  Object.defineProperty(ev,'keyCode',{get:()=>num});
-  Object.defineProperty(ev,'which',{get:()=>num});
-  window.dispatchEvent(ev);
- }
- function mouseEvent(type,button){
-  const rect=canvas.getBoundingClientRect();
-  const ev=new MouseEvent(type,{
-   button,buttons:type==='mousedown'?(button===2?2:1):0,
-   clientX:rect.left+rect.width/2,clientY:rect.top+rect.height/2,
-   bubbles:true,cancelable:true,view:window
-  });
-  canvas.dispatchEvent(ev);
- }
- function updateMovement(next){
-  for(const key of [...movement])if(!next.has(key)){movement.delete(key);keyEvent('keyup',key)}
-  for(const key of next)if(!movement.has(key)){movement.add(key);keyEvent('keydown',key)}
- }
- function updateStick(clientX,clientY){
-  const rect=joystick.getBoundingClientRect();
-  const centerX=rect.left+rect.width/2,centerY=rect.top+rect.height/2;
-  const maxRadius=rect.width*.27;
-  const rawX=clientX-centerX,rawY=clientY-centerY;
-  const length=Math.hypot(rawX,rawY);
-  const scale=length>maxRadius?maxRadius/length:1;
-  const x=rawX*scale,y=rawY*scale;
-  thumb.style.transform='translate3d('+x.toFixed(1)+'px,'+y.toFixed(1)+'px,0)';
-  const nx=x/maxRadius,ny=y/maxRadius;
-  const keys=new Set();
-  if(ny < -NEUTRAL)keys.add('KeyW');
-  if(ny > NEUTRAL)keys.add('KeyS');
-  if(nx < -NEUTRAL)keys.add('KeyA');
-  if(nx > NEUTRAL)keys.add('KeyD');
-  updateMovement(keys);
- }
- function releaseStick(){
-  if(stickPointer===null)return;
-  stickPointer=null;
-  joystick.classList.remove('is-dragging');
-  thumb.style.transform='translate3d(0,0,0)';
-  updateMovement(new Set());
- }
- joystick.addEventListener('pointerdown',event=>{
-  event.preventDefault();event.stopPropagation();
-  if(stickPointer!==null)return;
-  stickPointer=event.pointerId;
-  joystick.classList.add('is-dragging');
-  try{joystick.setPointerCapture(event.pointerId)}catch{}
-  updateStick(event.clientX,event.clientY);
- },{passive:false});
- joystick.addEventListener('pointermove',event=>{
-  if(stickPointer!==event.pointerId)return;
-  event.preventDefault();event.stopPropagation();
-  updateStick(event.clientX,event.clientY);
- },{passive:false});
- for(const name of ['pointerup','pointercancel','lostpointercapture']){
-  joystick.addEventListener(name,event=>{
-   if(stickPointer!==event.pointerId)return;
-   event.preventDefault();event.stopPropagation();
-   releaseStick();
-  },{passive:false});
- }
- function release(button){
-  const previous=active.get(button);if(!previous)return;
-  active.delete(button);button.classList.remove('is-pressed');
-  if(previous.key)keyEvent('keyup',previous.key);
-  else mouseEvent('mouseup',previous.mouse);
- }
- for(const button of layer.querySelectorAll('.family-pad-right button')){
-  button.addEventListener('pointerdown',event=>{
-   event.preventDefault();event.stopPropagation();
-   if(active.has(button))return;
-   try{button.setPointerCapture(event.pointerId)}catch{}
-   const key=button.dataset.key,mouse=button.dataset.mouse;
-   if(key){active.set(button,{key});keyEvent('keydown',key)}
-   else if(mouse!==undefined){active.set(button,{mouse:Number(mouse)});mouseEvent('mousedown',Number(mouse))}
-   button.classList.add('is-pressed');
-  },{passive:false});
-  for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,event=>{
-   event.preventDefault();event.stopPropagation();release(button);
-  },{passive:false});
-  button.addEventListener('contextmenu',event=>event.preventDefault());
- }
- for(const name of ['touchstart','touchmove','touchend','touchcancel'])layer.addEventListener(name,event=>{
-  event.preventDefault();event.stopPropagation();
- },{passive:false});
- const releaseAll=()=>{
-  releaseStick();
-  for(const b of [...active.keys()])release(b);
- };
- window.addEventListener('blur',releaseAll);
- document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll()});
- window.addEventListener('pagehide',releaseAll);
-})();
-</script>
+<script src="/classicube/touch-controls.js"></script>
 <button id="familyMenuBtn" type="button" aria-controls="familyPanel" aria-expanded="false">FAMÍLIA</button>
+<button id="familyInventoryBtn" type="button" aria-label="Abrir inventário de todos os blocos">▦ BLOCOS</button>
 <aside id="familyPanel" hidden aria-label="Amigos e mundos do Minecraft">
  <header><strong>Minecraft em família</strong><button type="button" class="family-close" id="familyClose" aria-label="Fechar">×</button></header>
  <p class="family-hint">Encontre seus amigos, visite sua casinha e explore mundos juntos.</p>

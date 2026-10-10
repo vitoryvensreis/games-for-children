@@ -20,8 +20,8 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check public/classicube/family-menu.js
-      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check public/classicube/family-menu.js
+      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs tests/minecraft-admin.cjs
 
   deploy:
     needs: validate
@@ -180,6 +180,12 @@ jobs:
               cp backup/mcgalaxy-levels-latest.tar.gz "backup/world-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
               ls -1t backup/world-*.tar.gz 2>/dev/null | tail -n +13 | xargs -r rm -f
             fi
+            if test -s vendor/mcgalaxy/properties/gfc-family-positions.tsv; then
+              cp vendor/mcgalaxy/properties/gfc-family-positions.tsv backup/gfc-family-positions-latest.tsv
+            fi
+            if test -d data/minecraft-backups; then
+              echo "Backups ADM preservados em data/minecraft-backups"
+            fi
             if test -s vendor/mcgalaxy/properties/gfc-family-adventures.tsv; then
               cp vendor/mcgalaxy/properties/gfc-family-adventures.tsv backup/gfc-family-adventures-latest.tsv
               cp vendor/mcgalaxy/properties/gfc-family-adventures.tsv "backup/gfc-family-adventures-$(date -u +%Y%m%dT%H%M%SZ).tsv"
@@ -215,6 +221,12 @@ jobs:
                       fi
                       for p in 1 2 3 4 5 6 7 8 9 10 11 12; do
                         if test -s vendor/mcgalaxy/properties/gfc-familyplay.ready; then
+                          if test -s vendor/mcgalaxy/properties/gfc-family-guides.status; then
+                            echo GFC_GUIDES_STATUS
+                            cat vendor/mcgalaxy/properties/gfc-family-guides.status
+                          else
+                            echo "::warning::NPCs da Vila ainda não confirmados"
+                          fi
                           echo FAMILYPLAY_HOUSE_PROTECTION_ACTIVE
                           echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
                           exit 0

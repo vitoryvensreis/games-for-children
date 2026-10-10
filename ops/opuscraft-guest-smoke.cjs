@@ -17,8 +17,8 @@ const watchdog=setTimeout(()=>{
 },255000);
 const diagnostics=setInterval(async()=>{
  try{
-  const info=await guestPage?.evaluate(()=>{const g=window.__game,c=g?.client;return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,clientState:c?.state,connection:c?.transport?.state,reason:c?.endReason,screen:g?.screen?.constructor?.name,wait:c?.loading,recent:c?.latelyIds?.slice(-5)};});
-  const second=await guestPage2?.evaluate(()=>({mode:window.__game?.mode,spawned:window.__game?.spawned,screen:window.__game?.screen?.constructor?.name})).catch(()=>({error:'second busy'}));
+  const info=await guestPage?.evaluate(()=>{const g=window.__game,c=g?.client;return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,clientState:c?.state,connection:c?.transport?.state,reason:c?.endReason,screen:g?.screen?.constructor?.name,screenTitle:g?.screen?.title,screenReason:g?.screen?.reason,wait:c?.loading,recent:c?.latelyIds?.slice(-5)};});
+  const second=await guestPage2?.evaluate(()=>({mode:window.__game?.mode,spawned:window.__game?.spawned,clientState:window.__game?.client?.state,screen:window.__game?.screen?.constructor?.name,screenTitle:window.__game?.screen?.title,screenReason:window.__game?.screen?.reason})).catch(()=>({error:'second busy'}));
  const relayState=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json()).catch(()=>({}));
   const hostState=await fetch('http://127.0.0.1:4173/__debug',{signal:AbortSignal.timeout(2500)}).then(r=>r.json()).catch(()=>({error:'host busy'}));
   console.log('Guest smoke progress:',stage,JSON.stringify({info,second,relay:{hosting:relayState.hosting,guests:relayState.guests},host:hostState}));
@@ -138,7 +138,7 @@ server.on('upgrade',(req,socket,head)=>{
   const page2=await browser.newPage();guestPage2=page2;
   await page2.setExtraHTTPHeaders({'x-gfc-test-profile':'adult'});
   page2.on('pageerror',e=>errors.push('second page: '+e.message));
-  page2.on('console',m=>{if(m.type()==='error')errors.push('second console: '+m.text().slice(0,240))});
+  page2.on('console',m=>{if(['error','warning'].includes(m.type()))errors.push('second console '+m.type()+': '+m.text().slice(0,380))});
   await page2.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcJoin=1',
     {waitUntil:'domcontentloaded',timeout:45000});
   await page2.waitForFunction(()=>{const g=window.__game;return !!(g?.mode==='client'&&g.inWorld&&g.spawned)},{

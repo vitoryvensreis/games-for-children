@@ -509,7 +509,7 @@ server.on('upgrade',(req,socket,head)=>{
  const auth=checkSession(req);
  if(!auth){console.warn('[WS] Rejeitado: sessão ausente ou inválida');socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
- if(pathname==='/__mp'){
+ if(pathname==='/__mp'||pathname==='/ws'&&new URL(req.url,'http://local').searchParams.get('opus')==='1'){
   const role=new URL(req.url,'http://local').searchParams.get('role');
   if(!['guest','list'].includes(role)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return}
   opusWss.handleUpgrade(req,socket,head,ws=>opusWss.emit('connection',ws,{...auth,role}));return;

@@ -7,9 +7,12 @@ test('OpusCraft is pinned and world persistence is owned by the VPS',()=>{
  assert.match(build,/bc0c753f730ef15bc8f8acf093d40797700b87ee/);
  assert.match(build,/npm run build/);
  assert.match(patch,/saveWorldMeta/);
- assert.match(patch,/gamesnavagador-family-world/);
+ assert.ok(patch.includes("game.joinWorld({ via: 'relay' }, guestIdentity("));
  assert.match(patch,/gfcHost/);
  assert.match(patch,/gfcJoin/);
+ assert.ok(patch.includes("game.joinWorld({ via: 'relay' }, guestIdentity("));
+ assert.ok(patch.includes("role === 'host' ? '/__mp' : '/ws?opus=1'"));
+ assert.ok(!patch.includes("joinFirstLanWorld(game, identity.joinCode)"));
  assert.match(host,/data','opuscraft','profile/);
  assert.match(host,/game\.saveWorld\(\)/);
  assert.match(host,/attachRelay/);
@@ -23,6 +26,8 @@ test('Game joins only as authenticated child; no public hosting through app rela
  assert.match(server,/\/api\/admin\/opuscraft\/status/);
  assert.match(server,/\['guest','list'\]\.includes\(role\)/);
  assert.match(server,/opusConnections/);
+ assert.ok(server.includes("pathname==='/ws'&&new URL(req.url"));
+
  assert.match(server,/s\.revoked/);
  assert.match(server,/usage\(u\)>=u\.dailyLimit\*60000/);
  assert.match(server,/familyChat/);

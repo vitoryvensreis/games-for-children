@@ -9,6 +9,9 @@ function patch(file,find,replace){
  fs.writeFileSync(full,s.replace(find,replace));
 }
 patch('src/main.ts',
+ "import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';",
+ "import { openToLanOnceSpawned, joinFirstLanWorld, guestIdentity, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';");
+patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
  "import { getWorldMeta, saveWorldMeta } from './storage/worldStore';");
 patch('src/main.ts',
@@ -31,10 +34,20 @@ patch('src/main.ts',
     if (!/^[A-Za-z0-9_]{3,16}$/.test(identity.playerName)) throw new Error('Identidade de jogador invalida');
     sessionStorage.setItem('mc-mp-name', identity.playerName);
     game.setScreen(new TitleScreen(game, false));
-    joinFirstLanWorld(game, identity.joinCode);
+    // One server-owned family world, never a LAN search or manual join-code form.
+    // The upstream LAN list is intended for ad-hoc browser hosts and may be blocked
+    // by production reverse proxies. Always connect directly to our private relay.
+    await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");
+patch('src/net/transport/webSocket.ts',
+ "return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}/__mp?role=${role}`;",
+ `// The headless VPS host keeps using the local relay. Family devices use
+  // /ws, which is already supported by the site's production reverse proxy.
+  const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
+  const separator = endpoint.includes('?') ? '&' : '?';
+  return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

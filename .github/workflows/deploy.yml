@@ -27,7 +27,7 @@ jobs:
     needs: validate
     if: ${{ vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - name: Configurar SSH e verificar identidade
@@ -127,6 +127,34 @@ jobs:
           fi
           test -x vendor/mcgalaxy/MCGalaxyCLI
           file vendor/mcgalaxy/MCGalaxyCLI
+      - name: Restaurar plugin FamilyPlay compilado
+        uses: actions/cache@v4
+        with:
+          path: vendor/mcgalaxy/plugins/FamilyPlay.dll
+          key: gfc-familyplay-1-${{ hashFiles('plugins/family-play/*.cs', 'plugins/family-play/*.csproj') }}
+      - name: Compilar proteção de casas e comandos familiares no MCGalaxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p vendor/mcgalaxy/plugins
+          if test -s vendor/mcgalaxy/plugins/FamilyPlay.dll; then
+            echo "FamilyPlay carregado do cache."
+          else
+            if [ ! -d /tmp/gfc-mcgalaxy ]; then
+              git clone --no-checkout --filter=blob:none https://github.com/ClassiCube/MCGalaxy.git /tmp/gfc-mcgalaxy
+              cd /tmp/gfc-mcgalaxy
+              git fetch --depth 1 origin 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
+              git checkout --detach 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
+              cd "$GITHUB_WORKSPACE"
+            fi
+            dotnet build /tmp/gfc-mcgalaxy/MCGalaxy/MCGalaxy_dotnet.csproj -c Release
+            lib="/tmp/gfc-mcgalaxy/MCGalaxy/bin/Release/net6.0/MCGalaxy_.dll"
+            test -s "$lib"
+            dotnet build plugins/family-play/FamilyPlay.csproj -c Release \
+              -p:MCGALAXY_REFERENCE="$lib"
+            cp plugins/family-play/bin/Release/net6.0/FamilyPlay.dll vendor/mcgalaxy/plugins/FamilyPlay.dll
+          fi
+          test -s vendor/mcgalaxy/plugins/FamilyPlay.dll
       - name: Empacotar aplicação
         run: tar -czf release.tar.gz server.cjs package.json public database vendor/mcgalaxy
       - name: Enviar servidor

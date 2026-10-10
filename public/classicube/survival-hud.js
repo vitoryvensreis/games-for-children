@@ -18,7 +18,8 @@
    const climate=d.climate||{};
    const text='<div class="mc-vitals-icons" aria-label="Vida: '+hp+' de 10">'+Array.from({length:10},(_,i)=>heart(i<hp)).join('')+'</div>'+
     '<div class="mc-vitals-icons" aria-label="Fome: '+hunger+' de 10">'+Array.from({length:10},(_,i)=>food(i<hunger)).join('')+'</div>'+
-    '<div class="mc-climate">'+(climate.phase||'Manhã')+' • '+(climate.weather==='chuva'?'Chuva':'Sol')+'</div>';
+    '<div class="mc-climate">'+(climate.phase||'Manhã')+' • '+(climate.weather==='chuva'?'Chuva':'Sol')+'</div>'+
+    '<div class="mc-supply" aria-label="Recursos de mineração">Madeira '+Number(d.inventory?.wood||0)+' | Pedra '+Number(d.inventory?.stone||0)+' | Ferro '+Number(d.inventory?.iron||0)+' | Ouro '+Number(d.inventory?.gold||0)+' | Maçãs '+Number(d.inventory?.apples||0)+' | Picareta '+['Nenhuma','Madeira','Pedra','Ferro'][Math.min(3,Number(d.inventory?.tool||0))]+'</div>';
    if(text!==last){root.innerHTML=text;last=text}
   }catch(e){/* Network reconnects independently; gameplay stays responsive. */}
  }

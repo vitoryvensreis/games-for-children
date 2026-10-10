@@ -32,6 +32,14 @@ test('ClassiCube tem orientação horizontal e não corta o jogo',()=>{
  assert.match(html,/id="familyPad"/);
  assert.match(html,/family-pad-panel/);
  assert.match(html,/background:#122747/,'O painel deve cobrir visualmente os controles originais');
+ assert.match(html,/\.family-pad-panel\{[\s\S]*?border-radius:50%/,'Painel deve ser redondo');
+ assert.match(html,/\.family-pad-panel button\{[\s\S]*?border-radius:50%/,'Botões devem ser redondos');
+ assert.match(html,/\.family-pad-left\{/);
+ assert.match(html,/\.family-pad-right\{/);
+ assert.match(html,/class="family-pad-panel family-pad-left"/);
+ assert.match(html,/class="family-pad-panel family-pad-right"/);
+ assert.match(html,/function keyEvent\(type,code\)/,'Não remover lógica dos controles');
+ assert.match(html,/function mouseEvent\(type,button\)/,'Não remover lógica de colocar/quebrar blocos');
  assert.match(html,/data-key="KeyW"/);
  assert.match(html,/data-key="KeyA"/);
  assert.match(html,/data-key="KeyS"/);

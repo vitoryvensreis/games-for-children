@@ -2,6 +2,7 @@ const http=require('node:http');
 const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
+const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
 const net=require('node:net');
 const {spawn}=require('node:child_process');
 const {WebSocketServer}=require('ws');
@@ -128,16 +129,17 @@ if(r.game==='pong'){
  if(ids.length===1){g.paddles.ai??=.5;const delta=g.y-g.paddles.ai;g.paddles.ai+=Math.sign(delta)*Math.min(.68*dt,Math.abs(delta))}
  if(!serving){
   if(g.vx===0){g.vx=g.serveDirection*.58;g.vy=(Math.random()<.5?-1:1)*(.22+Math.random()*.16)}
-  g.x+=g.vx*dt;g.y+=g.vy*dt;
-  if(g.y<=.025){g.y=.025;g.vy=Math.abs(g.vy)}
-  if(g.y>=.975){g.y=.975;g.vy=-Math.abs(g.vy)}
   const left=g.paddles[leftId]??.5,right=rightId?(g.paddles[rightId]??.5):g.paddles.ai;
-  function bounce(dir,paddle){g.x=dir===1?.05:.95;g.vx=dir*Math.min(1.10,Math.abs(g.vx)*1.045);g.vy=Math.max(-.72,Math.min(.72,g.vy+(g.y-paddle)*1.15))}
-  function point(winner,dir){r.scores[winner]=(r.scores[winner]||0)+1;g.round++;g.x=.5;g.y=.5;g.vx=0;g.vy=0;g.serveDirection=dir;g.serveAt=t+1250}
-  if(g.x<=.05&&g.vx<0){if(Math.abs(g.y-left)<=.115)bounce(1,left);else point(rightId||leftId,1)}
-  if(g.x>=.95&&g.vx>0){if(Math.abs(g.y-right)<=.115)bounce(-1,right);else point(leftId,-1)}
+  const collision=stepPongBall(g,dt,left,right);
+  if(collision==='leftMiss'||collision==='rightMiss'){
+   const winner=collision==='leftMiss'?(rightId||leftId):leftId;
+   r.scores[winner]=(r.scores[winner]||0)+1;
+   g.round++;g.x=.5;g.y=.5;g.vx=0;g.vy=0;
+   g.serveDirection=collision==='leftMiss'?1:-1;
+   g.serveAt=t+1250;
+  }
  }
- broadcastRoom(r,{type:'frame',game:'pong',roomCode:r.code,remaining:Math.ceil((r.endAt-t)/1000),players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),ball:{x:g.x,y:g.y,vx:g.vx,vy:g.vy},round:g.round,phase:t<g.serveAt?'serve':'play',serveRemaining:Math.max(0,Math.ceil((g.serveAt-t)/1000)),aiPaddle:g.paddles.ai??.5});continue}
+ broadcastRoom(r,{type:'frame',game:'pong',roomCode:r.code,remaining:Math.ceil((r.endAt-t)/1000),players:ids.map(id=>({id,score:r.scores[id]||0,paddle:g.paddles[id]??.5})),ball:{x:g.x,y:g.y,vx:g.vx,vy:g.vy},bounceId:g.bounces||0,limits:{left:PONG.LEFT_CONTACT,right:PONG.RIGHT_CONTACT},round:g.round,phase:t<g.serveAt?'serve':'play',serveRemaining:Math.max(0,Math.ceil((g.serveAt-t)/1000)),aiPaddle:g.paddles.ai??.5});continue}
 
 if(t>=r.nextObstacle){r.spawn++;const lane=Math.floor(Math.random()*3);r.obstacles.push({id:r.spawn,lane,at:t});r.nextObstacle=t+780}
 for(const o of r.obstacles){if(o.done||t-o.at<2400)continue;o.done=true;for(const id of r.players){if(r.lanes[id]===o.lane)r.scores[id]=Math.max(0,(r.scores[id]||0)-5);else r.scores[id]=(r.scores[id]||0)+10}}

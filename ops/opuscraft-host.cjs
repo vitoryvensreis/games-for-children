@@ -17,6 +17,50 @@ const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; ch
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1');
  if(req.method!=='GET'){res.writeHead(405).end();return}
+ if(url.pathname==='/__players'&&req.method==='GET'){
+  Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
+   const g=window.__game,srv=g?.server;
+   if(!srv||g.mode!=='host')return [];
+   return [...srv.sessions.values()]
+    .filter(s=>s.state==='play'&&s.player&&!s.player.removed)
+    .map(s=>({name:s.name,x:Math.round(s.player.x),y:Math.round(s.player.y),z:Math.round(s.player.z),
+      dimension:srv.level.world.dim.id,mode:s.player.gameMode}));
+  }):[]).then(players=>{
+   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+   res.end(JSON.stringify({players}));
+  }).catch(e=>{res.writeHead(503).end('World host unavailable')});
+  return;
+ }
+ if(url.pathname==='/__teleport'&&req.method==='POST'){
+  // Only the authenticated platform backend can reach this localhost service.
+  // The caller and target must both be currently logged-in guests of this exact world.
+  let chunks=[],bytes=0;
+  req.on('data',b=>{bytes+=b.length;if(bytes>1024){req.destroy();return}chunks.push(b)});
+  req.on('end',async()=>{
+   try{
+    const body=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if(!/^(ADM|KID)_[A-Za-z0-9_]{6,16}$/.test(body.from||'')||
+       !/^(ADM|KID)_[A-Za-z0-9_]{6,16}$/.test(body.to||'')||body.from===body.to)
+      throw Error('Invalid player selection');
+    if(!hostPage||hostPage.isClosed())throw Error('World unavailable');
+    const outcome=await hostPage.evaluate(({from,to})=>{
+     const g=window.__game,srv=g?.server;
+     if(!srv||g?.mode!=='host'||!g.inWorld)return {ok:false,error:'Mundo indisponível'};
+     const sessions=[...srv.sessions.values()].filter(s=>s.state==='play'&&s.player&&!s.player.removed);
+     const me=sessions.find(s=>s.name===from),friend=sessions.find(s=>s.name===to);
+     if(!me||!friend)return {ok:false,error:'Ambos precisam estar neste mundo'};
+     if(me.player.level!==friend.player.level)return {ok:false,error:'Jogadores em dimensões diferentes'};
+     const p=friend.player;
+     me.teleportTo(p.x,p.y,p.z,p.yaw,p.pitch);
+     return {ok:true,dimension:srv.level.world.dim.id};
+    },body);
+    res.writeHead(outcome.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'});
+    res.end(JSON.stringify(outcome));
+   }catch(e){
+    res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}));
+   }
+  });return;
+ }
  if(url.pathname==='/__debug'){
   // Localhost-only runtime diagnostics; never exposed as a public route.
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{

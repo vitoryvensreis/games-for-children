@@ -42,10 +42,10 @@ async function start(){
   log('Starting browser host attempt',tries);
   browser=await puppeteer.launch({
    executablePath:await chromium.executablePath(),
-   args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader','--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=1000,700'],
+   args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader','--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=320,240'],
    headless:true,
    userDataDir:PROFILE,
-   defaultViewport:{width:1000,height:700,deviceScaleFactor:1},
+   defaultViewport:{width:320,height:240,deviceScaleFactor:1},
    protocolTimeout:180000
   });
   browser.on('disconnected',()=>{hostPage=null;browser=null;log('Browser disconnected');});

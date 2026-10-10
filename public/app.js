@@ -199,92 +199,26 @@ function paint(){if(!$('#road')||!room)return;t++;const horizon=90;const topWidt
 function move(d){if(!room?.started||room.finished)return;const time=performance.now();if(time-lastLaneInput<95)return;lastLaneInput=time;const lane=Math.min(2,Math.max(0,desiredLane+d));if(lane===desiredLane)return;desiredLane=lane;inputSeq++;send({type:'lane',lane,seq:inputSeq});}
 function bindSteering(){for(const [selector,dir] of [['#left',-1],['#right',1]]){const btn=$(selector);if(!btn)continue;btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture?.(e.pointerId);btn.classList.add('pressed');move(dir)},{passive:false});for(const event of ['pointerup','pointercancel','lostpointercapture'])btn.addEventListener(event,()=>btn.classList.remove('pressed'));btn.addEventListener('contextmenu',e=>e.preventDefault())}}
 window.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){if(!$('#road')||e.repeat)return;e.preventDefault();move(e.key==='ArrowLeft'?-1:1)}});
-async function admin(){app.innerHTML=box(renderTop()+'<h1>'+ico('user')+' Painel dos pais</h1><p id="voiceTurnStatus" class="hint">'+(turnReady===true?'Conexão de voz preparada.':turnReady===false?'TURN não configurado; áudio pode falhar entre redes diferentes.':'Verificando a rede do áudio...')+'</p><p class="sub">Acompanhe o tempo, os acessos e entre nas salas de voz.</p><div class="row"><button id="add">+ Criar perfil infantil</button><button id="notifications" class="ghost">'+ico('bell')+' Ativar notificações</button></div><section id="adminContent" class="grid" style="margin-top:18px"></section><h2 style="margin-top:22px">Jogar</h2><div class="row admin-game-actions"><button id="adminPongSolo" class="success">Pong solo</button><button id="adminPongDuo">Pong em dupla</button><button id="adminSnake">Cobrinha</button><button id="adminClassiCube" class="success">Jogar Minecraft</button></div><h2 style="margin-top:22px">Central Minecraft — Controle ADM</h2><div id="adminMinecraftDashboard" class="minecraft-admin-dashboard"><p>Carregando mundos e jogadores...</p></div><h2 style="margin-top:22px">Casinhas do Minecraft</h2><p class="sub">Escolha o dono de cada casa. Só ele e o ADM podem modificar os blocos naquela área.</p><div id="adminMinecraftHouses" class="minecraft-houses"></div><h2 style="margin-top:22px">Capas dos jogos</h2><p class="sub">Troque a imagem de cada jogo sem mexer no código. Use fotos em JPG, PNG ou WebP.</p><div id="adminCovers" class="admin-covers"></div><h2 style="margin-top:22px">Salas em andamento</h2><div id="adminRooms"></div><h2 style="margin-top:22px">Atividades recentes</h2><div id="events" class="panel"></div>');bindLogout();$('#add').onclick=async()=>{const name=prompt('Nome da criança:');if(!name)return;const password=prompt('PIN de acesso (pelo menos 4 caracteres):');if(!password)return;try{await api('admin/users','POST',{name,password});refreshAdmin()}catch(e){notify(e.message)}};$('#notifications').onclick=setupPush;$('#adminPongSolo').onclick=()=>send({type:'create',game:'pong',solo:true});$('#adminPongDuo').onclick=()=>send({type:'create',game:'pong',solo:false});$('#adminSnake').onclick=snake;$('#adminClassiCube').onclick=openClassiCube;refreshAdmin();refreshGameCovers();refreshMinecraftHouses();refreshMinecraftDashboard();clearInterval(adminTimer);adminTimer=setInterval(()=>{if(me?.role==='admin'){refreshAdmin();if(!$('#adminMinecraftDashboard')?.querySelector('input:focus'))refreshMinecraftDashboard()}},15000)}
+async function admin(){app.innerHTML=box(renderTop()+'<h1>'+ico('user')+' Painel dos pais</h1><p id="voiceTurnStatus" class="hint">'+(turnReady===true?'Conexão de voz preparada.':turnReady===false?'TURN não configurado; áudio pode falhar entre redes diferentes.':'Verificando a rede do áudio...')+'</p><p class="sub">Acompanhe o tempo, os acessos e entre nas salas de voz.</p><div class="row"><button id="add">+ Criar perfil infantil</button><button id="notifications" class="ghost">'+ico('bell')+' Ativar notificações</button></div><section id="adminContent" class="grid" style="margin-top:18px"></section><h2 style="margin-top:22px">Jogar</h2><div class="row admin-game-actions"><button id="adminPongSolo" class="success">Pong solo</button><button id="adminPongDuo">Pong em dupla</button><button id="adminSnake">Cobrinha</button><button id="adminOpusCraft" class="success">Jogar Minecraft</button></div><h2 style="margin-top:22px">Central Minecraft — Controle ADM</h2><div id="adminMinecraftDashboard" class="minecraft-admin-dashboard"><p>Carregando mundos e jogadores...</p></div><h2 style="margin-top:22px">Capas dos jogos</h2><p class="sub">Troque a imagem de cada jogo sem mexer no código. Use fotos em JPG, PNG ou WebP.</p><div id="adminCovers" class="admin-covers"></div><h2 style="margin-top:22px">Salas em andamento</h2><div id="adminRooms"></div><h2 style="margin-top:22px">Atividades recentes</h2><div id="events" class="panel"></div>');bindLogout();$('#add').onclick=async()=>{const name=prompt('Nome da criança:');if(!name)return;const password=prompt('PIN de acesso (pelo menos 4 caracteres):');if(!password)return;try{await api('admin/users','POST',{name,password});refreshAdmin()}catch(e){notify(e.message)}};$('#notifications').onclick=setupPush;$('#adminPongSolo').onclick=()=>send({type:'create',game:'pong',solo:true});$('#adminPongDuo').onclick=()=>send({type:'create',game:'pong',solo:false});$('#adminSnake').onclick=snake;$('#adminOpusCraft').onclick=openOpusCraft;refreshAdmin();refreshGameCovers();refreshMinecraftDashboard();clearInterval(adminTimer);adminTimer=setInterval(()=>{if(me?.role==='admin'){refreshAdmin();if(!$('#adminMinecraftDashboard')?.querySelector('input:focus'))refreshMinecraftDashboard()}},15000)}
 async function refreshAdmin(){if(me?.role!=='admin'||!$('#adminContent'))return;try{const data=await api('admin/overview');$('#adminContent').innerHTML=data.users.map(u=>'<div class="panel child-card"><div class="child-head"><div class="avatar">'+(u.hasPhoto?'<img loading="lazy" alt="Foto de '+esc(u.name)+'" src="/api/photos/'+encodeURIComponent(u.id)+'">':ico('user'))+'</div><div><strong>'+esc(u.name)+'</strong><div class="'+(u.online?'online':'offline')+'">'+(u.online?'● Online':'○ Offline')+'</div></div></div><p class="stats">'+Math.floor(u.usedSeconds/60)+' / '+u.dailyLimit+' minutos</p><div class="meter"><div style="width:'+Math.min(100,(u.usedSeconds/(u.dailyLimit*60||1))*100)+'%"></div></div><div class="actions"><button data-id="'+u.id+'" data-action="kick" class="danger">Deslogar</button><button data-id="'+u.id+'" data-action="enable" class="ghost">'+(u.enabled?'Bloquear':'Liberar')+'</button><button data-id="'+u.id+'" data-action="login" class="ghost">Login '+(u.loginEnabled?'ON':'OFF')+'</button><button data-id="'+u.id+'" data-action="voice" class="ghost">Voz '+(u.voiceEnabled?'ON':'OFF')+'</button><button data-id="'+u.id+'" data-action="limit" class="ghost">'+ico('clock')+' Limite</button></div></div>').join('')||'<div class="panel">Cadastre o primeiro perfil.</div>';
 $('#adminRooms').innerHTML=data.rooms.filter(r=>r.game==='pong').map(r=>'<div class="record"><strong>'+ico('gamepad')+' '+esc(r.code)+'</strong><p class="sub">'+r.players.map(esc).join(' × ')+'</p><div class="row"><button data-room="'+esc(r.code)+'" data-mode="spectator">Assistir ao vivo</button><button data-room="'+esc(r.code)+'" data-mode="player" class="success" '+(r.started||r.players.length>=2?'disabled':'')+'>Jogar junto</button></div></div>').join('')||'<div class="panel muted">Nenhuma sala aberta</div>';
 $('#events').innerHTML=data.events.slice(0,12).map(e=>'<p>• '+esc(e.name)+' — '+esc(e.type)+' <small>'+new Date(e.at).toLocaleString('pt-BR')+'</small></p>').join('')||'Sem atividade recente';
 $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const u=data.users.find(x=>x.id===b.dataset.id);try{if(b.dataset.action==='photo'){await chooseChildPhoto(u);return}if(b.dataset.action==='edit'){const name=prompt('Novo nome:',u.name);if(name===null)return;const password=prompt('Novo PIN (deixe vazio para manter):','');if(password===null)return;await api('admin/users/'+u.id,'POST',{name,...(password?{password}:{})});refreshAdmin();return}if(b.dataset.action==='kick')await api('admin/users/'+u.id+'/kick','POST');if(b.dataset.action==='enable')await api('admin/users/'+u.id,'POST',{enabled:!u.enabled});if(b.dataset.action==='login')await api('admin/users/'+u.id,'POST',{loginEnabled:!u.loginEnabled});if(b.dataset.action==='voice')await api('admin/users/'+u.id,'POST',{voiceEnabled:!u.voiceEnabled});if(b.dataset.action==='limit'){const v=prompt('Limite em minutos por dia (0 a 1440)',String(u.dailyLimit));if(v!==null)await api('admin/users/'+u.id,'POST',{dailyLimit:Number(v)})}refreshAdmin()}catch(e){notify(e.message)}});$('#adminRooms').querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room,mode:b.dataset.mode}));}catch(e){notify(e.message)}}
-async function minecraftAdminAction(action,payload={}){
- try{
-  const result=await api('admin/minecraft/command','POST',{action,...payload});
-  notify(result.message||'Comando do Minecraft enviado');
-  setTimeout(refreshMinecraftDashboard,1200);
- }catch(error){notify(error.message)}
-}
 async function refreshMinecraftDashboard(){
  const el=$('#adminMinecraftDashboard');if(!el||me?.role!=='admin')return;
  try{
-  const data=await api('admin/minecraft/dashboard');if(!el.isConnected)return;
-  const controls=data.controls||{};
-  const worldNames={vila_familia:'Vila da Família',aventura:'Mundo Aventura',exploracao:'Mundo Exploração',mineracao:'Mundo Mineração'};
-  const ready=data.ready&&data.pluginActive;
+  const data=await api('admin/opuscraft/status');if(!el.isConnected)return;
   el.innerHTML='<div class="minecraft-admin-summary">'+
-    '<div class="panel"><strong>Servidor</strong><p>'+(data.ready?'Conectado':'Indisponível')+'</p></div>'+
-    '<div class="panel"><strong>Proteção</strong><p>'+(data.pluginActive?'FamilyPlay ativo':'Plugin não carregado')+'</p></div>'+
-    '<div class="panel"><strong>Animais / Monstros</strong><p>'+Number(data.creatures?.animals||0)+' / '+Number(data.creatures?.monsters||0)+'</p></div>'+
-    '<div class="panel"><strong>Jogadores</strong><p>'+data.players.filter(p=>p.online).length+' online</p></div></div>'+
-    '<div class="panel"><h3>Vida no mundo</h3><p class="sub">Animais caminham e fogem quando alguém se aproxima. Monstros perseguem nas áreas de aventura, sem machucar. Jogadores podem atravessar portais físicos.</p><p class="stats">Em movimento na última amostra: '+Number(data.creatures?.moving||0)+' · Portais registrados: '+Number(data.creatures?.portalEntrances||0)+'</p></div>'+ 
-    '<div class="panel"><h3>Mundos e salvamento</h3><div class="row"><button id="mcSave" class="success" '+(!data.ready?'disabled':'')+'>Salvar mundos agora</button></div>'+
-    data.worlds.map(world=>'<div class="mc-world-line"><div><strong>'+esc(world.title)+'</strong><small> '+(world.exists?new Date(world.updatedAt).toLocaleString('pt-BR'):'Mundo indisponível')+'</small></div>'+
-    '<div class="row"><button class="ghost" data-mc-backup="'+esc(world.id)+'" '+(!world.exists||!data.ready?'disabled':'')+'>Criar backup</button>'+
-    '<button data-mc-main="'+esc(world.id)+'" '+(!world.exists||!data.ready||world.id===data.main?'disabled':'')+'>'+(data.main===world.id?'Mundo principal':'Definir principal')+'</button></div></div>').join('')+'</div>'+
-    '<div class="panel"><h3>Backups e recuperação</h3><p class="sub">Para restaurar, todos precisam sair do Minecraft. Um backup de segurança será criado automaticamente antes da restauração.</p>'+
-    (data.backups.length?data.backups.slice(0,12).map(b=>'<div class="mc-backup-line"><div><strong>'+esc(worldNames[b.world]||b.world)+'</strong><small>'+new Date(b.createdAt).toLocaleString('pt-BR')+' • '+Math.ceil(b.size/1024)+' KB</small></div><button class="ghost" data-mc-restore="'+esc(b.id)+'" '+(data.players.some(p=>p.online)||!data.ready?'disabled':'')+'>Restaurar</button></div>').join(''):'<p class="sub">Nenhum backup criado pelo painel ainda.</p>')+'</div>'+
-    '<div class="panel"><h3>Crianças e localização de saída</h3><p class="sub">Cada posição é salva pelo servidor e restaurada ao entrar novamente, inclusive no mundo anterior.</p>'+
-    (data.players.map(p=>'<div class="mc-player-line"><strong>'+esc(p.name)+'</strong><span>'+(p.online?'Online':'Offline')+'</span><small>'+(p.position?esc(worldNames[p.position.world]||p.position.world)+' • X '+p.position.x+' / Y '+p.position.y+' / Z '+p.position.z:'Sem posição salva')+'</small></div>').join('')||'Nenhum jogador')+'</div>'+
-    '<div class="panel"><h3>Controles e construção</h3><p class="sub">Ajustes globais para os celulares. Os controles do PC continuam usando teclado e mouse.</p>'+
-    '<label>Tamanho do joystick e botões <strong id="mcPadSizeValue">'+Number(controls.padSize||152)+' px</strong><input id="mcPadSize" type="range" min="100" max="220" value="'+Number(controls.padSize||152)+'"></label>'+
-    '<label>Transparência <strong id="mcPadOpacityValue">'+Number(controls.padOpacity||85)+'%</strong><input id="mcPadOpacity" type="range" min="45" max="100" value="'+Number(controls.padOpacity||85)+'"></label>'+
-    '<label><input type="checkbox" id="mcBuildingEnabled" '+(controls.buildingEnabled!==false?'checked':'')+'> Permitir que crianças coloquem e quebrem blocos fora das casas protegidas</label>'+
-    '<button id="mcSaveControls" class="success">Salvar configurações</button></div>';
-  el.querySelector('#mcSave').onclick=()=>minecraftAdminAction('save');
-  el.querySelectorAll('[data-mc-backup]').forEach(btn=>btn.onclick=()=>minecraftAdminAction('backup',{world:btn.dataset.mcBackup}));
-  el.querySelectorAll('[data-mc-main]').forEach(btn=>btn.onclick=()=>{
-   const world=btn.dataset.mcMain;
-   if(confirm('Definir '+worldNames[world]+' como mundo inicial?'))minecraftAdminAction('main',{world});
-  });
-  el.querySelectorAll('[data-mc-restore]').forEach(btn=>btn.onclick=()=>{
-   const id=btn.dataset.mcRestore,world=Object.keys(worldNames).find(name=>id.startsWith(name+'-'))||'';
-   if(confirm('ATENÇÃO: Restaurar '+worldNames[world]+' a um backup antigo? Construções feitas depois daquela data deixarão de aparecer. Um backup da versão atual será criado primeiro.')){
-    if(prompt('Digite RESTAURAR '+world+' para confirmar')==='RESTAURAR '+world)minecraftAdminAction('restore',{id,confirm:'RESTAURAR '+world});
-   }
-  });
-  const size=el.querySelector('#mcPadSize'),opacity=el.querySelector('#mcPadOpacity');
-  size.oninput=()=>el.querySelector('#mcPadSizeValue').textContent=size.value+' px';
-  opacity.oninput=()=>el.querySelector('#mcPadOpacityValue').textContent=opacity.value+'%';
-  el.querySelector('#mcSaveControls').onclick=async()=>{
-   try{
-    await api('admin/minecraft/controls','POST',{
-     padSize:Number(size.value),padOpacity:Number(opacity.value),
-     buildingEnabled:el.querySelector('#mcBuildingEnabled').checked
-    });
-    notify('Configurações do Minecraft salvas');refreshMinecraftDashboard();
-   }catch(error){notify(error.message)}
-  };
- }catch(error){el.textContent='Não foi possível carregar a central Minecraft: '+error.message}
+   '<div class="panel"><strong>Servidor OpusCraft</strong><p>'+(data.ready?'Mundo online':'Iniciando')+'</p></div>'+
+   '<div class="panel"><strong>Jogadores</strong><p>'+Number(data.guests||0)+'</p></div>'+
+   '<div class="panel"><strong>Último salvamento</strong><p>'+(data.lastSave?new Date(data.lastSave).toLocaleTimeString('pt-BR'):'Aguardando')+'</p></div></div>'+
+   '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
+   data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
+   (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+
+   '<div class="panel"><h3>Proteção parental</h3><p>Os botões em cada perfil acima controlam limite diário, bloqueio imediato, desconexão e microfone. O chat escrito fica restrito às contas autenticadas.</p></div>';
+ }catch(e){el.textContent='Não foi possível consultar o mundo OpusCraft: '+e.message}
 }
-async function refreshMinecraftHouses(){
- const target=$('#adminMinecraftHouses');if(!target||me?.role!=='admin')return;
- try{
-  const data=await api('minecraft/family');
-  const children=data.players.filter(p=>p.role==='child');
-  target.innerHTML=data.homes.map(home=>
-   '<div class="minecraft-house panel"><strong>'+esc(home.title)+'</strong>'+
-   '<label>Dono da casa<select aria-label="Dono da '+esc(home.title)+'" data-house="'+home.id+'">'+
-   '<option value="">Sem dono</option>'+
-   children.map(u=>'<option value="'+esc(u.id)+'" '+(home.ownerId===u.id?'selected':'')+'>'+esc(u.name)+'</option>').join('')+
-   '</select></label><small>Somente o dono e o ADM podem construir nessa casa.</small></div>'
-  ).join('');
-  target.querySelectorAll('select').forEach(select=>select.onchange=async()=>{
-   select.disabled=true;
-   try{
-    const response=await api('admin/minecraft/houses/'+select.dataset.house,'POST',{userId:select.value||null});
-    if(response.ok)notify('Dono da casinha atualizado');refreshMinecraftHouses();
-   }catch(e){notify(e.message);refreshMinecraftHouses()}
-  });
- }catch(e){target.textContent='Não foi possível carregar as casinhas: '+e.message}
-}
-const GAME_COVER_NAMES={pong:'Pong Neon',snake:'Cobrinha Colorida',minecraft:'Minecraft'};
+const GAME_COVER_NAMES={pong:'Pong Neon',snake:'Cobrinha Colorida',minecraft:'OpusCraft'};
 async function refreshGameCovers(){
  const el=$('#adminCovers');
  if(!el||me?.role!=='admin')return;

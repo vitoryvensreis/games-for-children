@@ -230,7 +230,7 @@ async function refreshMinecraftDashboard(){
    if(confirm('Definir '+worldNames[world]+' como mundo inicial?'))minecraftAdminAction('main',{world});
   });
   el.querySelectorAll('[data-mc-restore]').forEach(btn=>btn.onclick=()=>{
-   const id=btn.dataset.mcRestore,world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('exploracao-')?'exploracao':'aventura';
+   const id=btn.dataset.mcRestore,world=Object.keys(worldNames).find(name=>id.startsWith(name+'-'))||'';
    if(confirm('ATENÇÃO: Restaurar '+worldNames[world]+' a um backup antigo? Construções feitas depois daquela data deixarão de aparecer. Um backup da versão atual será criado primeiro.')){
     if(prompt('Digite RESTAURAR '+world+' para confirmar')==='RESTAURAR '+world)minecraftAdminAction('restore',{id,confirm:'RESTAURAR '+world});
    }

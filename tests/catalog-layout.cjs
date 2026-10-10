@@ -29,6 +29,30 @@ test('ClassiCube tem orientação horizontal e não corta o jogo',()=>{
  assert.match(html,/ClassiCube\.js/);
  // The native game already includes left/right mobile controls. Do not duplicate them in HTML.
  assert.doesNotMatch(html,/mobileGamePad|cc-pad-left|cc-pad-right|data-mouse=/);
- assert.doesNotMatch(html,/window\.dispatchEvent\(evt\)|new KeyboardEvent/);
+ assert.match(html,/id="familyPad"/);
+ assert.match(html,/family-pad-panel/);
+ assert.match(html,/background:#122747/,'O painel deve cobrir visualmente os controles originais');
+ assert.match(html,/data-key="KeyW"/);
+ assert.match(html,/data-key="KeyA"/);
+ assert.match(html,/data-key="KeyS"/);
+ assert.match(html,/data-key="KeyD"/);
+ assert.match(html,/data-key="Space"/);
+ assert.match(html,/data-mouse="2"/);
+ assert.match(html,/data-mouse="0"/);
+ assert.match(html,/setPointerCapture/);
+ assert.match(html,/touchstart','touchmove','touchend','touchcancel/);
+ assert.equal((html.match(/id="familyPad"/g)||[]).length,1);
 });
 
+
+test('Mundo de aventura e salvamento são persistentes e não substituem mundos existentes',()=>{
+ const server=read('server.cjs');
+ assert.match(server,/const ADVENTURE_MAP='aventura'/);
+ assert.match(server,/if\(!fs\.existsSync\(world\)\)/,'Não regenerar mapa já criado');
+ assert.match(server,/writeCommand\('\/newlvl '/);
+ assert.match(server,/ADVENTURE_SIZE\+' Classic '/);
+ assert.match(server,/writeCommand\('\/main '/);
+ assert.match(server,/mcgalaxyProcess\.stdin\.write\('\/save all/);
+ assert.match(server,/backup-time':'300'/);
+ assert.match(server,/fs\.copyFileSync\(original,archive\)/);
+});

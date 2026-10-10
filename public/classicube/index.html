@@ -128,11 +128,6 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 #familyPanel .family-action.family-primary{background:#148c71;border-color:#75e7cc}
 #familyPanel .family-hint{font-size:11px;color:#d5e5fa;line-height:1.4;margin:6px 0 0}
 #familyPanel #familyMessage{font-size:12px;color:#ffe1a9;min-height:15px;margin-top:8px}
-#mcVitals{position:fixed;left:calc(env(safe-area-inset-left,0px) + 9px);top:calc(env(safe-area-inset-top,0px) + 53px);z-index:18;display:grid;gap:2px;pointer-events:none;color:#fff;padding:7px 9px;border-radius:12px;background:#13233acb;border:1px solid #ffffff60;backdrop-filter:blur(3px);font-family:system-ui,sans-serif;font-weight:900}
-.mc-vitals-icons{display:flex;gap:1px;height:16px}
-.mc-vitals-icons svg{width:17px;height:16px;flex:0 0 17px}
-.mc-climate{font-size:11px;color:#eaf0ff;line-height:1.2;white-space:nowrap}
-@media(max-height:450px){#mcVitals{transform:scale(.85);transform-origin:top left}}
 #desktopControlsHint[hidden]{display:none!important}
 #desktopControlsHint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:17;border:1px solid #b5ddff90;background:#10264be9;color:white;border-radius:12px;padding:8px 14px;pointer-events:none;white-space:nowrap;font:bold 13px system-ui,sans-serif}
 @media(pointer:coarse){#desktopControlsHint{display:none!important}}
@@ -335,8 +330,6 @@ try{
  window.addEventListener('pagehide',releaseAll);
 })();
 </script>
-<div id="mcVitals" aria-label="Vida, fome e clima"></div>
-<script src="/classicube/survival-hud.js"></script>
 <button id="familyMenuBtn" type="button" aria-controls="familyPanel" aria-expanded="false">FAMÍLIA</button>
 <aside id="familyPanel" hidden aria-label="Amigos e mundos do Minecraft">
  <header><strong>Minecraft em família</strong><button type="button" class="family-close" id="familyClose" aria-label="Fechar">×</button></header>

@@ -31,19 +31,24 @@ test('ClassiCube tem orientação horizontal e não corta o jogo',()=>{
  assert.doesNotMatch(html,/mobileGamePad|cc-pad-left|cc-pad-right/);
  assert.match(html,/id="familyPad"/);
  assert.match(html,/family-pad-panel/);
- assert.match(html,/background:#122747/,'O painel deve cobrir visualmente os controles originais');
- assert.match(html,/\.family-pad-panel\{[\s\S]*?border-radius:50%/,'Painel deve ser redondo');
- assert.match(html,/\.family-pad-panel button\{[\s\S]*?border-radius:50%/,'Botões devem ser redondos');
- assert.match(html,/\.family-pad-left\{/);
- assert.match(html,/\.family-pad-right\{/);
+ assert.match(html,/background:radial-gradient/,'Controles com acabamento circular tridimensional');
+ assert.match(html,/\.family-pad-panel\{[\s\S]*?border-radius:50%/,'Base do joystick deve ser redonda');
+ assert.match(html,/\.joystick-thumb\{[\s\S]*?border-radius:50%/,'Manete analógica deve ser redonda');
+ assert.match(html,/\.family-pad-right button\{[\s\S]*?border-radius:50%/,'Botões de ação devem ser redondos');
  assert.match(html,/class="family-pad-panel family-pad-left"/);
  assert.match(html,/class="family-pad-panel family-pad-right"/);
- assert.match(html,/function keyEvent\(type,code\)/,'Não remover lógica dos controles');
- assert.match(html,/function mouseEvent\(type,button\)/,'Não remover lógica de colocar/quebrar blocos');
- assert.match(html,/data-key="KeyW"/);
- assert.match(html,/data-key="KeyA"/);
- assert.match(html,/data-key="KeyS"/);
- assert.match(html,/data-key="KeyD"/);
+ assert.match(html,/id="familyJoystick"/);
+ assert.match(html,/id="familyStick"/);
+ assert.doesNotMatch(html,/class="family-pad-grid"/,'Remover quatro botões antigos');
+ assert.match(html,/function updateStick\(clientX,clientY\)/,'Joystick acompanha o dedo');
+ assert.match(html,/function updateMovement\(next\)/,'Joystick mantém movimentos simultâneos');
+ for(const direction of ['KeyW','KeyA','KeyS','KeyD']){
+   assert.match(html,new RegExp("keys\\.add\\('"+direction+"'\\)"),'Movimentação deve aceitar '+direction);
+ }
+ assert.match(html,/function releaseStick\(\)/,'Soltar os movimentos após arrastar');
+ assert.match(html,/pointercancel','lostpointercapture/,'Evitar comandos travados quando o toque é cancelado');
+ assert.match(html,/function keyEvent\(type,code\)/);
+ assert.match(html,/function mouseEvent\(type,button\)/);
  assert.match(html,/data-key="Space"/);
  assert.match(html,/data-mouse="2"/);
  assert.match(html,/data-mouse="0"/);

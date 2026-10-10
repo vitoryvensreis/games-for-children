@@ -24,6 +24,10 @@ public sealed class FamilyPlay : Plugin {
  private static readonly string SurvivalFile = "properties/gfc-survival.tsv";
  private static readonly string ClimateFile = "properties/gfc-climate.status";
  private SchedulerTask climateTimer;
+ private SchedulerTask wanderTimer;
+ private static readonly Dictionary<string,Position> botHomes=new Dictionary<string,Position>(StringComparer.OrdinalIgnoreCase);
+ private static readonly Dictionary<string,bool> botPhases=new Dictionary<string,bool>(StringComparer.OrdinalIgnoreCase);
+ private static readonly Dictionary<string,Position> lastBotPositions=new Dictionary<string,Position>(StringComparer.OrdinalIgnoreCase);
  private sealed class Vitals { public int Health=10,Hunger=10; public long Last=DateTime.UtcNow.Ticks; }
  private static readonly Dictionary<string,Vitals> vitals=new Dictionary<string,Vitals>(StringComparer.OrdinalIgnoreCase);
  private static readonly Random random=new Random();
@@ -75,6 +79,7 @@ public sealed class FamilyPlay : Plugin {
   foreach(Level existing in LevelInfo.Loaded.Items)InstallGuides(existing);
   climateTimer=Server.MainScheduler.QueueRepeat(task=>UpdateClimate(),null,TimeSpan.FromSeconds(25));
   UpdateClimate();
+  wanderTimer=Server.MainScheduler.QueueRepeat(task=>WanderBots(),null,TimeSpan.FromSeconds(8));
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
@@ -83,6 +88,7 @@ public sealed class FamilyPlay : Plugin {
   OnPlayerMoveEvent.Unregister(AdventureMove);
   OnLevelLoadedEvent.Unregister(InstallGuides);
   if(climateTimer!=null)Server.MainScheduler.Cancel(climateTimer);
+  if(wanderTimer!=null)Server.MainScheduler.Cancel(wanderTimer);
   SaveVitals();
   OnPlayerSpawningEvent.Unregister(RestoreSpotOnSpawn);
   OnJoinedLevelEvent.Unregister(RestorePreviousWorld);
@@ -200,6 +206,8 @@ public sealed class FamilyPlay : Plugin {
    PlayerBot guide=new PlayerBot(names[n],lvl);
    guide.Owner="GamesForChildren";
    guide.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   guide.TargetPos=Position.FromFeetBlockCoords(x+2,ground,z+1);
+   guide.movement=true;guide.movementSpeed=4;
    guide.SetYawPitch(0,0);
    guide.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+2)*32+"",ground*32+"",(z+1)*32+"","0","0"}));
    guide.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-1)*32+"",ground*32+"",(z-1)*32+"","0","0"}));
@@ -222,6 +230,8 @@ public sealed class FamilyPlay : Plugin {
    PlayerBot animal=new PlayerBot(critters[a],lvl);
    animal.Owner="GamesForChildren";animal.SetModel(models[a]);
    animal.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   animal.TargetPos=Position.FromFeetBlockCoords(x+2,ground,z+1);
+   animal.movement=true;animal.movementSpeed=3;
    animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+3)*32+"",ground*32+"",(z+2)*32+"","0","0"}));
    animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-2)*32+"","0","0"}));
    PlayerBot.Add(animal);
@@ -232,6 +242,33 @@ public sealed class FamilyPlay : Plugin {
   catch(Exception e){Logger.Log(LogType.Warning,"FamilyPlay guide status: "+e.Message);}
  }
 
+ // Real MCGalaxy bot movement requires 'movement=true' and a TargetPos;
+ // WalkInstruction entries alone do not start autonomous motion.
+ private static void WanderBots(){
+  int moved=0,total=0;
+  foreach(Level level in LevelInfo.Loaded.Items){
+   if(level.MapName!="vila_familia"&&level.MapName!="exploracao"&&level.MapName!="mineracao")continue;
+   foreach(PlayerBot bot in level.Bots.Items){
+    if(bot.Owner!="GamesForChildren")continue;
+    total++;
+    string key=level.MapName+"/"+bot.name;
+    Position home;
+    if(!botHomes.TryGetValue(key,out home)){home=bot.Pos;botHomes[key]=home;}
+    Position previous;
+    if(lastBotPositions.TryGetValue(key,out previous)&&(previous.X!=bot.Pos.X||previous.Z!=bot.Pos.Z))moved++;
+    lastBotPositions[key]=bot.Pos;
+    bool reverse;
+    botPhases.TryGetValue(key,out reverse);
+    botPhases[key]=!reverse;
+    int dx=reverse?-2:3,dz=reverse?-2:2;
+    bot.TargetPos=new Position(home.X+dx*32,home.Y,home.Z+dz*32);
+    bot.movement=true;
+    bot.movementSpeed=bot.name.StartsWith("Guia_")?4:3;
+   }
+  }
+  try{File.WriteAllText("properties/gfc-family-bot-movement.status","total="+total+"\nmoved="+moved+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
+  catch(Exception e){Logger.Log(LogType.Warning,"NPC movement status: "+e.Message);}
+ }
  private static bool ValidSpot(SavedSpot spot) {
   return spot!=null&&(spot.World=="vila_familia"||spot.World=="aventura"||spot.World=="exploracao")&&
          spot.X>=1&&spot.X<12288&&spot.Z>=1&&spot.Z<12288&&spot.Y>=1&&spot.Y<3584;
@@ -403,6 +440,8 @@ public sealed class FamilyPlay : Plugin {
    PlayerBot animal=new PlayerBot(names[n],lvl);
    animal.Owner="GamesForChildren";animal.SetModel(models[n]);
    animal.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   animal.TargetPos=Position.FromFeetBlockCoords(x+2,ground,z+1);
+   animal.movement=true;animal.movementSpeed=3;
    animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+2)*32+"",ground*32+"",(z+1)*32+"","0","0"}));
    animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-1)*32+"","0","0"}));
    PlayerBot.Add(animal);found++;

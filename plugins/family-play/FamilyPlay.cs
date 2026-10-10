@@ -8,6 +8,8 @@ using MCGalaxy;
 using MCGalaxy.Events;
 using MCGalaxy.Events.PlayerEvents;
 using MCGalaxy.Maths;
+using MCGalaxy.Bots;
+using MCGalaxy.Events.LevelEvents;
 
 public sealed class FamilyPlay : Plugin {
  public override string name { get { return "FamilyPlay"; } }
@@ -47,12 +49,14 @@ public sealed class FamilyPlay : Plugin {
   LoadAdventures();
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
   OnPlayerMoveEvent.Register(AdventureMove, Priority.Low);
+  OnLevelLoadedEvent.Register(InstallGuides, Priority.Low);
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
  public override void Unload(bool auto) {
   OnBlockChangingEvent.Unregister(ProtectHouse);
   OnPlayerMoveEvent.Unregister(AdventureMove);
+  OnLevelLoadedEvent.Unregister(InstallGuides);
   Command.Unregister(family);
   try{File.Delete("properties/gfc-familyplay.ready");}catch{}
  }
@@ -136,6 +140,29 @@ public sealed class FamilyPlay : Plugin {
   p.Message("&aVoce chegou a sua casinha!");
  }
 
+ // Three visible guide NPCs added to the existing village without changing its blocks.
+ // They are safe to restore after restarts; the bot list is deduplicated by name.
+ private static void InstallGuides(Level lvl){
+  if(lvl==null||!String.Equals(lvl.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
+  string[] names=new string[]{"Guia_Praca","Guia_Ponte","Guia_Torre"};
+  int[,] spots=new int[,]{{92,100},{99,57},{142,88}};
+  for(int n=0;n<names.Length;n++){
+   bool exists=false;
+   foreach(PlayerBot existing in lvl.Bots.Items){
+    if(existing.name.Equals(names[n],StringComparison.OrdinalIgnoreCase)){exists=true;break;}
+   }
+   if(exists)continue;
+   int x=spots[n,0],z=spots[n,1],ground=43;
+   for(int y=lvl.Height-4;y>1;y--){
+    if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
+   }
+   PlayerBot guide=new PlayerBot(names[n],lvl);
+   guide.Owner="GamesForChildren";
+   guide.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   guide.SetYawPitch(0,0);
+   PlayerBot.Add(guide);
+  }
+ }
  // Real in-world quests: progress advances exclusively from server-validated player positions.
  private static Quest GetQuest(string player) {
   Quest q;if(!quests.TryGetValue(player,out q)){q=new Quest();quests[player]=q;}return q;

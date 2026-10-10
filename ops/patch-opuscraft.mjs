@@ -49,6 +49,6 @@ patch('src/net/transport/webSocket.ts',
   const local = /^(127\\.0\\.0\\.1|localhost)(:|$)/.test(loc.host);
   const endpoint = local || role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
-  return \`${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}${endpoint}${separator}role=${role}\`;`);
+  return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

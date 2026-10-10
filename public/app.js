@@ -203,7 +203,7 @@ async function refreshMinecraftDashboard(){
  try{
   const data=await api('admin/minecraft/dashboard');if(!el.isConnected)return;
   const controls=data.controls||{};
-  const worldNames={vila_familia:'Vila da Família',aventura:'Mundo Aventura',exploracao:'Mundo Exploração'};
+  const worldNames={vila_familia:'Vila da Família',aventura:'Mundo Aventura',exploracao:'Mundo Exploração',mineracao:'Mundo Mineração'};
   const ready=data.ready&&data.pluginActive;
   el.innerHTML='<div class="minecraft-admin-summary">'+
     '<div class="panel"><strong>Servidor</strong><p>'+(data.ready?'Conectado':'Indisponível')+'</p></div>'+

@@ -440,29 +440,98 @@ public sealed class FamilyPlay : Plugin {
  private static void ShowBag(Player p){
   lock(Gate){
    MiningBag b=BagFor(p.name);
-   string pick=new[]{"Sem picareta","Picareta de madeira","Picareta de pedra","Picareta de ferro"}[b.Tool];
+   string[] picks={"Sem picareta","Madeira","Pedra","Ferro"};
+   string[] swords={"Sem espada","Madeira","Pedra","Ferro"};
+   string[] armors={"Sem armadura","Ferro","Ouro"};
    p.Message("&aMochila: &eMadeira "+b.Wood+" | Pedra "+b.Stone+" | Carvao "+b.Coal);
    p.Message("&aFerro "+b.Iron+" | Ouro "+b.Gold+" | Macas "+b.Apples);
-   p.Message("&bFerramenta: "+pick);
+   p.Message("&bPicareta: "+picks[b.Tool]+" | Espada: "+swords[b.Sword]+" | Armadura: "+armors[b.Armor]);
+   p.Message("&7Espadas e armaduras sao colecionaveis, sem combate nesta versao.");
   }
  }
  private static void Craft(Player p,string what){
+  string[] parts=(what??"").Trim().ToLowerInvariant().Split(new[]{' '},StringSplitOptions.RemoveEmptyEntries);
+  if(parts.Length<1||parts.Length>2){p.Message("&eEscolha picareta, espada ou armadura no menu Familia.");return;}
+  string kind=parts.Length==1?"picareta":parts[0];
+  string material=parts[parts.Length-1];
   lock(Gate){
-   MiningBag b=BagFor(p.name),old=b;
-   if(what=="madeira"){
-    if(b.Tool>=1){p.Message("&eVoce ja tem uma picareta de madeira ou melhor.");return;}
-    if(b.Wood<3){p.Message("&ePrecisa de 3 madeiras para criar a picareta.");return;}
-    b.Wood-=3;b.Tool=1;
-   }else if(what=="pedra"){
-    if(b.Tool>=2){p.Message("&eVoce ja tem uma picareta de pedra ou melhor.");return;}
-    if(b.Wood<2||b.Stone<3){p.Message("&ePrecisa de 2 madeiras e 3 pedras.");return;}
-    b.Wood-=2;b.Stone-=3;b.Tool=2;
-   }else if(what=="ferro"){
-    if(b.Tool>=3){p.Message("&eVoce ja tem uma picareta de ferro.");return;}
-    if(b.Wood<2||b.Iron<3){p.Message("&ePrecisa de 2 madeiras e 3 ferros.");return;}
-    b.Wood-=2;b.Iron-=3;b.Tool=3;
-   }else{p.Message("&eEscolha madeira, pedra ou ferro.");return;}
-   SaveBags();p.Message("&aPicareta fabricada! Agora voce minera materiais mais fortes.");
+   MiningBag b=BagFor(p.name);
+   if(kind=="picareta"){
+    int tier=material=="madeira"?1:material=="pedra"?2:material=="ferro"?3:0;
+    if(tier==0){p.Message("&ePicareta: madeira, pedra ou ferro.");return;}
+    if(b.Tool>=tier){p.Message("&eVoce ja tem uma picareta igual ou melhor.");return;}
+    int wood=tier==1?3:2,stone=tier==2?3:0,iron=tier==3?3:0;
+    if(b.Wood<wood||b.Stone<stone||b.Iron<iron){p.Message("&eReceita: "+wood+" madeiras, "+stone+" pedras, "+iron+" ferros.");return;}
+    b.Wood-=wood;b.Stone-=stone;b.Iron-=iron;b.Tool=tier;
+    p.Message("&aPicareta de "+material+" fabricada! Libera minerais mais fortes.");
+   }else if(kind=="espada"){
+    int tier=material=="madeira"?1:material=="pedra"?2:material=="ferro"?3:0;
+    if(tier==0){p.Message("&eEspada: madeira, pedra ou ferro.");return;}
+    if(b.Sword>=tier){p.Message("&eVoce ja tem uma espada igual ou melhor.");return;}
+    int wood=tier==1?2:1,stone=tier==2?2:0,iron=tier==3?2:0;
+    if(b.Wood<wood||b.Stone<stone||b.Iron<iron){p.Message("&eReceita: "+wood+" madeiras, "+stone+" pedras, "+iron+" ferros.");return;}
+    b.Wood-=wood;b.Stone-=stone;b.Iron-=iron;b.Sword=tier;
+    p.Message("&aEspada de "+material+" fabricada e guardada na mochila! Item de colecao.");
+   }else if(kind=="armadura"){
+    int tier=material=="ferro"?1:material=="ouro"?2:0;
+    if(tier==0){p.Message("&eArmadura: ferro ou ouro.");return;}
+    if(b.Armor>=tier){p.Message("&eVoce ja tem uma armadura igual ou melhor.");return;}
+    int iron=tier==1?6:0,gold=tier==2?7:0;
+    if(b.Iron<iron||b.Gold<gold){p.Message("&eReceita: "+iron+" ferros e "+gold+" ouros.");return;}
+    b.Iron-=iron;b.Gold-=gold;b.Armor=tier;
+    p.Message("&aArmadura de "+material+" fabricada e guardada na mochila! Item de colecao.");
+   }else{p.Message("&eEscolha picareta, espada ou armadura.");return;}
+   SaveBags();
+  }
+ }
+ // Persistent portals use MCGalaxy's real portal blocks and server-side DB.
+ // Children may build only in shared exploration/mining terrain, never homes.
+ private static void CreatePortal(Player p,string destination){
+  string dest=destination=="vila"?"vila_familia":destination=="exploracao"?"exploracao":destination=="mineracao"?"mineracao":"";
+  if(dest==""){p.Message("&eEscolha portal vila, exploracao ou mineracao.");return;}
+  if(p.level==null||(p.level.MapName!="exploracao"&&p.level.MapName!="mineracao")){
+   p.Message("&eCrie portais somente nos mundos Exploracao ou Mineracao.");return;
+  }
+  if(!buildingEnabled&&!IsParent(p)){p.Message("&eO responsavel desativou a construcao.");return;}
+  if(p.level.MapName==dest){p.Message("&eVoce ja esta nesse mundo.");return;}
+  int x=p.Pos.X/32+4,y=p.Pos.Y/32,z=p.Pos.Z/32+3;
+  Level lvl=p.level;
+  if(x<3||y<4||z<3||x+4>=lvl.Width||y+6>=lvl.Height||z+2>=lvl.Length){
+   p.Message("&eAfaste-se dos limites do mapa para criar o portal.");return;
+  }
+  // Entire 4x5 frame must be empty, above a solid and even base.
+  for(int a=0;a<4;a++)for(int h=0;h<5;h++){
+   ushort xx=(ushort)(x+a),yy=(ushort)(y+h),zz=(ushort)z;
+   if(lvl.GetBlock(xx,yy,zz)!=Block.Air){
+    p.Message("&eE necessario um espaco livre 4x5 perto de voce.");return;
+   }
+   if(lvl.GetBlock(xx,(ushort)(y-1),zz)==Block.Air){
+    p.Message("&eProcure um terreno plano para a base do portal.");return;
+   }
+  }
+  if(Portal.GetAllCoords(lvl.MapName).Count>=72){
+   p.Message("&eEste mundo tem muitos portais. Peca ajuda ao responsavel.");return;
+  }
+  int dx=dest=="vila_familia"?102:191,dy=dest=="vila_familia"?47:50,dz=dest=="vila_familia"?106:190;
+  lock(Gate){
+   MiningBag b=BagFor(p.name);
+   bool parent=IsParent(p);
+   if(!parent&&(b.Stone<8||b.Iron<2)){
+    p.Message("&ePara criar o portal, minere 8 pedras e 2 ferros.");return;
+   }
+   try{
+    for(int a=0;a<4;a++)for(int h=0;h<5;h++){
+     ushort xx=(ushort)(x+a),yy=(ushort)(y+h),zz=(ushort)z;
+     bool frame=(a==0||a==3||h==0||h==4);
+     lvl.Blockchange(xx,yy,zz,frame?(ushort)49:Block.Portal_Blue);
+     if(!frame)Portal.Set(lvl.MapName,xx,yy,zz,(ushort)dx,(ushort)dy,(ushort)dz,dest);
+    }
+    if(!parent){b.Stone-=8;b.Iron-=2;SaveBags();}
+    p.Message("&aPortal criado! Atravesse o brilho azul para viajar.");
+   }catch(Exception ex){
+    Logger.Log(LogType.Warning,"Family portal creation: "+ex.Message);
+    p.Message("&eErro ao criar o portal. Avise o responsavel.");
+   }
   }
  }
  private static void UpdateClimate(){

@@ -15,26 +15,80 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 #error a{color:#ffe27e}
 
 
-/* Uma camada de controles funcional cobrindo os comandos nativos do cliente. */
+/* Controle infantil circular. CSS somente: os comandos existentes ficam intocados. */
 #familyPad[hidden]{display:none!important}
-#familyPad{position:fixed;inset:0;z-index:15;pointer-events:none;touch-action:none;font-family:system-ui,-apple-system,sans-serif}
-.family-pad-panel{position:absolute;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:7px;pointer-events:auto;touch-action:none;background:#122747;box-shadow:inset 0 0 0 2px #7098cc,0 5px 15px #04132dbb;border-radius:22px;padding:10px}
-.family-pad-panel button{pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;border:2px solid #d4e9ff;border-radius:13px;background:#3c6aaf;color:#fff;font:900 clamp(13px,3.8vh,22px)/1 system-ui,sans-serif;box-shadow:0 3px 0 #203967;min-height:36px;min-width:45px;display:flex;align-items:center;justify-content:center}
-.family-pad-panel button.is-pressed{transform:translateY(2px);box-shadow:0 1px 0 #1e385d;background:#24b693}
-.family-pad-left{left:3%;bottom:16%;width:25%;height:47%}
-.family-pad-grid{width:100%;height:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr));gap:5px}
-.family-pad-grid button{width:100%;min-height:0;min-width:0;padding:0}
+#familyPad{
+ position:fixed;inset:0;z-index:15;pointer-events:none;touch-action:none;
+ font-family:system-ui,-apple-system,sans-serif;
+ --pad-diameter:clamp(136px,46dvh,234px);
+}
+.family-pad-panel{
+ position:absolute;width:var(--pad-diameter);height:var(--pad-diameter);aspect-ratio:1;
+ display:grid;align-content:center;justify-items:center;
+ padding:clamp(9px,2.5dvh,16px);border-radius:50%;
+ pointer-events:none;touch-action:none;
+ background:#122747;
+ border:3px solid #82acd7;
+ box-shadow:inset 0 0 0 5px #203b63,inset 0 4px 12px #09162c,0 10px 26px #04132dbf;
+}
+.family-pad-panel button{
+ display:flex;align-items:center;justify-content:center;
+ pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;
+ -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+ min-width:0;min-height:0;width:100%;height:100%;
+ padding:2px;border:2px solid #d4e9ff;
+ border-radius:50%;background:linear-gradient(165deg,#699bed,#3a65ae);
+ color:white;font:900 clamp(13px,3dvh,22px)/1 system-ui,sans-serif;
+ box-shadow:inset 0 2px 3px #ffffff5c,0 3px 0 #1b3969,0 5px 9px #0619329c;
+ transition:filter .06s,transform .06s;
+}
+.family-pad-panel button.is-pressed{
+ transform:translateY(2px) scale(.96);
+ box-shadow:inset 0 2px 4px #103659,0 1px 0 #122b4c;
+ filter:brightness(1.14);
+}
+.family-pad-left{
+ left:calc(env(safe-area-inset-left,0px) + 5.2vw);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 8vh);
+}
+.family-pad-grid{
+ display:grid;width:100%;height:100%;
+ grid-template-columns:repeat(3,minmax(0,1fr));
+ grid-template-rows:repeat(3,minmax(0,1fr));
+ gap:3px;
+}
 .family-pad-grid .forward{grid-column:2;grid-row:1}
 .family-pad-grid .left{grid-column:1;grid-row:2}
 .family-pad-grid .back{grid-column:2;grid-row:3}
 .family-pad-grid .right{grid-column:3;grid-row:2}
-.family-pad-right{right:3%;bottom:16%;width:21%;height:37%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:7px}
-.family-pad-right button{width:100%;height:100%;min-width:0;min-height:0;padding:4px;font-size:clamp(10px,2.6vh,17px);text-align:center;line-height:1.1}
-.family-pad-right .jump{grid-column:2;grid-row:1;background:#5484dc}
-.family-pad-right .place{grid-column:1;grid-row:2;background:#1d9173}
-.family-pad-right .break{grid-column:2;grid-row:2;background:#ba4e53}
-@media (pointer:fine){#familyPad{display:none!important}}
-@media(max-height:390px){.family-pad-panel{border-radius:14px;padding:7px}.family-pad-grid{gap:3px}.family-pad-right{gap:4px}.family-pad-panel button{border-radius:9px}}
+.family-pad-right{
+ right:calc(env(safe-area-inset-right,0px) + 4.2vw);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 8vh);
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ grid-template-rows:repeat(2,minmax(0,1fr));
+ gap:clamp(5px,1.7dvh,11px);
+}
+.family-pad-right button{
+ font-size:clamp(8px,2.2dvh,13px);line-height:1.15;
+ text-align:center;overflow-wrap:anywhere;
+}
+.family-pad-right .jump{grid-column:2;grid-row:1;background:linear-gradient(165deg,#79a8fa,#446fc3)}
+.family-pad-right .place{grid-column:1;grid-row:2;background:linear-gradient(165deg,#43d9b5,#137e70)}
+.family-pad-right .break{grid-column:2;grid-row:2;background:linear-gradient(165deg,#ff929b,#bd4b59)}
+@media(pointer:fine){#familyPad{display:none!important}}
+@media(max-height:410px){
+ #familyPad{--pad-diameter:clamp(126px,42dvh,172px)}
+ .family-pad-panel{padding:8px;border-width:2px}
+ .family-pad-left,.family-pad-right{bottom:calc(env(safe-area-inset-bottom,0px) + 5vh)}
+ .family-pad-grid{gap:2px}
+ .family-pad-right{gap:5px}
+ .family-pad-right button{font-size:clamp(8px,2.3dvh,11px)}
+}
+@media(max-width:650px) and (orientation:landscape){
+ #familyPad{--pad-diameter:clamp(116px,42dvh,170px)}
+ .family-pad-left{left:calc(env(safe-area-inset-left,0px) + 3vw)}
+ .family-pad-right{right:calc(env(safe-area-inset-right,0px) + 3vw)}
+}
 
 </style>
 </head><body><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div><div id="familyPad" role="group" aria-label="Controles para jogar no celular" hidden>

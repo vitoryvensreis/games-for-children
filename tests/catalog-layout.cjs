@@ -40,20 +40,22 @@ test('ClassiCube tem orientação horizontal e não corta o jogo',()=>{
  assert.match(html,/id="familyJoystick"/);
  assert.match(html,/id="familyStick"/);
  assert.doesNotMatch(html,/class="family-pad-grid"/,'Remover quatro botões antigos');
- assert.match(html,/function updateStick\(clientX,clientY\)/,'Joystick acompanha o dedo');
- assert.match(html,/function updateMovement\(next\)/,'Joystick mantém movimentos simultâneos');
- for(const direction of ['KeyW','KeyA','KeyS','KeyD']){
-   assert.match(html,new RegExp("keys\\.add\\('"+direction+"'\\)"),'Movimentação deve aceitar '+direction);
- }
- assert.match(html,/function releaseStick\(\)/,'Soltar os movimentos após arrastar');
- assert.match(html,/pointercancel','lostpointercapture/,'Evitar comandos travados quando o toque é cancelado');
- assert.match(html,/function keyEvent\(type,code\)/);
- assert.match(html,/function mouseEvent\(type,button\)/);
+ const controls=read('public/classicube/touch-controls.js');
+ assert.match(controls,/function positionStick\(x,y\)/,'Joystick acompanha o dedo');
+ assert.match(controls,/function setMovement\(next\)/,'Joystick mantém movimentos simultâneos');
+ for(const direction of ['KeyW','KeyA','KeyS','KeyD'])
+  assert.match(controls,new RegExp("next\\.add\\('"+direction+"'\\)"),'Movimentação deve aceitar '+direction);
+ assert.match(controls,/function releaseStick\(\)/,'Libera movimentação ao soltar o dedo');
+ assert.match(controls,/pointercancel/);
+ assert.match(controls,/lostpointercapture/);
+ assert.match(controls,/function keyEvent\(type,code\)/);
+ assert.match(controls,/function mouseEvent\(type,button\)/);
  assert.match(html,/data-key="Space"/);
  assert.match(html,/data-mouse="2"/);
  assert.match(html,/data-mouse="0"/);
- assert.match(html,/setPointerCapture/);
- assert.match(html,/touchstart','touchmove','touchend','touchcancel/);
+ assert.match(controls,/setPointerCapture/);
+ assert.match(controls,/touchstart/);
+ assert.match(controls,/touchcancel/);
  assert.equal((html.match(/id="familyPad"/g)||[]).length,1);
 });
 

@@ -522,7 +522,7 @@ server.on('upgrade',(req,socket,head)=>{
  }
  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))
 });
-wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});emit(ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))});report();
+wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});for(const item of (state.familyChat||[]).slice(-30))emit(ws,item);emit(ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))});report();
 ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
 if(m.type==='lobby')lobby();
 if(m.type==='create'&&(u.role==='child'||u.role==='admin')){leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=m.game==='pong'?'pong':m.game==='race'?'race':'pong';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
@@ -543,6 +543,15 @@ if(m.type==='join'&&typeof m.code==='string'){
 if(m.type==='paddle'&&p.room&&p.playing){const r=rooms.get(p.room);if(r?.game==='pong'&&r.started&&!r.finished&&Number.isFinite(m.y)){r.pong.paddles[u.id]=Math.max(.13,Math.min(.87,m.y))}}
 if(m.type==='lane'&&p.room&&p.playing){const r=rooms.get(p.room);if(r&&r.started&&!r.finished&&r.players.has(u.id)&&Number.isInteger(m.lane)&&m.lane>=0&&m.lane<=2){r.lanes[u.id]=m.lane;if(Number.isSafeInteger(m.seq)&&m.seq>=0){r.ack??={};r.ack[u.id]=m.seq}}}
 if(m.type==='leave')leaveRoom(p);
+if(m.type==='familyChat'&&typeof m.text==='string'){
+  const message=m.text.trim().slice(0,180);
+  if(message&&now()-(p.lastChat||0)>900){
+   p.lastChat=now();
+   const item={type:'familyChat',name:u.name,text:message,at:now()};
+   state.familyChat??=[];state.familyChat.push(item);state.familyChat=state.familyChat.slice(-80);save();
+   for(const other of peers.values())if(other.ws.readyState===1)emit(other.ws,item);
+  }
+ }
 if(m.type==='voice-ready'&&voiceEligible(p)){p.voiceActive=true;emit(ws,{type:'peers',items:voiceList(p)});for(const q of voiceMembers())if(q!==p)emit(q.ws,{type:'voiceReady',id:p.id,name:u.name,role:u.role});voicePresence()}
 if(m.type==='voice-off'){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id});voicePresence()}
 if(m.type==='peers'){emit(ws,{type:'peers',items:voiceList(p)})}

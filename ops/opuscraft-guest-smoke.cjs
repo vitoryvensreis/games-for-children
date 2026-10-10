@@ -14,7 +14,7 @@ let stage='init',guestPage=null;
 const watchdog=setTimeout(()=>{
  console.error('OPUSCRAFT_GUEST_TIMEOUT stage='+stage,errors.slice(-12));
  process.exit(3);
-},150000);
+},190000);
 const diagnostics=setInterval(async()=>{
  try{
   const info=await guestPage?.evaluate(()=>{const g=window.__game,c=g?.client;return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,clientState:c?.state,connection:c?.transport?.state,reason:c?.endReason,screen:g?.screen?.constructor?.name,wait:c?.loading,recent:c?.latelyIds?.slice(-5)};});
@@ -103,10 +103,10 @@ server.on('upgrade',(req,socket,head)=>{
   stage='join-world';console.log('Guest smoke: waiting for authenticated multiplayer login');
   await page.waitForFunction(()=>{
    const g=window.__game;
-   return !!(g&&g.mode==='client'&&g.inWorld&&g.client);
-  },{timeout:115000,polling:1000});
+   return !!(g&&g.mode==='client'&&g.inWorld&&g.client&&g.spawned);
+  },{timeout:145000,polling:1000});
   const status=await page.evaluate(()=>({
-   mode:window.__game?.mode,inWorld:window.__game?.inWorld,
+   mode:window.__game?.mode,inWorld:window.__game?.inWorld,spawned:window.__game?.spawned,
    name:window.__game?.client?.me?.name||'',
   }));
   const stats=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json());

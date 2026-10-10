@@ -79,3 +79,13 @@ node --test tests/integration.cjs
 - Controles touch usam os atalhos oficiais: Z alterna voo, Q sobe, E desce, Espaço pula, mouse esquerdo quebra e direito coloca. Toques contínuos repetem a ação e liberam no cancelamento.
 - Oito skins self-hosted de 64x32 com preview pixelado no menu FAMÍLIA, sem upload arbitrário nem URLs externas.
 - Validar em iPhone PWA: abrir inventário/selecionar bloco, quebrar/colocar, alternar voo, subir/descer e liberar botão. O painel parental, os mundos e o multiplayer não foram modificados.
+
+
+## OpusCraft: menu original, mundos individuais e teleporte (10/2026)
+- Abrir OpusCraft pelo catálogo agora exibe o **menu inicial original**: Um jogador, Multiplayer e Configurações. Não conecta automaticamente à VPS até a família escolher Multiplayer.
+- Em **Um jogador**, o menu nativo permite criar/continuar/renomear/excluir mundos com modos Criativo, Sobrevivência, Aventura, Espectador e Hardcore, semente, dificuldade, geração de estruturas e regras. O mundo local salva automaticamente no IndexedDB do próprio aparelho/navegador.
+- Na seleção de mundos há **Backup na VPS** e **Restaurar da VPS**. São ações manuais e autenticadas, independentes por perfil; o backup não sincroniza automaticamente mundos entre dispositivos. Cada arquivo pode ter até 64 MB, com cota de 400 MB por conta e até três versões por mundo. A restauração cria outra cópia, sem sobrescrever o mundo atual.
+- Em **Multiplayer**, a entrada **Servidor da Familia - Entrar** é fixa e usa identidade da sessão do GamesNavagador. O mundo familiar antigo da VPS permanece com seus blocos e inventários. O menu LAN original continua disponível, mas **outros mundos hospedados permanentemente para cada criança ainda não estão implementados**.
+- No mundo familiar, o overlay **Jogadores / Teleporte** mostra apenas perfis realmente conectados; tocar em Ir até executa teleporte autoritativo pelo host do OpusCraft. Só funciona quando ambos estão no mesmo mundo e dimensão; há intervalo de 6 segundos entre teletransportes.
+- O mundo do servidor continua hospedado 24h na VPS, sem precisar manter um celular ligado. Mundos individuais ficam no aparelho e podem ser copiados manualmente para a VPS.
+- Limites parentais continuam verificados periodicamente no cliente de mundo individual; para o multiplayer a conexão é autenticada e pode ser encerrada pelo ADM. Jogar localmente não fornece segurança antiviolação absoluta contra clientes modificados.

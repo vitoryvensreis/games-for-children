@@ -274,11 +274,16 @@ const publicDir=path.join(ROOT,'public');
 const CLASSICUBE_DIR=path.join(publicDir,'classicube');
 const OPUSCRAFT_ROOT=path.join(publicDir,'opuscraft');
 const OPUSCRAFT_READY=()=>fs.existsSync(path.join(OPUSCRAFT_ROOT,'index.html'));
+function opusBuildId(){
+ try{return fs.readFileSync(path.join(OPUSCRAFT_ROOT,'GFC-BUILD-ID.txt'),'utf8').trim().slice(0,48)}
+ catch{return 'unversioned'}
+}
+const opusGateway={attempts:0,accepted:0,forwarded:0,lastAttempt:null,lastForwarded:null,lastFailure:''};
 function opusName(u){return (u.role==='admin'?'ADM_':'KID_')+String(u.id).replace(/[^a-f0-9]/gi,'').slice(0,12)}
 async function opusStatus(){
  try{const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});const info=await response.json();
-  return {available:OPUSCRAFT_READY(),ready:!!info.ready,guests:Number(info.guests)||0,lastSave:info.lastSave||null,error:info.error||'',mode:'vps-persistent',players:[...opusConnections].filter(p=>p.role==='guest'&&p.ws.readyState===1).map(p=>({name:p.user.name,role:p.user.role}))};
- }catch{return {available:OPUSCRAFT_READY(),ready:false,guests:0,players:[],error:'Servidor do mundo ainda iniciando',mode:'vps-persistent'}}
+  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),ready:!!info.ready,guests:Number(info.guests)||0,lastSave:info.lastSave||null,error:info.error||'',mode:'vps-persistent',gateway:{...opusGateway},players:[...opusConnections].filter(p=>p.role==='guest'&&p.ws.readyState===1).map(p=>({name:p.user.name,role:p.user.role}))};
+ }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),ready:false,guests:0,players:[],gateway:{...opusGateway},error:'Servidor do mundo ainda iniciando',mode:'vps-persistent'}}
 }
 function launchOpusHost(){
  if(opusHostProcess||!OPUSCRAFT_READY()||!fs.existsSync(path.join(ROOT,'ops','opuscraft-relay.mjs')))return;
@@ -459,7 +464,7 @@ return json(res,404,{error:'Rota não encontrada'});
 }
 const file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));if(file.includes('..')||file.startsWith('.')){res.writeHead(403);return res.end()}
 const fp=path.join(publicDir,file);if(!fp.startsWith(publicDir+path.sep)){res.writeHead(403);return res.end()}
-fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.wasm':'application/wasm','.zip':'application/zip','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'?'no-cache':'public, max-age=3600'});res.end(b)});
+fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.wasm':'application/wasm','.zip':'application/zip','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'||file==='index.html'||file==='app.js'||file==='style.css'||pathname.startsWith('/opuscraft/')?'private, no-store, max-age=0':'public, max-age=3600'});res.end(b)});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{error:'Erro interno'})}});
 const cubeWss=new WebSocketServer({noServer:true,maxPayload:1024});
 const cubeSessions=new Map();
@@ -484,11 +489,15 @@ cubeWss.on('connection',(ws,{u,s})=>{
 });
 const opusWss=new WebSocketServer({noServer:true,maxPayload:20*1024*1024});
 opusWss.on('connection',(ws,ctx)=>{
+ opusGateway.accepted++;
  const {u,s,role}=ctx,p={ws,remote:null,session:s,user:u,role};opusConnections.add(p);
  const remote=new WebSocket('ws://127.0.0.1:4173/__mp?role='+role,{headers:{Origin:'http://127.0.0.1:4173'},maxPayload:20*1024*1024,perMessageDeflate:false});
  p.remote=remote;let queued=[],queuedBytes=0;
  const done=()=>{opusConnections.delete(p);if(ws.readyState<2)ws.close();if(remote.readyState<2)remote.close()};
- remote.on('open',()=>{for(const [b,binary] of queued)remote.send(b,{binary});queued=[];queuedBytes=0});
+ remote.on('open',()=>{
+  opusGateway.forwarded++;opusGateway.lastForwarded=new Date().toISOString();opusGateway.lastFailure='';
+  for(const [b,binary] of queued)remote.send(b,{binary});queued=[];queuedBytes=0
+ });
  ws.on('message',(b,binary)=>{
   if(s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000)return done();
   if(remote.readyState===WebSocket.OPEN){if(remote.bufferedAmount>12*1024*1024)return done();remote.send(b,{binary})}
@@ -496,7 +505,8 @@ opusWss.on('connection',(ws,ctx)=>{
   else done();
  });
  remote.on('message',(b,binary)=>{if(ws.readyState===WebSocket.OPEN){if(ws.bufferedAmount>20*1024*1024)return done();ws.send(b,{binary})}});
- remote.on('error',done);remote.on('close',done);ws.on('error',done);ws.on('close',done);
+ remote.on('error',err=>{opusGateway.lastFailure='Falha na conexão com o relay interno';console.warn('[OpusCraft relay]',err?.message||'error');done()});
+ remote.on('close',done);ws.on('error',done);ws.on('close',done);
 });
 const wss=new WebSocketServer({noServer:true,maxPayload:8192});
 server.on('upgrade',(req,socket,head)=>{
@@ -510,6 +520,7 @@ server.on('upgrade',(req,socket,head)=>{
  if(!auth){console.warn('[WS] Rejeitado: sessão ausente ou inválida');socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
  if(pathname==='/__mp'||pathname==='/ws'&&new URL(req.url,'http://local').searchParams.get('opus')==='1'){
+  opusGateway.attempts++;opusGateway.lastAttempt=new Date().toISOString();
   const role=new URL(req.url,'http://local').searchParams.get('role');
   if(!['guest','list'].includes(role)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return}
   opusWss.handleUpgrade(req,socket,head,ws=>opusWss.emit('connection',ws,{...auth,role}));return;

@@ -26,6 +26,7 @@ test('Native inventory, flying up/down and pressed block actions have stable rel
   const obj={id,dataset,hidden:true,attributes:{},style:{transform:'',setProperty(){}},
    classList:{add(){},remove(){},toggle(){}},
    addEventListener(type,fn){if(!handlers.has(obj))handlers.set(obj,{});handlers.get(obj)[type]=fn},
+   dispatchEvent(event){handlers.get(obj)?.[event.type]?.(event);return true},
    setPointerCapture(){},setAttribute(k,v){obj.attributes[k]=v},
    dispatch(type,vals={}){handlers.get(obj)?.[type]?.({pointerId:1,clientX:70,clientY:35,...vals,
     preventDefault(){},stopPropagation(){}})},

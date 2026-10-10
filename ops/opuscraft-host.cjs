@@ -23,7 +23,7 @@ const server=http.createServer((req,res)=>{
    if(!srv||g.mode!=='host')return [];
    return [...srv.sessions.values()]
     .filter(s=>s.state==='play'&&s.player&&!s.player.removed)
-    .map(s=>({name:s.name,x:Math.round(s.player.x),y:Math.round(s.player.y),z:Math.round(s.player.z),
+    .map(s=>({name:s.name,x:Math.round(s.player.x*100)/100,y:Math.round(s.player.y*100)/100,z:Math.round(s.player.z*100)/100,
       dimension:srv.level.world.dim.id,mode:s.player.gameMode}));
   }):[]).then(players=>{
    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
@@ -66,6 +66,7 @@ const server=http.createServer((req,res)=>{
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
    const g=window.__game,server=g?.server;
    return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,ticks:g?.ticks,
+    world:{id:g?.meta?.id||null,created:g?.meta?.created||null,lastPlayed:g?.meta?.lastPlayed||null},
     hostSessions:[...(server?.sessions?.values()||[])].map(p=>({state:p.state,player:p.name||null})),
     hostTicks:server?.ticks||0};
   }):{}).then(info=>{res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(info))})

@@ -20,8 +20,8 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs
-      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check public/classicube/family-menu.js
+      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs
 
   deploy:
     needs: validate
@@ -205,8 +205,16 @@ jobs:
                       else
                         echo "::warning::Vila da Família indisponível; mundo aventura foi preservado"
                       fi
-                      echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
-                      exit 0
+                      for p in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                        if test -s vendor/mcgalaxy/properties/gfc-familyplay.ready; then
+                          echo FAMILYPLAY_HOUSE_PROTECTION_ACTIVE
+                          echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
+                          exit 0
+                        fi
+                        sleep 1
+                      done
+                      echo "::error::FamilyPlay não carregou; casas ainda não estão protegidas"
+                      /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
                     fi
                     sleep 2
                   done

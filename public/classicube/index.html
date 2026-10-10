@@ -128,9 +128,13 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 #familyPanel .family-action.family-primary{background:#148c71;border-color:#75e7cc}
 #familyPanel .family-hint{font-size:11px;color:#d5e5fa;line-height:1.4;margin:6px 0 0}
 #familyPanel #familyMessage{font-size:12px;color:#ffe1a9;min-height:15px;margin-top:8px}
+#desktopControlsHint[hidden]{display:none!important}
+#desktopControlsHint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:17;border:1px solid #b5ddff90;background:#10264be9;color:white;border-radius:12px;padding:8px 14px;pointer-events:none;white-space:nowrap;font:bold 13px system-ui,sans-serif}
+@media(pointer:coarse){#desktopControlsHint{display:none!important}}
+
 
 </style>
-</head><body><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div><div id="familyPad" role="group" aria-label="Controles para jogar no celular" hidden>
+</head><body><canvas id="canvas" tabindex="0" aria-label="Jogo Minecraft: use W A S D para andar, Espaço para pular e o mouse para olhar" oncontextmenu="event.preventDefault()"></canvas><div id="desktopControlsHint" hidden>Andar: W A S D &nbsp; | &nbsp; Pular: Espaço &nbsp; | &nbsp; Mouse: olhar</div><div id="logmsg">Carregando ClassiCube do nosso servidor...</div><div id="error"><p>Não foi possível iniciar o jogo 3D. Verifique a conexão e tente abrir novamente.</p></div><div id="familyPad" role="group" aria-label="Controles para jogar no celular" hidden>
   <div class="family-pad-panel family-pad-left" aria-label="Joystick analógico para movimentar">
     <div id="familyJoystick" class="joystick-surface" role="group" aria-label="Mova o polegar para andar em qualquer direção">
       <span class="joystick-mark top" aria-hidden="true">▲</span>
@@ -176,6 +180,23 @@ try{
  const config=await responseWorld.json();
  const username=config.playerName||'Jogador';
  if(!config.multiplayerConfigured){throw Error('O mundo compartilhado ainda está iniciando. Aguarde alguns segundos e tente novamente.')}
+ // Desktop: parent launcher and menu buttons can leave keyboard focus outside WebGL.
+ // Explicitly return focus to the canvas so native keydown/keyup events reach ClassiCube.
+ if(!window.matchMedia('(pointer:coarse)').matches){
+  const hint=document.getElementById('desktopControlsHint');
+  hint.hidden=false;
+  const focusCanvas=()=>{if(document.getElementById('familyPanel')?.hidden!==false)canvas.focus({preventScroll:true})};
+  canvas.addEventListener('pointerdown',focusCanvas);
+  window.addEventListener('focus',()=>requestAnimationFrame(focusCanvas));
+  document.addEventListener('keydown',event=>{
+   if(['KeyW','KeyA','KeyS','KeyD','Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){
+    hint.hidden=true;
+    if(document.activeElement!==canvas&&document.getElementById('familyPanel')?.hidden!==false)focusCanvas();
+   }
+  },true);
+  setTimeout(()=>{hint.hidden=true},12000);
+  requestAnimationFrame(focusCanvas);
+ }
  // The Emscripten ClassiCube webclient always connects using its own WebSocket.
  // Redirect only the ClassiCube protocol to our cookie-authenticated, same-origin gateway.
  const NativeWebSocket=window.WebSocket;
@@ -187,7 +208,7 @@ try{
  Object.setPrototypeOf(FamilyWebSocket,NativeWebSocket);
  window.WebSocket=FamilyWebSocket;
  window.Module={
- preRun:[],postRun:[],arguments:[username,'',location.hostname,'443'],canvas,print:(...args)=>console.log(...args),printErr:(...args)=>console.warn(...args),
+ preRun:[],postRun:[()=>{if(!window.matchMedia('(pointer:coarse)').matches){requestAnimationFrame(()=>canvas.focus({preventScroll:true}));}}],arguments:[username,'',location.hostname,'443'],canvas,print:(...args)=>console.log(...args),printErr:(...args)=>console.warn(...args),
  setStatus:text=>{status.textContent=text;if(!text||text==='All downloads complete.')setTimeout(()=>status.style.display='none',1200)},
  totalDependencies:0,
  monitorRunDependencies(left){this.totalDependencies=Math.max(this.totalDependencies,left);this.setStatus(left?'Preparando arquivos... '+(this.totalDependencies-left)+'/'+this.totalDependencies:'All downloads complete.')}

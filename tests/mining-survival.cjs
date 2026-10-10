@@ -26,7 +26,7 @@ test('Mining map is generated only once, never overwriting a saved build',()=>{
   assert.equal(fs.readFileSync(path.join(dir,'mineracao.lvl'),'utf8'),'BUILDS_STAY');
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
-test('MCGalaxy mining is server-authoritative and villagers actively wander',()=>{
+test('MCGalaxy mining is server-authoritative and creatures continuously walk',()=>{
  const s=fs.readFileSync(path.join(__dirname,'../plugins/family-play/FamilyPlay.cs'),'utf8');
  const menu=fs.readFileSync(path.join(__dirname,'../public/classicube/family-menu.js'),'utf8');
  const backend=fs.readFileSync(path.join(__dirname,'../server.cjs'),'utf8');
@@ -37,7 +37,7 @@ test('MCGalaxy mining is server-authoritative and villagers actively wander',()=
  assert.match(s,/gfc-mining-inventory\.tsv/);
  assert.match(s,/WanderBots\(\)/);
  assert.match(s,/bot\.movement=true/);
- assert.match(s,/bot\.TargetPos=new Position/);
+ assert.match(s,/SetCreatureGoal\(bot/);
  assert.match(s,/gfc-family-bot-movement\.status/);
  assert.match(menu,/data-action="mining"/);
  assert.match(menu,/data-action="craft"/);

@@ -43,6 +43,13 @@ test('Bloco D and Block C: plugin must check existing maps, persist position and
  assert.match(plugin,/OnJoinedLevelEvent\.Register\(RestorePreviousWorld/);
  assert.match(plugin,/p\.Socket\.Disconnected/);
  assert.match(plugin,/gfc-family-positions\.tsv/);
+ assert.match(plugin,/if\(cmd=="guia"\)/);
+ assert.match(plugin,/Gui[a-z_ ]*da Praca|Guia encontrado/);
+ const menu=fs.readFileSync(path.join(__dirname,'../public/classicube/family-menu.js'),'utf8');
+ assert.match(menu,/data-place="praca"/);
+ assert.match(menu,/data-place="ponte"/);
+ assert.match(menu,/data-place="torre"/);
+
  assert.match(server,/function minecraftGuidesStatus/);
  assert.match(server,/function minecraftPlayersOverview/);
  assert.match(server,/action==='restore'/);

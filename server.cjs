@@ -64,6 +64,12 @@ function startFamilyAdventureWorld(){
  const world=path.join(levels,ADVENTURE_MAP+'.lvl');
  const familyVillage=path.join(levels,FAMILY_VILLAGE+'.lvl');
  const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\n')};
+ // Prefer the newly built village without changing any block in the older adventure.
+ if(fs.existsSync(familyVillage)){
+  writeCommand('/main '+FAMILY_VILLAGE);
+  console.log('[MCGalaxy] Entrando na vila da família existente: '+familyVillage);
+  return;
+ }
  // No momento da primeira atualização preservamos "main" e criamos "aventura".
  // Se a geração já ocorreu antes, o MCGalaxy restaura o "main-name" salvo e NÃO regenera.
  if(!fs.existsSync(world)){

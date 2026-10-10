@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node ops/opuscraft-host.cjs >/tmp/opuscraft-host.log 2>&1 &
+          OPUSCRAFT_CI_MARKER=yes node ops/opuscraft-host.cjs >/tmp/opuscraft-host.log 2>&1 &
           HOST_PID=$!
           trap 'kill "$HOST_PID" 2>/dev/null || true' EXIT
           ready=0
@@ -60,6 +60,11 @@ jobs:
             exit 1
           fi
           # Test recovery using the SAME Chromium profile, never a newly generated world.
+          # Save a physical world block at a known world coordinate, then
+          # verify that same block AFTER the Chromium server was terminated.
+          placed="$(curl -fsS --max-time 12 'http://127.0.0.1:4173/__ci/world-block?mode=write')"
+          echo "OPUSCRAFT_WORLD_BLOCK_WRITTEN $placed"
+          block_expect="$(printf '%s' "$placed" | node -e 'let x="";process.stdin.on("data",b=>x+=b).on("end",()=>{const j=JSON.parse(x);if(!j.ok||j.state!==j.actual||!j.state)process.exit(1);process.stdout.write(j.x+"|"+j.z+"|"+j.state)})')"
           original_id="$(curl -fsS http://127.0.0.1:4173/__debug | node -e '
             let s="";process.stdin.on("data",b=>s+=b).on("end",()=>{
               const j=JSON.parse(s);
@@ -70,7 +75,7 @@ jobs:
           echo "OPUSCRAFT_WORLD_BEFORE_RESTART $original_id"
           kill -TERM "$HOST_PID"
           wait "$HOST_PID" || true
-          node ops/opuscraft-host.cjs >/tmp/opuscraft-restarted.log 2>&1 &
+          OPUSCRAFT_CI_MARKER=yes node ops/opuscraft-host.cjs >/tmp/opuscraft-restarted.log 2>&1 &
           HOST_PID=$!
           recovered=0
           for attempt in $(seq 1 95); do
@@ -96,6 +101,13 @@ jobs:
             cat /tmp/opuscraft-restarted.log
             exit 1
           }
+          marker_x="$(echo "$block_expect" | cut -d'|' -f1)"
+          marker_z="$(echo "$block_expect" | cut -d'|' -f2)"
+          marker_state="$(echo "$block_expect" | cut -d'|' -f3)"
+          loaded="$(curl -fsS --max-time 10 "http://127.0.0.1:4173/__ci/world-block?mode=read&x=$marker_x&z=$marker_z")"
+          actual_state="$(printf '%s' "$loaded" | node -e 'let x="";process.stdin.on("data",b=>x+=b).on("end",()=>{const j=JSON.parse(x);if(!j.ok)process.exit(1);process.stdout.write(j.state)})')"
+          test "$actual_state" = "$marker_state" || { echo "Persistent chunk lost: before=$marker_state after=$actual_state"; exit 1; }
+          echo "OPUSCRAFT_WORLD_BLOCK_SURVIVED_RESTART_OK at $marker_x,315,$marker_z state=$actual_state"
           echo "OPUSCRAFT_WORLD_PERSISTENCE_AFTER_RESTART_OK $restored_id"
 
 

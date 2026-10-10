@@ -25,6 +25,7 @@ public sealed class FamilyPlay : Plugin {
  private static readonly Dictionary<string,long> lastSpotWrite = new Dictionary<string,long>(StringComparer.OrdinalIgnoreCase);
  private static readonly HashSet<string> returningPlayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
  private static readonly object Gate = new object();
+ private static bool buildingEnabled=true;
  private static DateTime checkedAt = DateTime.MinValue;
  private static Dictionary<string, string> users = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
  private static Dictionary<int, string> owners = new Dictionary<int, string>();
@@ -94,6 +95,7 @@ public sealed class FamilyPlay : Plugin {
      if(parts.Length!=3)continue;
      if(parts[0]=="U" && (parts[2]=="admin"||parts[2]=="child") && parts[1].Length>=3)
       nextUsers[parts[1]]=parts[2];
+     if(parts[0]=="S"&&parts[1]=="building")buildingEnabled=parts[2]!="false";
      if(parts[0]=="H") {
       int slot;
       if(int.TryParse(parts[1],out slot)&&slot>=1&&slot<=4)nextOwners[slot]=parts[2];
@@ -125,8 +127,13 @@ public sealed class FamilyPlay : Plugin {
  }
  // All X/Y/Z changes within the building footprint are server-blocked, not just taps.
  private static void ProtectHouse(Player p, ushort x, ushort y, ushort z, ushort block, bool placing, ref bool cancel) {
-  if(p.level==null||!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
+  if(p.level==null)return;
   if(IsParent(p))return;
+  if(!buildingEnabled){
+   cancel=true;p.RevertBlock(x,y,z);
+   return;
+  }
+  if(!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   bool isKnown=IsAllowed(p);
   for(int i=0;i<4;i++) {
    if(x<bounds[i,0]||x>bounds[i,1]||z<bounds[i,2]||z>bounds[i,3])continue;

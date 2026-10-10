@@ -44,6 +44,22 @@ test('OpusCraft backups stay private to each family member, persist and restore'
   const restored=await api('opuscraft/world-backups/Minha%20Casa/'+version,{cookie:one});
   assert.equal(restored.status,200);
   assert.deepEqual(Buffer.from(await restored.arrayBuffer()),bytes);
+  // Force a real backend restart. The account index and backup file must survive.
+  proc.kill('SIGTERM');
+  await Promise.race([new Promise(resolve=>proc.once('exit',resolve)),sleep(1800)]);
+  proc=spawn(process.execPath,[path.resolve(__dirname,'..','server.cjs')],{env:{
+   ...process.env,PORT:String(port),DATA_DIR:dir,ADMIN_PASSWORD:'test-opus-admin-secret-123',MCGALAXY_ENABLED:'false'
+  },stdio:'ignore'});
+  let restarted=false;
+  for(let attempt=0;attempt<95;attempt++){
+   try{const response=await api('health');if(response.ok){restarted=true;break}}catch{}
+   await sleep(90);
+  }
+  assert.ok(restarted,'Backend could not restart with the existing accounts and world backup');
+  const afterRestart=await api('opuscraft/world-backups/Minha%20Casa/'+version,{cookie:one});
+  assert.equal(afterRestart.status,200);
+  assert.deepEqual(Buffer.from(await afterRestart.arrayBuffer()),bytes);
+  console.log('OPUSCRAFT_CHILD_BACKUP_SURVIVES_RESTART_OK');
   assert.equal((await api('opuscraft/world-backups/Minha%20Casa',{method:'POST',body:bytes,contentType:'application/octet-stream'})).status,401);
   const bad=await api('opuscraft/world-backups/%2E%2E%2Fsecret',{cookie:one,method:'POST',body:bytes,contentType:'application/octet-stream'});
   assert.notEqual(bad.status,200,'Path traversal should be rejected');

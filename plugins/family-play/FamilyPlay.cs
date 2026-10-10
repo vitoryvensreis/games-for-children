@@ -416,7 +416,17 @@ public sealed class FamilyPlay : Plugin {
   int centerZ=lvl.MapName=="vila_familia"||lvl.MapName=="aventura"?106:lvl.Length/2;
   // Keep previously persisted portals without recreating or overriding user builds.
   int existing=Portal.GetAllCoords(lvl.MapName).Count;
-  if(existing>=3){WritePortalsStatus();return;}
+  if(existing>=3){
+   // A restart must reconstruct the menu destination without rewriting any portal.
+   var registered=Portal.GetAllCoords(lvl.MapName);
+   if(registered.Count>0){
+    var first=registered[0];
+    int x=first.X,z=Math.Max(3,first.Z-3);
+    int safeY=FindFeet(lvl,x,z);
+    if(safeY>0)hubLocations[lvl.MapName]=Position.FromFeetBlockCoords(x,safeY,z);
+   }
+   WritePortalsStatus();return;
+  }
   int created=0;
   for(int target=0;target<HubMaps.Length;target++){
    string destination=HubMaps[target];

@@ -132,6 +132,14 @@ patch('src/gui/screens/menus.ts',
 patch('src/game/game.ts',
  "this.chunks.isReady(this.player.x, this.player.z, LOADING_RADIUS, vd ?",
  "this.chunks.isReady(this.player.x, this.player.z, this.mode === 'client' ? 1 : LOADING_RADIUS, vd ?");
+// Small iPhones and the software-rendered VPS may need extra time to finish
+// receiving terrain. Keep the session alive instead of ejecting the child mid-load.
+patch('src/net/config.ts',
+ "export const TIMEOUT_TICKS = 30 * 20;",
+ "export const TIMEOUT_TICKS = 120 * 20;");
+patch('src/net/config.ts',
+ "export const CHUNKS_PER_TICK = 6;",
+ "export const CHUNKS_PER_TICK = 3;");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");

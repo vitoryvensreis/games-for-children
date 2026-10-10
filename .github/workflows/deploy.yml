@@ -221,11 +221,13 @@ jobs:
                       fi
                       for p in 1 2 3 4 5 6 7 8 9 10 11 12; do
                         if test -s vendor/mcgalaxy/properties/gfc-familyplay.ready; then
-                          if test -s vendor/mcgalaxy/properties/gfc-family-guides.status; then
-                            echo GFC_GUIDES_STATUS
+                          if test -s vendor/mcgalaxy/properties/gfc-family-guides.status && grep -qx "count=3" vendor/mcgalaxy/properties/gfc-family-guides.status; then
+                            echo GFC_THREE_NPCS_CONFIRMED
                             cat vendor/mcgalaxy/properties/gfc-family-guides.status
                           else
-                            echo "::warning::NPCs da Vila ainda não confirmados"
+                            echo "::error::Os 3 NPCs da Vila não foram encontrados"
+                            /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
+                            exit 1
                           fi
                           echo FAMILYPLAY_HOUSE_PROTECTION_ACTIVE
                           echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING

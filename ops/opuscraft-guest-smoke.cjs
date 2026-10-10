@@ -120,6 +120,11 @@ server.on('upgrade',(req,socket,head)=>{
   }));
   const stats=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json());
   if(!stats.ready||stats.guests<1)throw Error('The server did not record the guest connection: '+JSON.stringify(stats));
+  const roster=await fetch('http://127.0.0.1:4173/__players').then(r=>r.json());
+  if(!roster.players?.some(p=>p.name==='KID_TESTPLAYER'))
+   throw Error('The server roster did not include the connected child: '+JSON.stringify(roster));
+  console.log('OPUSCRAFT_LIVE_ROSTER_OK');
+
   console.log('OPUSCRAFT_GUEST_JOIN_SUCCESS',JSON.stringify({status,serverGuests:stats.guests}));
  }catch(err){
   console.error('OpusCraft guest multiplayer smoke failed:',err?.stack||err);

@@ -16,12 +16,83 @@ const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1');
- if(req.method!=='GET'){res.writeHead(405).end();return}
+ if(req.method!=='GET'&&!(req.method==='POST'&&url.pathname==='/__teleport')){res.writeHead(405).end();return}
+ if(url.pathname==='/__players'&&req.method==='GET'){
+  Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
+   const g=window.__game,srv=g?.server;
+   if(!srv||g.mode!=='host')return [];
+   return [...srv.sessions.values()]
+    .filter(s=>s.state==='play'&&s.player&&!s.player.removed)
+    .map(s=>({name:s.name,x:Math.round(s.player.x*100)/100,y:Math.round(s.player.y*100)/100,z:Math.round(s.player.z*100)/100,
+      dimension:srv.level.world.dim.id,mode:s.player.gameMode}));
+  }):[]).then(players=>{
+   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+   res.end(JSON.stringify({players}));
+  }).catch(e=>{res.writeHead(503).end('World host unavailable')});
+  return;
+ }
+ if(url.pathname==='/__teleport'&&req.method==='POST'){
+  // Only the authenticated platform backend can reach this localhost service.
+  // The caller and target must both be currently logged-in guests of this exact world.
+  let chunks=[],bytes=0;
+  req.on('data',b=>{bytes+=b.length;if(bytes>1024){req.destroy();return}chunks.push(b)});
+  req.on('end',async()=>{
+   try{
+    const body=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if(!/^(ADM|KID)_[A-Za-z0-9_]{6,16}$/.test(body.from||'')||
+       !/^(ADM|KID)_[A-Za-z0-9_]{6,16}$/.test(body.to||'')||body.from===body.to)
+      throw Error('Invalid player selection');
+    if(!hostPage||hostPage.isClosed())throw Error('World unavailable');
+    const outcome=await hostPage.evaluate(({from,to})=>{
+     const g=window.__game,srv=g?.server;
+     if(!srv||g?.mode!=='host'||!g.inWorld)return {ok:false,error:'Mundo indisponível'};
+     const sessions=[...srv.sessions.values()].filter(s=>s.state==='play'&&s.player&&!s.player.removed);
+     const me=sessions.find(s=>s.name===from),friend=sessions.find(s=>s.name===to);
+     if(!me||!friend)return {ok:false,error:'Ambos precisam estar neste mundo'};
+     if(me.player.level!==friend.player.level)return {ok:false,error:'Jogadores em dimensões diferentes'};
+     const p=friend.player;
+     me.teleportTo(p.x,p.y,p.z,p.yaw,p.pitch);
+     return {ok:true,dimension:srv.level.world.dim.id};
+    },body);
+    res.writeHead(outcome.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'});
+    res.end(JSON.stringify(outcome));
+   }catch(e){
+    res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}));
+   }
+  });return;
+ }
+ if(url.pathname==='/__ci/world-block'&&process.env.OPUSCRAFT_CI_MARKER==='yes'){
+  // Test-only route for the CI runner, disabled completely in production.
+  Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(async ({mode,x,z})=>{
+   const g=window.__game;
+   if(!g||g.mode!=='host'||!g.inWorld||!g.spawned)return {ok:false,error:'host unavailable'};
+   const px=mode==='write'?Math.floor(g.player.x):x;
+   const pz=mode==='write'?Math.floor(g.player.z):z;
+   const y=315;
+   if(mode==='write'){
+    let state=0;
+    for(let yy=Math.min(Math.floor(g.player.y)-2,250);yy>=-60;yy--){
+      const candidate=g.level.getState(px,yy,pz);
+      if(candidate!==0){state=candidate;break}
+    }
+    if(state===0)return {ok:false,error:'no non-air block for persistence marker'};
+    g.level.setBlock(px,y,pz,state,false);
+    await g.saveWorld();
+    return {ok:true,x:px,y,z:pz,state,actual:g.level.getState(px,y,pz)};
+   }
+   return {ok:true,x:px,y,z:pz,state:g.level.getState(px,y,pz)};
+  },{mode:url.searchParams.get('mode'),x:Number(url.searchParams.get('x')),z:Number(url.searchParams.get('z'))}):{ok:false}).then(out=>{
+   res.writeHead(out?.ok?200:503,{'Content-Type':'application/json','Cache-Control':'no-store'});
+   res.end(JSON.stringify(out));
+  }).catch(err=>{res.writeHead(503).end(JSON.stringify({ok:false,error:String(err.message).slice(0,150)}))});
+  return;
+ }
  if(url.pathname==='/__debug'){
   // Localhost-only runtime diagnostics; never exposed as a public route.
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
    const g=window.__game,server=g?.server;
    return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,ticks:g?.ticks,
+    world:{id:g?.meta?.id||null,created:g?.meta?.created||null,lastPlayed:g?.meta?.lastPlayed||null},
     hostSessions:[...(server?.sessions?.values()||[])].map(p=>({state:p.state,player:p.name||null})),
     hostTicks:server?.ticks||0};
   }):{}).then(info=>{res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(info))})

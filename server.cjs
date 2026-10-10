@@ -274,6 +274,23 @@ const publicDir=path.join(ROOT,'public');
 const CLASSICUBE_DIR=path.join(publicDir,'classicube');
 const OPUSCRAFT_ROOT=path.join(publicDir,'opuscraft');
 const OPUSCRAFT_READY=()=>fs.existsSync(path.join(OPUSCRAFT_ROOT,'index.html'));
+const OPUS_BACKUP_ROOT=path.join(DATA,'opuscraft','backups');
+const lastOpusTeleport=new Map();
+function validOpusWorldId(id){return typeof id==='string'&&id.length>0&&id.length<=90&&!id.includes('/')&&!id.includes(String.fromCharCode(92))&&![...id].some(c=>c.charCodeAt(0)<32)}
+function opusBackupDir(u){return path.join(OPUS_BACKUP_ROOT,u.id)}
+function opusBackupIndex(u){
+ try{const rows=JSON.parse(fs.readFileSync(path.join(opusBackupDir(u),'index.json'),'utf8'));
+  return Array.isArray(rows)?rows.filter(b=>validOpusWorldId(b.id)&&/^[0-9]{13}-[a-f0-9]{8}$/.test(b.version)&&Number.isSafeInteger(b.size)):[]}
+ catch{return []}
+}
+function opusFileName(id,version){return crypto.createHash('sha256').update(id).digest('hex').slice(0,40)+'-'+version+'.world'}
+async function opusGuests(){
+ const r=await fetch('http://127.0.0.1:4173/__players',{signal:AbortSignal.timeout(3500)});
+ if(!r.ok)throw Error('Servidor do mundo indisponível');
+ const data=await r.json();
+ return (Array.isArray(data.players)?data.players:[]).filter(p=>typeof p.name==='string'&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z));
+}
+
 function opusBuildId(){
  try{return fs.readFileSync(path.join(OPUSCRAFT_ROOT,'GFC-BUILD-ID.txt'),'utf8').trim().slice(0,48)}
  catch{return 'unversioned'}
@@ -316,6 +333,80 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
+if(pathname==='/api/opuscraft/players'&&req.method==='GET'){
+ try{
+  const online=await opusGuests();
+  return json(res,200,{me:opusName(u),players:online.map(p=>{
+   const member=state.users.find(v=>v.enabled&&opusName(v)===p.name);
+   return member?{name:member.name,id:p.name,dimension:p.dimension,mode:p.mode,
+    x:p.x,y:p.y,z:p.z,self:member.id===u.id}:null;
+  }).filter(Boolean)});
+ }catch{return json(res,503,{error:'Não foi possível consultar os jogadores deste mundo'})}
+}
+if(pathname==='/api/opuscraft/teleport'&&req.method==='POST'){
+ const body=await readBody(req),target=String(body.to||'');
+ const current=now();
+ if(current-(lastOpusTeleport.get(u.id)||0)<6000)return json(res,429,{error:'Aguarde alguns segundos para teleportar novamente'});
+ if(target===opusName(u)||!state.users.some(v=>v.enabled&&opusName(v)===target))
+  return json(res,400,{error:'Escolha outro jogador da família'});
+ if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
+  return json(res,403,{error:'Você precisa estar no servidor da família'});
+ try{
+  const players=await opusGuests(),from=players.find(p=>p.name===opusName(u)),to=players.find(p=>p.name===target);
+  if(!from||!to||from.dimension!==to.dimension)return json(res,409,{error:'Os dois precisam estar no mesmo mundo e dimensão'});
+  const r=await fetch('http://127.0.0.1:4173/__teleport',{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:opusName(u),to:target}),
+   signal:AbortSignal.timeout(3500)
+  });
+  const data=await r.json();
+  if(!data.ok)return json(res,409,{error:data.error||'Não foi possível teleportar'});
+  lastOpusTeleport.set(u.id,current);
+  return json(res,200,{ok:true,dimension:data.dimension});
+ }catch{return json(res,503,{error:'Mundo ocupado. Tente novamente em alguns instantes'})}
+}
+if(pathname==='/api/opuscraft/world-backups'&&req.method==='GET'){
+ return json(res,200,{backups:opusBackupIndex(u).sort((a,b)=>b.created.localeCompare(a.created))});
+}
+const opusUpload=pathname.match(new RegExp('^/api/opuscraft/world-backups/(.+)$'));
+if(opusUpload&&req.method==='POST'){
+ const id=decodeURIComponent(opusUpload[1]);
+ if(!validOpusWorldId(id))return json(res,400,{error:'Identificador de mundo inválido'});
+ const max=64*1024*1024;
+ if(Number(req.headers['content-length']||0)>max)return json(res,413,{error:'O backup ultrapassa 64 MB'});
+ if(req.headers['content-type']!=='application/octet-stream')return json(res,415,{error:'Tipo de arquivo não suportado'});
+ const dir=opusBackupDir(u);
+ fs.mkdirSync(dir,{recursive:true,mode:0o700});
+ const version=String(now())+'-'+crypto.randomBytes(4).toString('hex');
+ const filename=opusFileName(id,version),tmp=path.join(dir,'.'+filename+'.part');
+ let chunks=[],size=0;
+ for await(const data of req){size+=data.length;if(size>max)return json(res,413,{error:'O backup ultrapassa 64 MB'});chunks.push(data)}
+ if(size<32)return json(res,400,{error:'O backup está vazio ou incompleto'});
+ const previous=opusBackupIndex(u);
+ const total=previous.reduce((n,p)=>n+p.size,0);
+ if(total+size>400*1024*1024)return json(res,413,{error:'Limite de 400 MB de backups por conta'});
+ fs.writeFileSync(tmp,Buffer.concat(chunks),{mode:0o600});
+ fs.renameSync(tmp,path.join(dir,filename));
+ const items=[{id,version,size,created:new Date().toISOString()},...previous];
+ const kept=items.filter((item,index)=>items.filter(v=>v.id===item.id).indexOf(item)<3).slice(0,100);
+ const tempIndex=path.join(dir,'index.json.tmp');
+ fs.writeFileSync(tempIndex,JSON.stringify(kept),{mode:0o600});
+ fs.renameSync(tempIndex,path.join(dir,'index.json'));
+ for(const p of previous)if(!kept.some(b=>b.id===p.id&&b.version===p.version))try{fs.unlinkSync(path.join(dir,opusFileName(p.id,p.version)))}catch{}
+ return json(res,200,{ok:true,version,size});
+}
+const opusDownload=pathname.match(new RegExp('^/api/opuscraft/world-backups/(.+)/([0-9]{13}-[a-f0-9]{8})$'));
+if(opusDownload&&req.method==='GET'){
+ const id=decodeURIComponent(opusDownload[1]),version=opusDownload[2];
+ const record=opusBackupIndex(u).find(b=>b.id===id&&b.version===version);
+ if(!record)return json(res,404,{error:'Backup não encontrado'});
+ const file=path.join(opusBackupDir(u),opusFileName(id,version));
+ return fs.readFile(file,(err,bytes)=>{
+  if(err){res.writeHead(404).end();return}
+  res.writeHead(200,{'Content-Type':'application/octet-stream','Cache-Control':'private,no-store',
+   'Content-Disposition':'attachment; filename="opuscraft-backup.world"'});
+  res.end(bytes);
+ });
+}
 if(pathname==='/api/opuscraft/identity'&&req.method==='GET')return json(res,200,{playerName:opusName(u),joinCode:'GFC2026X'});
 if(pathname==='/api/opuscraft/status'&&req.method==='GET')return json(res,200,await opusStatus());
 if(pathname==='/api/admin/opuscraft/status'&&req.method==='GET'){

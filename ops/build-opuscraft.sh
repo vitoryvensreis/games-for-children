@@ -12,6 +12,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
 (
  cd "$TMP/opuscraft"
  npm ci --no-audit --no-fund
+ cp "$REPO_ROOT/ops/gfc-world-backup.ts" src/gfc-world-backup.ts
  node "$REPO_ROOT/ops/patch-opuscraft.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )

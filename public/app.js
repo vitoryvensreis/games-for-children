@@ -208,8 +208,9 @@ async function refreshMinecraftDashboard(){
   el.innerHTML='<div class="minecraft-admin-summary">'+
     '<div class="panel"><strong>Servidor</strong><p>'+(data.ready?'Conectado':'Indisponível')+'</p></div>'+
     '<div class="panel"><strong>Proteção</strong><p>'+(data.pluginActive?'FamilyPlay ativo':'Plugin não carregado')+'</p></div>'+
-    '<div class="panel"><strong>Guias / NPCs</strong><p>'+Number(data.guides?.count||0)+' de 3</p></div>'+
+    '<div class="panel"><strong>Animais / Monstros</strong><p>'+Number(data.creatures?.animals||0)+' / '+Number(data.creatures?.monsters||0)+'</p></div>'+
     '<div class="panel"><strong>Jogadores</strong><p>'+data.players.filter(p=>p.online).length+' online</p></div></div>'+
+    '<div class="panel"><h3>Vida no mundo</h3><p class="sub">Animais caminham e fogem quando alguém se aproxima. Monstros perseguem nas áreas de aventura, sem machucar. Jogadores podem atravessar portais físicos.</p><p class="stats">Em movimento na última amostra: '+Number(data.creatures?.moving||0)+' · Portais registrados: '+Number(data.creatures?.portalEntrances||0)+'</p></div>'+ 
     '<div class="panel"><h3>Mundos e salvamento</h3><div class="row"><button id="mcSave" class="success" '+(!data.ready?'disabled':'')+'>Salvar mundos agora</button></div>'+
     data.worlds.map(world=>'<div class="mc-world-line"><div><strong>'+esc(world.title)+'</strong><small> '+(world.exists?new Date(world.updatedAt).toLocaleString('pt-BR'):'Mundo indisponível')+'</small></div>'+
     '<div class="row"><button class="ghost" data-mc-backup="'+esc(world.id)+'" '+(!world.exists||!data.ready?'disabled':'')+'>Criar backup</button>'+

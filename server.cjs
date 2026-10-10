@@ -103,13 +103,15 @@ function minecraftMining(u){
  }catch{}
  return {inventory,mode:'creative-mining'};
 }
-function minecraftGuidesStatus(){
- const file=path.join(MCGALAXY_DIR,'properties','gfc-family-guides.status');
- try{
-  const lines=fs.readFileSync(file,'utf8').split(/\r?\n/);
-  const count=Math.max(0,Math.min(3,Number(lines.find(line=>line.startsWith('count='))?.slice(6))||0));
-  return {count,ready:count===3};
- }catch{return {count:0,ready:false}}
+function minecraftCreatureStatus(){
+ const read=(name)=>{try{return fs.readFileSync(path.join(MCGALAXY_DIR,'properties',name),'utf8')}catch{return ''}};
+ const num=(source,key)=>Math.max(0,Math.min(1000,Number(new RegExp('^'+key+'=(\\d+)','m').exec(source)?.[1])||0));
+ const creatures=read('gfc-family-creatures.status');
+ const movement=read('gfc-family-bot-movement.status');
+ const portals=read('gfc-family-portals.status');
+ return {animals:num(creatures,'animals'),monsters:num(creatures,'monsters'),
+  humans:num(creatures,'humans'),moving:num(movement,'moved'),
+  portalEntrances:num(portals,'entrances')};
 }
 function minecraftPlayersOverview(){
  let spotLines=[];try{spotLines=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-family-positions.tsv'),'utf8').split(/\r?\n/)}catch{}
@@ -119,14 +121,14 @@ function minecraftPlayersOverview(){
  }));
 }
 function minecraftStatus(){
- const guides=minecraftGuidesStatus();
+ const creatures=minecraftCreatureStatus();
  const worlds=Object.entries(WORLDS).map(([id,title])=>{
   const filename=path.join(MCGALAXY_DIR,'levels',id+'.lvl');
   try{const st=fs.statSync(filename);return {id,title,exists:st.size>0,bytes:st.size,updatedAt:st.mtime.toISOString()}}catch{return {id,title,exists:false,bytes:0}}
  });
  const props=path.join(MCGALAXY_DIR,'properties','server.properties');
  let main=WORLDS[state.minecraftMainWorld]?state.minecraftMainWorld:'mineracao';try{const m=/^main-name\s*=\s*(\S+)/mi.exec(fs.readFileSync(props,'utf8'));if(m&&WORLDS[m[1]])main=m[1]}catch{}
- return {ready:mcgalaxyReady,pluginActive:fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready')),guides,worlds,main,players:minecraftPlayersOverview(),backups:listBackups(MINECRAFT_BACKUPS),controls:state.minecraftControls,maintenance:minecraftMaintenance};
+ return {ready:mcgalaxyReady,pluginActive:fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready')),creatures,worlds,main,players:minecraftPlayersOverview(),backups:listBackups(MINECRAFT_BACKUPS),controls:state.minecraftControls,maintenance:minecraftMaintenance};
 }
 async function minecraftSave(){
  if(!mcgalaxyReady||!mcgalaxyProcess?.stdin?.writable)throw Error('Servidor Minecraft indisponível');

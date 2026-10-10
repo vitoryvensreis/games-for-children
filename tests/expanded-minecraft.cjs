@@ -34,12 +34,16 @@ test('Creative mining uses server-authoritative wildlife, weather, equipment and
  const menu=fs.readFileSync(path.join(__dirname,'../public/classicube/family-menu.js'),'utf8');
  const html=fs.readFileSync(path.join(__dirname,'../public/classicube/index.html'),'utf8');
  assert.match(plugin,/WalkInstruction\(\)\.Parse/);
- assert.match(plugin,/SetModel\(models\[a\]\)/);
- assert.match(plugin,/PlayerBot\.Add\(animal\)/);
+ assert.match(plugin,/creature\.SetModel\(model\)/);
+ assert.match(plugin,/PlayerBot\.Add\(creature,false\)/);
  assert.match(plugin,/level\.Config\.Weather=raining\?1:0/);
  assert.match(plugin,/level\.Config\.SkyColor=sky\[phase\]/);
  assert.match(plugin,/player\.SendCurrentEnv\(\)/);
  assert.match(plugin,/Portal\.Set\(lvl\.MapName/);
+ assert.match(plugin,/SetupHubPortals\(lvl\)/);
+ assert.match(plugin,/PlayerBot\.Remove\(old,false\)/);
+ assert.match(plugin,/new WalkInstruction\(\)\.Parse/);
+ assert.match(plugin,/Monster\(PlayerBot bot\)/);
  assert.match(plugin,/Block\.Portal_Blue/);
  assert.match(plugin,/b\.Sword=tier/);
  assert.match(plugin,/b\.Armor=tier/);
@@ -49,5 +53,6 @@ test('Creative mining uses server-authoritative wildlife, weather, equipment and
  assert.match(menu,/data-action="exploracao"/);
  assert.match(menu,/data-action="portal"/);
  assert.match(menu,/data-item="espada ferro"/);
+ assert.match(menu,/data-action="hub"/);
  assert.doesNotMatch(html,/mcVitals|survival-hud\.js/);
 });

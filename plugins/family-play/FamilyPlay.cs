@@ -21,7 +21,8 @@ public sealed class FamilyPlay : Plugin {
  private static readonly string ConfigPath = "properties/gfc-family-policy.txt";
  private static readonly string QuestFile = "properties/gfc-family-adventures.tsv";
  private static readonly string PositionFile = "properties/gfc-family-positions.tsv";
- private static readonly string GuideStatusFile = "properties/gfc-family-guides.status";
+ private static readonly string CreaturesStatusFile = "properties/gfc-family-creatures.status";
+ private static readonly string PortalsStatusFile = "properties/gfc-family-portals.status";
   private static readonly string InventoryFile = "properties/gfc-mining-inventory.tsv";
  private sealed class MiningBag { public int Wood,Stone,Coal,Iron,Gold,Apples,Tool,Sword,Armor; }
  private static readonly Dictionary<string,MiningBag> bags=new Dictionary<string,MiningBag>(StringComparer.OrdinalIgnoreCase);
@@ -30,7 +31,8 @@ public sealed class FamilyPlay : Plugin {
  private SchedulerTask climateTimer;
  private SchedulerTask wanderTimer;
  private static readonly Dictionary<string,Position> botHomes=new Dictionary<string,Position>(StringComparer.OrdinalIgnoreCase);
- private static readonly Dictionary<string,bool> botPhases=new Dictionary<string,bool>(StringComparer.OrdinalIgnoreCase);
+ private static readonly Dictionary<string,int> botStalls=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
+ private static readonly Dictionary<string,DateTime> botGoals=new Dictionary<string,DateTime>(StringComparer.OrdinalIgnoreCase);
  private static readonly Dictionary<string,Position> lastBotPositions=new Dictionary<string,Position>(StringComparer.OrdinalIgnoreCase);
  private static readonly Random random=new Random();
 
@@ -49,7 +51,7 @@ public sealed class FamilyPlay : Plugin {
  private static int teamWins=0;
  private static readonly int[,] treasureTargets=new int[,] { {102,106,13},{96,50,19},{143,89,16} };
  private static readonly int[,] sprintTargets=new int[,] { {96,50,19},{143,89,16},{102,106,13} };
- private static readonly string[] treasureClues=new string[]{"Procure o Guia da Praca perto da fonte!", "Encontre o Guardiao da Ponte sobre o rio!", "Visite a Torre do Explorador junto ao lago!"};
+ private static readonly string[] treasureClues=new string[]{"Procure a fonte da Praca!", "Encontre a Ponte sobre o rio!", "Visite a Torre do Explorador junto ao lago!"};
  private static readonly string[] sprintClues=new string[]{"Corra ate a Ponte!", "Agora chegue a Torre!", "Volte para a Fonte da Praca!"};
  private sealed class Quest {
   public int Stars,Treasures,Sprints,Stage;
@@ -73,16 +75,16 @@ public sealed class FamilyPlay : Plugin {
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
   OnBlockChangingEvent.Register(MiningChange, Priority.Low);
   OnPlayerMoveEvent.Register(AdventureMove, Priority.Low);
-  OnLevelLoadedEvent.Register(InstallGuides, Priority.Low);
+  OnLevelLoadedEvent.Register(SetupFamilyWorld, Priority.Low);
   OnPlayerSpawningEvent.Register(RestoreSpotOnSpawn,Priority.High);
   OnJoinedLevelEvent.Register(RestorePreviousWorld,Priority.Low);
   OnPlayerConnectEvent.Register(RememberReturningPlayer,Priority.Low);
   OnPlayerDisconnectEvent.Register(TrackDisconnect,Priority.Low);
   // Main village may have loaded before this plugin subscribed to OnLevelLoaded.
-  foreach(Level existing in LevelInfo.Loaded.Items)InstallGuides(existing);
+  foreach(Level existing in LevelInfo.Loaded.Items)SetupFamilyWorld(existing);
   climateTimer=Server.MainScheduler.QueueRepeat(task=>UpdateClimate(),null,TimeSpan.FromSeconds(25));
   UpdateClimate();
-  wanderTimer=Server.MainScheduler.QueueRepeat(task=>WanderBots(),null,TimeSpan.FromSeconds(5));
+  wanderTimer=Server.MainScheduler.QueueRepeat(task=>WanderBots(),null,TimeSpan.FromSeconds(2));
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
@@ -90,7 +92,7 @@ public sealed class FamilyPlay : Plugin {
   OnBlockChangingEvent.Unregister(ProtectHouse);
   OnBlockChangingEvent.Unregister(MiningChange);
   OnPlayerMoveEvent.Unregister(AdventureMove);
-  OnLevelLoadedEvent.Unregister(InstallGuides);
+  OnLevelLoadedEvent.Unregister(SetupFamilyWorld);
   if(climateTimer!=null)Server.MainScheduler.Cancel(climateTimer);
   if(wanderTimer!=null)Server.MainScheduler.Cancel(wanderTimer);
   SaveBags();
@@ -98,7 +100,8 @@ public sealed class FamilyPlay : Plugin {
   OnJoinedLevelEvent.Unregister(RestorePreviousWorld);
   OnPlayerConnectEvent.Unregister(RememberReturningPlayer);
   OnPlayerDisconnectEvent.Unregister(TrackDisconnect);
-  try{File.Delete(GuideStatusFile);}catch{}
+  try{File.Delete(CreaturesStatusFile);}catch{}
+  try{File.Delete(PortalsStatusFile);}catch{}
   Command.Unregister(family);
   try{File.Delete("properties/gfc-familyplay.ready");}catch{}
  }
@@ -188,98 +191,290 @@ public sealed class FamilyPlay : Plugin {
   p.Message("&aVoce chegou a sua casinha!");
  }
 
- // Three visible guide NPCs added to the existing village without changing its blocks.
- // They are safe to restore after restarts; the bot list is deduplicated by name.
- private static void InstallGuides(Level lvl){
-  if(lvl==null)return;
-  if(String.Equals(lvl.MapName,"exploracao",StringComparison.OrdinalIgnoreCase)||String.Equals(lvl.MapName,"mineracao",StringComparison.OrdinalIgnoreCase)){InstallWildlife(lvl);return;}
-  if(!String.Equals(lvl.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
-  string[] names=new string[]{"Guia_Praca","Guia_Ponte","Guia_Torre"};
-  int[,] spots=new int[,]{{92,100},{99,57},{142,88}};
-  int created=0,found=0;
-  for(int n=0;n<names.Length;n++){
-   bool exists=false;
-   foreach(PlayerBot existing in lvl.Bots.Items){
-    if(existing.name.Equals(names[n],StringComparison.OrdinalIgnoreCase)){exists=true;found++;break;}
-   }
-   if(exists)continue;
-   int x=spots[n,0],z=spots[n,1],ground=43;
-   for(int y=lvl.Height-4;y>1;y--){
-    if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
-   }
-   PlayerBot guide=new PlayerBot(names[n],lvl);
-   guide.Owner="GamesForChildren";
-   guide.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
-   guide.TargetPos=Position.FromFeetBlockCoords(x+2,ground,z+1);
-   guide.movement=true;guide.movementSpeed=4;
-   guide.SetYawPitch(0,0);
-   guide.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+2)*32+"",ground*32+"",(z+1)*32+"","0","0"}));
-   guide.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-1)*32+"",ground*32+"",(z-1)*32+"","0","0"}));
-   PlayerBot.Add(guide);
-   created++;found++;
-  }
-
-  // Peaceful ambient animals. These are actual ClassiCube model entities,
-  // not hostile modern Minecraft mobs, and they do not destroy blocks.
-  string[] critters=new string[]{"Ovelha_01","Ovelha_02","Porquinho_01","Porquinho_02","Galinha_01"};
-  string[] models=new string[]{"sheep","sheep","pig","pig","chicken"};
-  int[,] areas=new int[,]{{83,118},{113,120},{111,86},{76,117},{118,109}};
-  int animalCount=0;
-  for(int a=0;a<critters.Length;a++){
-   bool exists=false;
-   foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==critters[a]){exists=true;break;}
-   if(exists){animalCount++;continue;}
-   int x=areas[a,0],z=areas[a,1],ground=44;
-   for(int y=lvl.Height-5;y>1;y--)if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
-   PlayerBot animal=new PlayerBot(critters[a],lvl);
-   animal.Owner="GamesForChildren";animal.SetModel(models[a]);
-   animal.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
-   animal.TargetPos=Position.FromFeetBlockCoords(x+2,ground,z+1);
-   animal.movement=true;animal.movementSpeed=3;
-   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+3)*32+"",ground*32+"",(z+2)*32+"","0","0"}));
-   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-2)*32+"","0","0"}));
-   PlayerBot.Add(animal);
-   animalCount++;
-  }
-  // Written only after verification against real loaded bot entities, not on DLL compilation.
-  try{File.WriteAllText(GuideStatusFile,"map="+lvl.MapName+"\ncount="+found+"\ncreated="+created+"\nanimals="+animalCount+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
-  catch(Exception e){Logger.Log(LogType.Warning,"FamilyPlay guide status: "+e.Message);}
+ // All non-player entities are peaceful animals or non-damaging fantasy monsters.
+ // MCGalaxy's BotsScheduler sets movement=false every 100ms; updating TargetPos alone
+ // makes a bot stop. We set an actual WalkInstruction for each new destination.
+ private static readonly string[] WildlifeNames={"Ovelha_01","Ovelha_02","Porquinho_01","Porquinho_02","Galinha_01"};
+ private static readonly string[] WildlifeModels={"sheep","sheep","pig","pig","chicken"};
+ private static readonly int[,] WildlifePlaces={{83,118},{113,120},{111,86},{76,117},{118,109}};
+ private static bool FamilyWorld(Level lvl){
+  if(lvl==null)return false;
+  return lvl.MapName=="vila_familia"||lvl.MapName=="aventura"||
+         lvl.MapName=="exploracao"||lvl.MapName=="mineracao";
  }
-
- // Real MCGalaxy bot movement requires 'movement=true' and a TargetPos;
- // WalkInstruction entries alone do not start autonomous motion.
- private static void WanderBots(){
-  int moved=0,total=0;
-  foreach(Level level in LevelInfo.Loaded.Items){
-   if(level.MapName!="vila_familia"&&level.MapName!="exploracao"&&level.MapName!="mineracao")continue;
-   foreach(PlayerBot bot in level.Bots.Items){
-    if(bot.Owner!="GamesForChildren")continue;
-    total++;
-    string key=level.MapName+"/"+bot.name;
-    Position home;
-    if(!botHomes.TryGetValue(key,out home)){home=bot.Pos;botHomes[key]=home;}
-    Position previous;
-    if(lastBotPositions.TryGetValue(key,out previous)&&(previous.X!=bot.Pos.X||previous.Z!=bot.Pos.Z))moved++;
-    lastBotPositions[key]=bot.Pos;
-    bool reverse;
-    botPhases.TryGetValue(key,out reverse);
-    botPhases[key]=!reverse;
-    int dx=random.Next(-4,5),dz=random.Next(-4,5);
-    if(dx==0&&dz==0)dx=reverse?2:-2;
-    int x=home.X/32+dx,y=home.Y/32,z=home.Z/32+dz;
-    if(x>1&&z>1&&y>2&&x<level.Width-2&&z<level.Length-2&&y<level.Height-2
-       &&level.GetBlock((ushort)x,(ushort)y,(ushort)z)==Block.Air
-       &&level.GetBlock((ushort)x,(ushort)(y+1),(ushort)z)==Block.Air
-       &&(level.GetBlock((ushort)x,(ushort)(y-1),(ushort)z)!=Block.Air
-          ||level.GetBlock((ushort)x,(ushort)(y-2),(ushort)z)!=Block.Air)){
-     bot.TargetPos=new Position(home.X+dx*32,home.Y,home.Z+dz*32);
-    }
-    bot.movement=true;
-    bot.movementSpeed=bot.name.StartsWith("Guia_")?4:3;
+ private static bool Monster(PlayerBot bot){
+  return bot.name.StartsWith("Creeper_")||bot.name.StartsWith("Esqueleto_")||
+         bot.name.StartsWith("Aranha_");
+ }
+ private static bool IsWildlife(PlayerBot bot){
+  return bot.Model=="sheep"||bot.Model=="pig"||bot.Model=="chicken"||
+         bot.Model=="creeper"||bot.Model=="skeleton"||bot.Model=="spider";
+ }
+ private static bool IsFloor(ushort b){
+  return b==Block.Grass||b==Block.Dirt||b==Block.Stone||b==Block.Cobblestone||
+         b==Block.Sand||b==Block.Gravel||b==Block.Brick||b==Block.Wood||
+         b==Block.DoubleSlab;
+ }
+ // Returns feet above solid terrain without teleporting mobs inside a mountain.
+ private static int FindFeet(Level lvl,int x,int z){
+  if(x<2||z<2||x>=lvl.Width-2||z>=lvl.Length-2)return -1;
+  for(int y=lvl.Height-5;y>=3;y--){
+   if(!IsFloor(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)))continue;
+   if(lvl.GetBlock((ushort)x,(ushort)(y+1),(ushort)z)!=Block.Air||
+      lvl.GetBlock((ushort)x,(ushort)(y+2),(ushort)z)!=Block.Air)continue;
+   // Avoid water and exposed tree canopies.
+   if(lvl.GetBlock((ushort)x,(ushort)(y+3),(ushort)z)==Block.Water)continue;
+   return y+1;
+  }
+  return -1;
+ }
+ private static bool ClearPath(Level lvl,int x,int z,int fromY){
+  int y=FindFeet(lvl,x,z);
+  return y>2&&Math.Abs(y-fromY)<=1;
+ }
+ private static void SetupFamilyWorld(Level lvl){
+  if(!FamilyWorld(lvl))return;
+  // Remove old stationary human guides (including persisted copies on the VPS).
+  bool removed=false;
+  foreach(PlayerBot old in lvl.Bots.Items){
+   if(old.name.StartsWith("Guia_") || !IsWildlife(old)){
+    PlayerBot.Remove(old,false);removed=true;
    }
   }
-  try{File.WriteAllText("properties/gfc-family-bot-movement.status","total="+total+"\nmoved="+moved+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
-  catch(Exception e){Logger.Log(LogType.Warning,"NPC movement status: "+e.Message);}
+  if(lvl.MapName=="vila_familia"){
+   for(int i=0;i<WildlifeNames.Length;i++)
+    AddCreature(lvl,WildlifeNames[i],WildlifeModels[i],WildlifePlaces[i,0],WildlifePlaces[i,1]);
+  } else {
+   string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago",
+                   "Porquinho_Rio","Galinha_Trilha","Ovelha_Colina","Porco_Bosque"};
+   string[] models={"sheep","pig","chicken","sheep","pig","chicken","sheep","pig"};
+   int[,] places={{187,207},{220,190},{183,167},{245,171},{206,232},{170,224},{257,207},{217,154}};
+   for(int i=0;i<names.Length;i++)AddCreature(lvl,names[i],models[i],places[i,0],places[i,1]);
+   string suffix=lvl.MapName=="mineracao"?"_M":lvl.MapName=="aventura"?"_A":"_E";
+   int midX=lvl.Width/2,midZ=lvl.Length/2;
+   AddCreature(lvl,"Creeper_01"+suffix,"creeper",midX-19,midZ+13);
+   AddCreature(lvl,"Esqueleto_01"+suffix,"skeleton",midX+19,midZ+16);
+   AddCreature(lvl,"Aranha_01"+suffix,"spider",midX-12,midZ-23);
+   AddCreature(lvl,"Creeper_02"+suffix,"creeper",midX+22,midZ-18);
+  }
+  if(removed)BotsFile.Save(lvl);
+  SetupHubPortals(lvl);
+  WriteCreatureStatus();
+ }
+ private static void AddCreature(Level lvl,string name,string model,int x,int z){
+  PlayerBot creature=null;
+  foreach(PlayerBot found in lvl.Bots.Items){
+   if(found.name.Equals(name,StringComparison.OrdinalIgnoreCase)){creature=found;break;}
+  }
+  if(creature!=null){
+   if(creature.Owner!="GamesForChildren")return;
+   if(creature.Model!=model)creature.SetModel(model);
+  }else{
+   x=Math.Min(Math.Max(3,x),lvl.Width-4);z=Math.Min(Math.Max(3,z),lvl.Length-4);
+   int ground=FindFeet(lvl,x,z);
+   if(ground<0)return;
+   creature=new PlayerBot(name,lvl);
+   creature.Owner="GamesForChildren";
+   creature.SetModel(model);
+   creature.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
+   PlayerBot.Add(creature,false);
+   BotsFile.Save(lvl);
+  }
+  creature.Instructions.Clear();
+  creature.cur=0;creature.hunt=false;creature.kill=false;
+  creature.movementSpeed=Monster(creature)?4:3;
+  botHomes[lvl.MapName+"/"+creature.name]=creature.Pos;
+  SetCreatureGoal(creature,creature.Pos.X/32+2,creature.Pos.Y/32,creature.Pos.Z/32+2);
+ }
+ private static void SetCreatureGoal(PlayerBot bot,int x,int y,int z){
+  // MUST update WalkInstruction, because scheduler overwrites movement flag.
+  Position goal=Position.FromFeetBlockCoords(x,y,z);
+  bot.Instructions.Clear();
+  bot.Instructions.Add(new WalkInstruction().Parse(new string[]{
+   "walk",goal.X.ToString(),goal.Y.ToString(),goal.Z.ToString(),"0","0"
+  }));
+  bot.cur=0;bot.TargetPos=goal;bot.movement=true;
+  botGoals[bot.level.MapName+"/"+bot.name]=DateTime.UtcNow;
+ }
+ private static void WriteCreatureStatus(){
+  int animals=0,monsters=0,humans=0;
+  foreach(Level lvl in LevelInfo.Loaded.Items){
+   if(!FamilyWorld(lvl))continue;
+   foreach(PlayerBot b in lvl.Bots.Items){
+    if(Monster(b))monsters++;
+    else if(IsWildlife(b))animals++;
+    else humans++;
+   }
+  }
+  try{File.WriteAllText(CreaturesStatusFile,"animals="+animals+"\nmonsters="+monsters+
+   "\nhumans="+humans+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
+  catch(Exception ex){Logger.Log(LogType.Warning,"Creature status: "+ex.Message);}
+ }
+ private static Player ClosestFamilyPlayer(Level lvl,Position pos,int range){
+  Player closest=null;long best=(long)range*range*32*32;
+  foreach(Player p in PlayerInfo.Online.Items){
+   if(p.level!=lvl||!IsAllowed(p))continue;
+   long dx=p.Pos.X-pos.X,dz=p.Pos.Z-pos.Z,dy=p.Pos.Y-pos.Y;
+   long dist=dx*dx+dz*dz+dy*dy;
+   if(dist<best){best=dist;closest=p;}
+  }
+  return closest;
+ }
+ private static void WanderBots(){
+  int moved=0,total=0,animals=0,monsters=0;
+  foreach(Level lvl in LevelInfo.Loaded.Items){
+   if(!FamilyWorld(lvl))continue;
+   foreach(PlayerBot bot in lvl.Bots.Items){
+    if(bot.Owner!="GamesForChildren"||!IsWildlife(bot))continue;
+    total++;if(Monster(bot))monsters++;else animals++;
+    string key=lvl.MapName+"/"+bot.name;
+    Position home; if(!botHomes.TryGetValue(key,out home)){home=bot.Pos;botHomes[key]=home;}
+    Position previous;
+    bool moving=lastBotPositions.TryGetValue(key,out previous)&&
+        (Math.Abs(previous.X-bot.Pos.X)>3||Math.Abs(previous.Z-bot.Pos.Z)>3);
+    if(moving){moved++;botStalls[key]=0;}
+    else botStalls[key]=botStalls.ContainsKey(key)?botStalls[key]+1:0;
+    lastBotPositions[key]=bot.Pos;
+    bool monster=Monster(bot);
+    Player near=ClosestFamilyPlayer(lvl,bot.Pos,monster?12:5);
+    bool reached=Math.Abs(bot.Pos.X-bot.TargetPos.X)<36&&Math.Abs(bot.Pos.Z-bot.TargetPos.Z)<36;
+    bool stale=!botGoals.ContainsKey(key)||(DateTime.UtcNow-botGoals[key]).TotalSeconds>9;
+    // Monsters pursue but do not attack (no survival health or damage).
+    if(monster&&near!=null){
+     int px=near.Pos.X/32,pz=near.Pos.Z/32;
+     if(!ClearPath(lvl,px,pz,bot.Pos.Y/32)){
+      // The target is separated by a wall or cliff; keep searching for an alternate route.
+     }else if(botStalls[key]>=3||reached||
+      Math.Abs(bot.TargetPos.X-near.Pos.X)>64||Math.Abs(bot.TargetPos.Z-near.Pos.Z)>64){
+      SetCreatureGoal(bot,px,FindFeet(lvl,px,pz),pz);
+     }
+     continue;
+    }
+    if(!reached&&botStalls[key]<3&&!stale)continue;
+    int baseX=home.X/32,baseZ=home.Z/32;
+    int startX=bot.Pos.X/32,startY=bot.Pos.Y/32,startZ=bot.Pos.Z/32;
+    bool chosen=false;
+    for(int attempt=0;attempt<12;attempt++){
+     int dx=random.Next(-7,8),dz=random.Next(-7,8);
+     if(Math.Abs(dx)+Math.Abs(dz)<3)continue;
+     // Animals seek a safe clearing near their herd; avoid cliff dives.
+     int x=startX+dx,z=startZ+dz;
+     if(Math.Abs(x-baseX)>14||Math.Abs(z-baseZ)>14)continue;
+     int feet=FindFeet(lvl,x,z);
+     if(feet<0||Math.Abs(feet-startY)>1)continue;
+     // Prefer walkable straight lines; engine performs short step-up/down.
+     bool clear=true;
+     for(int step=1;step<=4;step++){
+      int sx=startX+dx*step/4,sz=startZ+dz*step/4;
+      if(!ClearPath(lvl,sx,sz,startY)){clear=false;break;}
+     }
+     if(!clear)continue;
+     // Passive animals retreat from nearby players if approached.
+     if(!monster&&near!=null){
+      long oldDX=bot.Pos.X-near.Pos.X,oldDZ=bot.Pos.Z-near.Pos.Z;
+      long newDX=x*32-near.Pos.X,newDZ=z*32-near.Pos.Z;
+      if(newDX*newDX+newDZ*newDZ<oldDX*oldDX+oldDZ*oldDZ)continue;
+     }
+     SetCreatureGoal(bot,x,feet,z);chosen=true;break;
+    }
+    if(!chosen)botGoals[key]=DateTime.UtcNow;
+   }
+  }
+  WriteCreatureStatus();
+  try{File.WriteAllText("properties/gfc-family-bot-movement.status",
+     "total="+total+"\nmoved="+moved+"\nanimals="+animals+
+     "\nmonsters="+monsters+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
+  catch(Exception ex){Logger.Log(LogType.Warning,"Creature movement status: "+ex.Message);}
+ }
+ // Hub portals are one-way blocks; installing links on each map makes travel round-trip.
+ private static readonly string[] HubMaps={"vila_familia","aventura","exploracao","mineracao"};
+ private static readonly string[] HubNames={"Vila","Aventura","Exploracao","Mineracao"};
+ private static readonly int[,] HubOffsets={{-12,-12},{12,-12},{-12,12},{12,12}};
+ private static readonly Dictionary<string,Position> hubLocations=new Dictionary<string,Position>();
+ private static bool HasPortalSpace(Level lvl,int x,int y,int z){
+  if(x<4||z<4||x+4>=lvl.Width-4||z>=lvl.Length-4||y+5>=lvl.Height)return false;
+  for(int a=-1;a<=4;a++)for(int dz=-1;dz<=1;dz++)for(int h=0;h<5;h++){
+   int xx=x+a,yy=y+h,zz=z+dz;
+   if(lvl.GetBlock((ushort)xx,(ushort)yy,(ushort)zz)!=Block.Air)return false;
+   // Only the actual frame's base needs to be solid; sides have clearance.
+   if(h==0&&dz==0&&a>=0&&a<4&&
+      !IsFloor(lvl.GetBlock((ushort)xx,(ushort)(y-1),(ushort)zz)))return false;
+  }
+  return true;
+ }
+ private static Position SafeLanding(Level lvl,int centerX,int centerZ){
+  for(int radius=0;radius<=14;radius++)for(int dx=-radius;dx<=radius;dx++)for(int dz=-radius;dz<=radius;dz++){
+   if(radius>0&&Math.Abs(dx)!=radius&&Math.Abs(dz)!=radius)continue;
+   int x=centerX+dx,z=centerZ+dz,y=FindFeet(lvl,x,z);
+   if(y<0)continue;
+   return Position.FromFeetBlockCoords(x,y,z);
+  }
+  return Position.FromFeetBlockCoords(Math.Min(lvl.Width-3,centerX),Math.Min(lvl.Height-3,54),Math.Min(lvl.Length-3,centerZ));
+ }
+ private static void SetupHubPortals(Level lvl){
+  int centerX=lvl.MapName=="vila_familia"||lvl.MapName=="aventura"?96:lvl.Width/2;
+  int centerZ=lvl.MapName=="vila_familia"||lvl.MapName=="aventura"?106:lvl.Length/2;
+  // Keep previously persisted portals without recreating or overriding user builds.
+  int existing=Portal.GetAllCoords(lvl.MapName).Count;
+  if(existing>=3){
+   // A restart must reconstruct the menu destination without rewriting any portal.
+   var registered=Portal.GetAllCoords(lvl.MapName);
+   if(registered.Count>0){
+    var first=registered[0];
+    int x=first.X,z=Math.Max(3,first.Z-3);
+    int safeY=FindFeet(lvl,x,z);
+    if(safeY>0)hubLocations[lvl.MapName]=Position.FromFeetBlockCoords(x,safeY,z);
+   }
+   WritePortalsStatus();return;
+  }
+  int created=0;
+  for(int target=0;target<HubMaps.Length;target++){
+   string destination=HubMaps[target];
+   if(destination==lvl.MapName)continue;
+   int x=0,y=0,z=0;
+   bool found=false;
+   int sx=centerX+HubOffsets[target,0],sz=centerZ+HubOffsets[target,1];
+   // Seek unmodified, solid terrain: never overwrite a child-built block.
+   for(int radius=0;radius<=20&&!found;radius++){
+    for(int ox=-radius;ox<=radius&&!found;ox++)for(int oz=-radius;oz<=radius&&!found;oz++){
+     if(radius>0&&Math.Abs(ox)!=radius&&Math.Abs(oz)!=radius)continue;
+     int tx=sx+ox,tz=sz+oz;
+     int feet=FindFeet(lvl,tx,tz);
+     if(feet<0||!HasPortalSpace(lvl,tx,feet,tz))continue;
+     if(Math.Abs(tx-centerX)<4&&Math.Abs(tz-centerZ)<4)continue;
+     x=tx;y=feet;z=tz;found=true;
+    }
+   }
+   if(!found){Logger.Log(LogType.Warning,"No safe family portal site: "+lvl.MapName+" > "+destination);continue;}
+   try{
+    int arrX=destination=="vila_familia"||destination=="aventura"?96:192;
+    int arrZ=destination=="vila_familia"?106:destination=="aventura"?96:192;
+    Level dest=LevelInfo.FindExact(destination);
+    Position land=dest!=null?SafeLanding(dest,arrX,arrZ):
+       Position.FromFeetBlockCoords(arrX,destination=="vila_familia"?45:50,arrZ);
+    // Create the DB route first. If block placing fails, next load can retry.
+    for(int a=1;a<=2;a++)for(int h=1;h<=3;h++)
+     Portal.Set(lvl.MapName,(ushort)(x+a),(ushort)(y+h),(ushort)z,
+       (ushort)(land.X/32),(ushort)(land.Y/32),(ushort)(land.Z/32),destination);
+    for(int a=0;a<4;a++)for(int h=0;h<5;h++)
+     lvl.Blockchange((ushort)(x+a),(ushort)(y+h),(ushort)z,
+      a==0||a==3||h==0||h==4?(ushort)49:Block.Portal_Blue);
+    if(!hubLocations.ContainsKey(lvl.MapName))
+     hubLocations[lvl.MapName]=Position.FromFeetBlockCoords(x+1,y,z-2);
+    created++;
+   }catch(Exception ex){Logger.Log(LogType.Warning,"Hub portal "+destination+": "+ex.Message);}
+  }
+  if(created>0)Logger.Log(LogType.SystemActivity,
+      "Family portals created: "+created+" on "+lvl.MapName);
+  WritePortalsStatus();
+ }
+ private static void WritePortalsStatus(){
+  int count=0;
+  foreach(Level map in LevelInfo.Loaded.Items)if(FamilyWorld(map))
+   count+=Portal.GetAllCoords(map.MapName).Count;
+  try{File.WriteAllText(PortalsStatusFile,"entrances="+count+
+       "\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
+  catch(Exception e){Logger.Log(LogType.Warning,"Family portal status: "+e.Message);}
  }
  private static bool ValidSpot(SavedSpot spot) {
   return spot!=null&&(spot.World=="vila_familia"||spot.World=="aventura"||spot.World=="exploracao"||spot.World=="mineracao")&&
@@ -542,6 +737,15 @@ public sealed class FamilyPlay : Plugin {
    }
   }
  }
+ private static void GoToHub(Player p){
+  if(p.level==null||!FamilyWorld(p.level)){p.Message("&eEntre em um mundo da familia primeiro.");return;}
+  Position destination;
+  if(!hubLocations.TryGetValue(p.level.MapName,out destination)){
+   p.Message("&eOs portais deste mundo ainda nao foram encontrados. Use Familia > Mundos.");return;
+  }
+  PlayerOperations.TeleportToCoords(p,destination,p.Rot);
+  p.Message("&aOs portais estao perto daqui. Entre em um portal para viajar!");
+ }
  private static void UpdateClimate(){
   // Whole-world classic map colors. No fake browser tint: MCGalaxy sends CPE
   // environment packets that change sky, fog, clouds, sun, shadows and weather.
@@ -566,31 +770,7 @@ public sealed class FamilyPlay : Plugin {
   try{File.WriteAllText(ClimateFile,"phase="+names[phase]+"\nweather="+(raining?"chuva":"sol")+"\nupdated="+sec+"\n");}
   catch(Exception error){Logger.Log(LogType.Warning,"Climate update failed: "+error.Message);}
  }
- private static void InstallWildlife(Level lvl){
-  // Wild animals are decorative, with simple walking paths. Never hostile.
-  string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago","Porquinho_Rio","Galinha_Trilha","Ovelha_Colina","Porco_Bosque"};
-  string[] models={"sheep","pig","chicken","sheep","pig","chicken","sheep","pig"};
-  int[,] places=new int[,]{{187,207},{220,190},{183,167},{245,171},{206,232},{170,224},{257,207},{217,154}};
-  int found=0;
-  for(int n=0;n<names.Length;n++){
-   bool exists=false;foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==names[n]){exists=true;break;}
-   if(exists){found++;continue;}
-   int x=places[n,0],z=places[n,1],ground=47;
-   for(int y=lvl.Height-5;y>1;y--){
-    if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
-   }
-   PlayerBot animal=new PlayerBot(names[n],lvl);
-   animal.Owner="GamesForChildren";animal.SetModel(models[n]);
-   animal.SetInitialPos(Position.FromFeetBlockCoords(x,ground,z));
-   animal.TargetPos=Position.FromFeetBlockCoords(x+2,ground,z+1);
-   animal.movement=true;animal.movementSpeed=3;
-   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+2)*32+"",ground*32+"",(z+1)*32+"","0","0"}));
-   animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-1)*32+"","0","0"}));
-   PlayerBot.Add(animal);found++;
-  }
-  try{File.WriteAllText("properties/gfc-exploration-animals.status","count="+found+"\n");}catch{}
- }
- // Real in-world quests: progress advances exclusively from server-validated player positions.
+ // Real in-world quests: // Real in-world quests: progress advances exclusively from server-validated player positions.
  private static Quest GetQuest(string player) {
   Quest q;if(!quests.TryGetValue(player,out q)){q=new Quest();quests[player]=q;}return q;
  }
@@ -674,7 +854,7 @@ public sealed class FamilyPlay : Plugin {
    q.Stage++;
    if(q.Stage<3){
     SaveAdventures();
-    p.Message("&bGuia da Vila: voce encontrou a pista "+q.Stage+" de 3!");
+    p.Message("&bAventura: voce encontrou a pista "+q.Stage+" de 3!");
     p.Message("&e"+(q.Mode=="tesouro"?treasureClues[q.Stage]:sprintClues[q.Stage]));
     return;
    }
@@ -722,9 +902,9 @@ public sealed class FamilyPlay : Plugin {
     p.Message("&aPronto! Voce encontrou "+target.name);
     return;
    }
-   if(cmd=="guia"){
+   if(cmd=="marco"){
     int index=arg=="praca"?0:arg=="ponte"?1:arg=="torre"?2:-1;
-    if(index<0){p.Message("&eEscolha Guia da Praca, Ponte ou Torre no menu Familia.");return;}
+    if(index<0){p.Message("&eEscolha Praca, Ponte ou Torre no menu Familia.");return;}
     if(!MoveToWorld(p,"vila_familia"))return;
     p.BlockUntilLoad(10);
     int[,] places=new int[,]{{90,45,101},{102,43,58},{140,46,89}};
@@ -734,12 +914,13 @@ public sealed class FamilyPlay : Plugin {
      if(p.level.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
     }
     PlayerOperations.TeleportToCoords(p,Position.FromFeetBlockCoords(x,ground,z),p.Rot);
-    p.Message("&aGuia encontrado! Ele mostra um dos locais do desafio.");
+    p.Message("&aPonto de interesse encontrado! Procure pistas pelo lugar.");
     return;
    }
    if(cmd=="mochila"){ShowBag(p);return;}
    if(cmd=="criar"){Craft(p,arg);return;}
    if(cmd=="portal"){CreatePortal(p,arg);return;}
+   if(cmd=="hub"){GoToHub(p);return;}
    if(cmd=="minerar"){if(MoveToWorld(p,"mineracao"))p.Message("&aBem-vindo ao Mundo Mineracao! Corte uma arvore e fabrique ferramentas.");return;}
    if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
    if(cmd=="premios"){ShowAdventures(p);return;}
@@ -768,7 +949,8 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&T/familia criar espada ferro &H- Fabricar espada colecionavel");
    p.Message("&T/familia criar armadura ouro &H- Fabricar armadura colecionavel");
    p.Message("&T/familia portal vila &H- Construir portal no mundo");
-   p.Message("&T/familia guia praca &H- Visitar NPCs da Vila");
+   p.Message("&T/familia marco praca &H- Visitar os marcos da Vila");
+   p.Message("&T/familia hub &H- Visitar os portais da Vila");
   }
  }
 }

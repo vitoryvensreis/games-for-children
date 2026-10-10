@@ -111,7 +111,7 @@ function minecraftStatus(){
   try{const st=fs.statSync(filename);return {id,title,exists:st.size>0,bytes:st.size,updatedAt:st.mtime.toISOString()}}catch{return {id,title,exists:false,bytes:0}}
  });
  const props=path.join(MCGALAXY_DIR,'properties','server.properties');
- let main='vila_familia';try{const m=/^main-name\s*=\s*(\S+)/mi.exec(fs.readFileSync(props,'utf8'));if(m&&WORLDS[m[1]])main=m[1]}catch{}
+ let main=WORLDS[state.minecraftMainWorld]?state.minecraftMainWorld:'vila_familia';try{const m=/^main-name\s*=\s*(\S+)/mi.exec(fs.readFileSync(props,'utf8'));if(m&&WORLDS[m[1]])main=m[1]}catch{}
  return {ready:mcgalaxyReady,pluginActive:fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready')),guides,worlds,main,players:minecraftPlayersOverview(),backups:listBackups(MINECRAFT_BACKUPS),controls:state.minecraftControls,maintenance:minecraftMaintenance};
 }
 async function minecraftSave(){
@@ -142,8 +142,8 @@ function startFamilyAdventureWorld(){
  const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\n')};
  // Prefer the newly built village without changing any block in the older adventure.
  if(fs.existsSync(familyVillage)){
-  writeCommand('/main '+FAMILY_VILLAGE);
-  console.log('[MCGalaxy] Entrando na vila da família existente: '+familyVillage);
+  writeCommand('/main '+(WORLDS[state.minecraftMainWorld]&&fs.existsSync(path.join(levels,state.minecraftMainWorld+'.lvl'))?state.minecraftMainWorld:FAMILY_VILLAGE));
+  console.log('[MCGalaxy] Vila existente preservada e mundo principal restaurado');
   return;
  }
  // No momento da primeira atualização preservamos "main" e criamos "aventura".
@@ -167,7 +167,7 @@ function startFamilyAdventureWorld(){
    clearInterval(awaitMap);
    // Command /main retains old map; changes only which saved world children join by default.
    // Never mutate adventure or overwrite the new, editable village.
-   const destination=fs.existsSync(familyVillage)?FAMILY_VILLAGE:ADVENTURE_MAP;
+   const destination=WORLDS[state.minecraftMainWorld]&&fs.existsSync(path.join(levels,state.minecraftMainWorld+'.lvl'))?state.minecraftMainWorld:(fs.existsSync(familyVillage)?FAMILY_VILLAGE:ADVENTURE_MAP);
    writeCommand('/main '+destination);
    setTimeout(()=>writeCommand('/save all'),1200).unref();
    console.log('[MCGalaxy] Mundo principal: '+(fs.existsSync(familyVillage)?familyVillage:world)+'; construções anteriores mantidas');
@@ -331,11 +331,12 @@ if(pathname==='/api/admin/minecraft/command'&&req.method==='POST'){
    const world=checkWorld(b.world);
    if(!fs.existsSync(path.join(MCGALAXY_DIR,'levels',world+'.lvl')))return json(res,404,{error:'Mundo inexistente'});
    mcgalaxyProcess.stdin.write('/main '+world+'\n');
+   state.minecraftMainWorld=world;save();
    return json(res,200,{ok:true,world});
   }catch(e){return json(res,400,{error:e.message})}
  }
  if(action==='restore'){
-  const id=String(b.id||''),world=id.split('-')[0]==='vila'?'vila_familia':id.startsWith('aventura-')?'aventura':'';
+  const id=String(b.id||''),world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('aventura-')?'aventura':'';
   if(!WORLDS[world]||b.confirm!=='RESTAURAR '+world)return json(res,400,{error:'Confirmação inválida'});
   if(minecraftPlayersOverview().some(x=>x.online))return json(res,409,{error:'Peça às crianças para sair do Minecraft antes de restaurar'});
   if(!mcgalaxyReady||!mcgalaxyProcess)return json(res,503,{error:'Servidor indisponível'});

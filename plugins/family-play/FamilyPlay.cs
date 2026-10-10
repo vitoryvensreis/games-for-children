@@ -196,7 +196,7 @@ public sealed class FamilyPlay : Plugin {
  // They are safe to restore after restarts; the bot list is deduplicated by name.
  private static void InstallGuides(Level lvl){
   if(lvl==null)return;
-  if(String.Equals(lvl.MapName,"exploracao",StringComparison.OrdinalIgnoreCase)){InstallWildlife(lvl);return;}
+  if(String.Equals(lvl.MapName,"exploracao",StringComparison.OrdinalIgnoreCase)||String.Equals(lvl.MapName,"mineracao",StringComparison.OrdinalIgnoreCase)){InstallWildlife(lvl);return;}
   if(!String.Equals(lvl.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
   string[] names=new string[]{"Guia_Praca","Guia_Ponte","Guia_Torre"};
   int[,] spots=new int[,]{{92,100},{99,57},{142,88}};
@@ -255,7 +255,7 @@ public sealed class FamilyPlay : Plugin {
  private static void WanderBots(){
   int moved=0,total=0;
   foreach(Level level in LevelInfo.Loaded.Items){
-   if(level.MapName!="vila_familia"&&level.MapName!="exploracao"&&level.MapName!="mineracao"&&level.MapName!="mineracao")continue;
+   if(level.MapName!="vila_familia"&&level.MapName!="exploracao"&&level.MapName!="mineracao")continue;
    foreach(PlayerBot bot in level.Bots.Items){
     if(bot.Owner!="GamesForChildren")continue;
     total++;
@@ -481,7 +481,7 @@ public sealed class FamilyPlay : Plugin {
   string[] shade={"9B9B9B","949CA9","856C79","515775"};
   bool raining=(sec/420)%5==2;
   foreach(Level level in LevelInfo.Loaded.Items){
-   if(level.MapName!="vila_familia"&&level.MapName!="exploracao")continue;
+   if(level.MapName!="vila_familia"&&level.MapName!="exploracao"&&level.MapName!="mineracao")continue;
    level.Config.SkyColor=sky[phase];
    level.Config.CloudColor=cloud[phase];
    level.Config.FogColor=sky[phase];

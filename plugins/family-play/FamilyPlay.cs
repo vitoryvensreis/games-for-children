@@ -32,10 +32,12 @@ public sealed class FamilyPlay : Plugin {
   Refresh(true);
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
   Command.Register(family);
+  File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
  public override void Unload(bool auto) {
   OnBlockChangingEvent.Unregister(ProtectHouse);
   Command.Unregister(family);
+  try{File.Delete("properties/gfc-familyplay.ready");}catch{}
  }
  public override void Help(Player p) { p.Message("Protege as casinhas e permite encontrar seus amigos. /familia ajuda"); }
 

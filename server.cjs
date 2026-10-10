@@ -2,6 +2,7 @@ const http=require('node:http');
 const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
+const {NAME:FAMILY_VILLAGE,installFamilyVillage}=require('./database/family-village.cjs');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
 const net=require('node:net');
 const {spawn}=require('node:child_process');
@@ -61,6 +62,7 @@ function startFamilyAdventureWorld(){
  worldInitStarted=true;
  const levels=path.join(MCGALAXY_DIR,'levels');
  const world=path.join(levels,ADVENTURE_MAP+'.lvl');
+ const familyVillage=path.join(levels,FAMILY_VILLAGE+'.lvl');
  const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\n')};
  // No momento da primeira atualização preservamos "main" e criamos "aventura".
  // Se a geração já ocorreu antes, o MCGalaxy restaura o "main-name" salvo e NÃO regenera.
@@ -82,15 +84,22 @@ function startFamilyAdventureWorld(){
   if(fs.existsSync(world)){
    clearInterval(awaitMap);
    // Command /main retains old map; changes only which saved world children join by default.
-   writeCommand('/main '+ADVENTURE_MAP);
+   // Never mutate adventure or overwrite the new, editable village.
+   const destination=fs.existsSync(familyVillage)?FAMILY_VILLAGE:ADVENTURE_MAP;
+   writeCommand('/main '+destination);
    setTimeout(()=>writeCommand('/save all'),1200).unref();
-   console.log('[MCGalaxy] Mapa da familia restaurado; construções são persistidas em '+world);
+   console.log('[MCGalaxy] Mundo principal: '+(fs.existsSync(familyVillage)?familyVillage:world)+'; construções anteriores mantidas');
   }else if(tries>=65){clearInterval(awaitMap);console.warn('[MCGalaxy] Aguardando geração do mundo; original mantido')}
  },1500);awaitMap.unref();
 }
 function setupMCGalaxy(){
  if(process.env.MCGALAXY_EXTERNAL==='true'){const check=setInterval(async()=>{if(await cubePortReady()){mcgalaxyReady=true;clearInterval(check)}},150);check.unref();return}
  const exec=path.join(MCGALAXY_DIR,'MCGalaxyCLI');if(!fs.existsSync(exec)||process.env.MCGALAXY_ENABLED==='false')return;
+ // Generate only once: MCGalaxy subsequently owns persistence and modifications.
+ try{
+  const village=installFamilyVillage(path.join(MCGALAXY_DIR,'levels'));
+  console.log('[MCGalaxy] Vila da Família '+(village.created?'criada':'preservada')+': '+village.path);
+ }catch(err){console.error('[MCGalaxy] Não foi possível preparar a vila; mapa atual será preservado:',err.message)}
  const cfgDir=path.join(MCGALAXY_DIR,'properties');fs.mkdirSync(cfgDir,{recursive:true});
  const cfg=path.join(cfgDir,'server.properties');
  const required={'server-name':'GamesForChildren Privado','public':'false','verify-names':'false','listen-ip':'127.0.0.1','port':String(MCGALAXY_PORT),'support-web-client':'true','allow-ip-forwarding':'false','max-players':'12','max-guests':'12','use-whitelist':'false','autoload':'true','backup-time':'300'};

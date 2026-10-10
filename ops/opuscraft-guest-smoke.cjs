@@ -17,8 +17,9 @@ const watchdog=setTimeout(()=>{
 },150000);
 const diagnostics=setInterval(async()=>{
  try{
-  const info=await guestPage?.evaluate(()=>({mode:window.__game?.mode,inWorld:window.__game?.inWorld,client:!!window.__game?.client}));
-  console.log('Guest smoke progress:',stage,JSON.stringify(info));
+  const info=await guestPage?.evaluate(()=>{const g=window.__game,c=g?.client;return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,clientState:c?.state,connection:c?.transport?.state,reason:c?.endReason,screen:g?.screen?.constructor?.name,wait:c?.loading,recent:c?.latelyIds?.slice(-5)};});
+  const relayState=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json()).catch(()=>({}));
+  console.log('Guest smoke progress:',stage,JSON.stringify({info,relay:{hosting:relayState.hosting,guests:relayState.guests}}));
  }catch{console.log('Guest smoke progress:',stage)}
 },12000);
 diagnostics.unref?.();

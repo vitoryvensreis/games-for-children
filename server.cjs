@@ -276,7 +276,7 @@ const OPUSCRAFT_ROOT=path.join(publicDir,'opuscraft');
 const OPUSCRAFT_READY=()=>fs.existsSync(path.join(OPUSCRAFT_ROOT,'index.html'));
 const OPUS_BACKUP_ROOT=path.join(DATA,'opuscraft','backups');
 const lastOpusTeleport=new Map();
-function validOpusWorldId(id){return typeof id==='string'&&id.length>0&&id.length<=90&&!/[\\\\/\\x00-\\x1f]/.test(id)}
+function validOpusWorldId(id){return typeof id==='string'&&id.length>0&&id.length<=90&&!id.includes('/')&&!id.includes(String.fromCharCode(92))&&![...id].some(c=>c.charCodeAt(0)<32)}
 function opusBackupDir(u){return path.join(OPUS_BACKUP_ROOT,u.id)}
 function opusBackupIndex(u){
  try{const rows=JSON.parse(fs.readFileSync(path.join(opusBackupDir(u),'index.json'),'utf8'));
@@ -367,7 +367,7 @@ if(pathname==='/api/opuscraft/teleport'&&req.method==='POST'){
 if(pathname==='/api/opuscraft/world-backups'&&req.method==='GET'){
  return json(res,200,{backups:opusBackupIndex(u).sort((a,b)=>b.created.localeCompare(a.created))});
 }
-const opusUpload=pathname.match(/^\\/api\\/opuscraft\\/world-backups\\/(.+)$/);
+const opusUpload=pathname.match(new RegExp('^/api/opuscraft/world-backups/(.+)$'));
 if(opusUpload&&req.method==='POST'){
  const id=decodeURIComponent(opusUpload[1]);
  if(!validOpusWorldId(id))return json(res,400,{error:'Identificador de mundo inválido'});
@@ -394,7 +394,7 @@ if(opusUpload&&req.method==='POST'){
  for(const p of previous)if(!kept.some(b=>b.id===p.id&&b.version===p.version))try{fs.unlinkSync(path.join(dir,opusFileName(p.id,p.version)))}catch{}
  return json(res,200,{ok:true,version,size});
 }
-const opusDownload=pathname.match(/^\\/api\\/opuscraft\\/world-backups\\/(.+)\\/([0-9]{13}-[a-f0-9]{8})$/);
+const opusDownload=pathname.match(new RegExp('^/api/opuscraft/world-backups/(.+)/([0-9]{13}-[a-f0-9]{8})$'));
 if(opusDownload&&req.method==='GET'){
  const id=decodeURIComponent(opusDownload[1]),version=opusDownload[2];
  const record=opusBackupIndex(u).find(b=>b.id===id&&b.version===version);

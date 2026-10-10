@@ -41,6 +41,48 @@ patch('src/main.ts',
     game.opts.renderDistance = Math.min(game.opts.renderDistance, 3); // iPhone: reduce initial chunk backlog.
     await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
+
+patch('src/gui/screens/multiplayer.ts',
+ "    this.list = this.add(new LanList(this, this.width, 48, this.height - 112));",
+ `    // This family server is always shown, independent of LAN discovery.
+    this.list = this.add(new LanList(this, this.width, 48, this.height - 142));
+    this.add(new Button(cx - 100, this.height - 79, 200, 20, 'Servidor da Familia - Entrar', () => void this.enterFamilyServer()));`);
+patch('src/gui/screens/multiplayer.ts',
+ "  private nameOk(): boolean {",
+ `  private async enterFamilyServer(): Promise<void> {
+    try {
+      const r = await fetch('/api/opuscraft/identity', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) throw Error('Acesso da familia encerrado. Faca login novamente.');
+      const identity = await r.json() as { playerName:string; joinCode:string };
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(identity.playerName)) throw Error('Identidade invalida');
+      this.closeLists();
+      this.game.opts.renderDistance = Math.min(this.game.opts.renderDistance, 3);
+      await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
+    } catch (error) {
+      this.game.setScreen(this);
+      window.alert('Nao foi possivel entrar no Servidor da Familia: ' + String(error));
+    }
+  }
+  private nameOk(): boolean {`);
+patch('src/gui/screens/menus.ts',
+ "import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';",
+ "import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';\\nimport { backupToVps, restoreFromVps } from '../../gfc-world-backup';");
+patch('src/gui/screens/menus.ts',
+ "    this.playBtn = this.add(new Button(cx - 154, this.height - 52, 150, 20, 'Play Selected World',",
+ `    this.add(new Button(cx - 154, this.height - 77, 150, 20, 'Backup na VPS', () => {
+      const selected = this.list.selected;
+      if (selected) void backupToVps(selected).then(()=>window.alert('Backup salvo na VPS')).catch(e=>window.alert(String(e)));
+    }));
+    this.add(new Button(cx + 4, this.height - 77, 150, 20, 'Restaurar da VPS', () => {
+      void restoreFromVps().then(()=>{
+       this.all=null;
+       this.game.setScreen(this);
+      }).catch(e=>window.alert(String(e)));
+    }));
+    this.playBtn = this.add(new Button(cx - 154, this.height - 52, 150, 20, 'Play Selected World',`);
+patch('src/gui/screens/menus.ts',
+ "    this.list = this.add(new WorldList(this, this.width, 48, this.height - 112));",
+ "    this.list = this.add(new WorldList(this, this.width, 48, this.height - 142));");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");

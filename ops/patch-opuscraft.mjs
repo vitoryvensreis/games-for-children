@@ -66,7 +66,7 @@ patch('src/gui/screens/multiplayer.ts',
   private nameOk(): boolean {`);
 patch('src/gui/screens/menus.ts',
  "import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';",
- "import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';\\nimport { backupToVps, restoreFromVps } from '../../gfc-world-backup';");
+ "import { WorldMeta, listWorlds, saveWorldMeta, deleteWorld } from '../../storage/worldStore';\nimport { backupToVps, restoreFromVps } from '../../gfc-world-backup';");
 patch('src/gui/screens/menus.ts',
  "    this.playBtn = this.add(new Button(cx - 154, this.height - 52, 150, 20, 'Play Selected World',",
  `    this.add(new Button(cx - 154, this.height - 77, 150, 20, 'Backup na VPS', () => {

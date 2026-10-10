@@ -46,8 +46,8 @@ test('Bloco C: server-side landmarks, timed challenges, persistent prizes and co
  assert.match(plugin,/teamReady\.Count>=2/);
  assert.match(plugin,/properties\/gfc-family-adventures\.tsv/);
  assert.match(plugin,/File\.Move\(temp,QuestFile,true\)/);
- assert.match(plugin,/OnLevelLoadedEvent\.Register\(InstallGuides, Priority\.Low\)/);
- assert.match(plugin,/PlayerBot\.Add\(guide\)/);
+ assert.match(plugin,/OnLevelLoadedEvent\.Register\(SetupFamilyWorld, Priority\.Low\)/);
+ assert.match(plugin,/PlayerBot\.Add\(creature,false\)/);
  assert.match(menu,/\/familia tesouro/);
  assert.match(menu,/\/familia corrida/);
  assert.match(menu,/data\.adventures\?\.own\?\.stars/);

@@ -20,8 +20,8 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js
-      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs
+      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs
 
   deploy:
     needs: validate
@@ -170,6 +170,12 @@ jobs:
                       else
                         echo "::warning::Mapa aventura ainda não persistido; consultar logs MCGalaxy"
                         /usr/bin/journalctl --no-pager -u games-for-children.service -n 22 | grep -E "MCGalaxy|Generate|world|map" || true
+                      fi
+                      if test -s vendor/mcgalaxy/levels/vila_familia.lvl && gzip -t vendor/mcgalaxy/levels/vila_familia.lvl; then
+                        echo "GFC_FAMILY_VILLAGE_VALID_AND_PERSISTED"
+                        ls -lh vendor/mcgalaxy/levels/vila_familia.lvl
+                      else
+                        echo "::warning::Vila da Família indisponível; mundo aventura foi preservado"
                       fi
                       echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
                       exit 0

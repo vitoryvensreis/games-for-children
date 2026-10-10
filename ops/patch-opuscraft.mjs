@@ -86,7 +86,7 @@ patch('src/gui/screens/menus.ts',
 
 patch('src/gui/screens/menus.ts',
  "  creative: \"Create, build, and explore without limits. You can fly, have endless materials, and can't be hurt by monsters\",",
- "  creative: \"Create, build, and explore without limits. You can fly, have endless materials, and can't be hurt by monsters\",\\n  adventure: 'Explore maps with limited block interactions',\\n  spectator: 'Observe and fly through the world without building',");
+ "  creative: \"Create, build, and explore without limits. You can fly, have endless materials, and can't be hurt by monsters\",\n  adventure: 'Explore maps with limited block interactions',\n  spectator: 'Observe and fly through the world without building',");
 patch('src/gui/screens/menus.ts',
  "  private mode: 'survival' | 'hardcore' | 'creative' = 'survival';",
  "  private mode: 'survival' | 'hardcore' | 'creative' | 'adventure' | 'spectator' = 'survival';");

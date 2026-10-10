@@ -24,7 +24,7 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-host.cjs && node --check ops/patch-opuscraft.mjs
-      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs tests/opuscraft-backup-api.cjs
       - name: Build pinned OpusCraft
         run: bash ops/build-opuscraft.sh
       - name: Validate compiled web assets

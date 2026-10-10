@@ -260,3 +260,24 @@ body:has(.pong-game) #app{position:fixed;inset:0;width:100%;height:100dvh;min-wi
 .minecraft-house label{font-size:12px;font-weight:800;color:#4d5c79}
 .minecraft-house select{width:100%;min-height:43px;margin-top:6px;background:#fff;color:#223552;border:2px solid #cad6ee;border-radius:12px;font:700 13px system-ui;padding:7px}
 .minecraft-house small{font-size:11px;color:#77849a;line-height:1.45}
+
+
+/* Central Minecraft ADM — mundos, jogadores, backups e controles */
+.minecraft-admin-dashboard{display:grid;gap:13px;margin:12px 0 24px;min-width:0}
+.minecraft-admin-dashboard>.panel{min-width:0;border:2px solid #dde4f4;border-radius:19px;padding:16px;background:#fff}
+.minecraft-admin-dashboard h3{margin:0 0 12px;font-size:18px;color:#24365c}
+.minecraft-admin-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:9px}
+.minecraft-admin-summary>.panel{background:#e9f1ff;border-radius:15px;padding:13px;border:1px solid #cce0ff;min-width:0}
+.minecraft-admin-summary strong{font-size:12px;color:#556483}
+.minecraft-admin-summary p{margin:5px 0 0;font-weight:900;color:#203359;font-size:17px}
+.mc-world-line,.mc-backup-line,.mc-player-line{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #edf0f7;padding:11px 0;flex-wrap:wrap}
+.mc-world-line div:first-child,.mc-backup-line div:first-child{display:flex;flex-direction:column;gap:4px}
+.minecraft-admin-dashboard small{display:block;color:#6e7b92;font-size:11px;font-weight:600}
+.minecraft-admin-dashboard .row{gap:7px}
+.minecraft-admin-dashboard button{padding:9px 12px;border-radius:11px;font-size:12px;box-shadow:none;min-height:37px}
+.minecraft-admin-dashboard input[type=range]{width:100%;display:block;min-height:26px;margin:7px 0 16px;accent-color:#366ec0}
+.minecraft-admin-dashboard label{display:block;font-size:13px;color:#33435e;font-weight:800;margin:10px 0}
+.minecraft-admin-dashboard label input[type=checkbox]{margin:0 7px 0 0;accent-color:#36957b}
+.mc-player-line strong{color:#24365b}
+.mc-player-line span{font-size:11px;font-weight:900;color:#3b897a}
+.mc-player-line small{width:100%}

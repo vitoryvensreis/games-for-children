@@ -32,8 +32,8 @@ test('MCGalaxy mining is server-authoritative and creatures continuously walk',(
  const backend=fs.readFileSync(path.join(__dirname,'../server.cjs'),'utf8');
  assert.match(s,/OnBlockChangingEvent\.Register\(MiningChange, Priority\.Low\)/);
  assert.match(s,/p\.level\.GetBlock\(x,y,z\)/,'Resource determined from block actually present on server');
- assert.match(s,/required>b\.Tool/,'Ore mining requires better pickaxe');
- assert.match(s,/b\.Iron<2/,'Portals require genuinely mined resources');
+ assert.doesNotMatch(s,/required>b\.Tool/,'No pickaxe requirements in creative mode');
+ assert.doesNotMatch(s,/if\(!parent&&\(b\.Stone<8/,'Portals are free and preserve building permissions');
  assert.match(s,/gfc-mining-inventory\.tsv/);
  assert.match(s,/WanderBots\(\)/);
  assert.match(s,/bot\.movement=true/);

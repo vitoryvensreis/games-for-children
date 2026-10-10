@@ -37,6 +37,7 @@
      '<span class="family-hint">Nenhum amigo jogando agora. Peça para ele abrir o Minecraft.</span>')+'</div></section>'+
     '<section class="family-section"><h3>Minha casinha</h3><div class="family-row"><button type="button" class="family-action family-primary" data-action="home" '+(myHome?'':'disabled')+'>Ir para minha casa</button></div><p class="family-hint">'+(myHome?escape(myHome.title)+'. Seus blocos estão protegidos contra alterações das outras crianças.':'Peça ao ADM para escolher uma casa para você.')+'</p></section>'+
     '<section class="family-section"><h3>Portais para outros mundos</h3><div class="family-row"><button type="button" class="family-action" data-action="vila">Vila da Família</button><button type="button" class="family-action" data-action="aventura">Mundo Aventura</button></div></section>'+
+    '<section class="family-section"><h3>Conhecer os guias da Vila</h3><p class="family-hint">Toque para visitar os personagens que mostram onde ficam as missões.</p><div class="family-row"><button type="button" class="family-action" data-action="guide" data-place="praca">Guia da Praça</button><button type="button" class="family-action" data-action="guide" data-place="ponte">Guia da Ponte</button><button type="button" class="family-action" data-action="guide" data-place="torre">Guia da Torre</button></div></section>'+
     '<section class="family-section"><h3>Aventuras e minijogos 3D</h3>'+
     '<p class="family-hint">Os guias da Praça, da Ponte e da Torre têm pistas. Visite os três locais com seu personagem para ganhar estrelas!</p>'+
     '<div class="family-row"><button type="button" class="family-action family-primary" data-action="treasure">Caça ao tesouro</button>'+
@@ -54,6 +55,7 @@
     if(action==='friend'){if(command('/familia amigo '+button.dataset.player)){message('Indo encontrar seu amigo!');close()}}
     else if(action==='home'){if(command('/familia casa')){message('Indo para sua casa!');close()}}
     else if(action==='vila'||action==='aventura'){if(command('/familia '+action)){message('Abrindo o mundo...');close()}}
+    else if(action==='guide'){const place=button.dataset.place;if(['praca','ponte','torre'].includes(place)&&command('/familia guia '+place)){message('Visitando o guia!');close()}}
     else if(action==='treasure'){if(command('/familia tesouro')){message('Procure o Guia da Praça!');close()}}
     else if(action==='sprint'){if(command('/familia corrida')){message('O circuito começou!');close()}}
     else if(action==='rewards'){if(command('/familia premios'))message('Veja suas estrelas no chat do jogo!')}

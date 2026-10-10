@@ -10,7 +10,7 @@ const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
 const {WORLDS,BACKUP_PATTERN,makeBackup,listBackups,restoreOffline,checkWorld,safeSettings}=require('./database/minecraft-control.cjs');
 const net=require('node:net');
 const {spawn}=require('node:child_process');
-const {WebSocketServer}=require('ws');
+const {WebSocketServer,WebSocket}=require('ws');
 const webpush=require('web-push');
 const sqlStore=require('./database/store.cjs');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
@@ -19,6 +19,8 @@ const MCGALAXY_PORT=Number(process.env.MCGALAXY_PORT||25565);
 const MCGALAXY_DIR=path.join(ROOT,'vendor','mcgalaxy');
 const MINECRAFT_BACKUPS=path.join(DATA,'minecraft-backups');
 let minecraftMaintenance=false;
+const opusConnections=new Set();
+let opusHostProcess=null, opusRestarting=false;
 let mcgalaxyProcess=null,mcgalaxyReady=false;
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
 const COVER_SLUGS=Object.freeze(['pong','snake','minecraft']);
@@ -63,7 +65,7 @@ function usage(u){const d=localDay(now());return state.sessions.filter(s=>s.user
 function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws.readyState===1)||state.sessions.some(s=>s.userId===u.id&&!s.revoked&&s.expires>now()&&s.lastSeen&&now()-s.lastSeen<45000)}
 function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=Math.min(t-s.lastTick,15000);s.lastTick=t;if(delta>0&&delta<16000){const k=localDay(t);s.daily??={};s.daily[k]=(s.daily[k]||0)+delta}}
 function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
-function end(s){touch(s);s.revoked=true;for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
+function end(s){touch(s);s.revoked=true;for(const p of opusConnections)if(p.session===s){try{p.ws.close(4001,'Acesso encerrado pelo responsavel')}catch{};try{p.remote?.close()}catch{}}for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
 function cubePlayerName(u){return familyName(u)}
 function adventureStatus(u){
  const filename=path.join(MCGALAXY_DIR,'properties','gfc-family-adventures.tsv');
@@ -270,14 +272,31 @@ broadcastRoom(r,{type:'frame',remaining:Math.ceil((r.endAt-t)/1000),players:[...
 setInterval(gameTick,40).unref();
 const publicDir=path.join(ROOT,'public');
 const CLASSICUBE_DIR=path.join(publicDir,'classicube');
+const OPUSCRAFT_ROOT=path.join(publicDir,'opuscraft');
+const OPUSCRAFT_READY=()=>fs.existsSync(path.join(OPUSCRAFT_ROOT,'index.html'));
+function opusName(u){return (u.role==='admin'?'ADM_':'KID_')+String(u.id).replace(/[^a-f0-9]/gi,'').slice(0,12)}
+async function opusStatus(){
+ try{const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});const info=await response.json();
+  return {available:OPUSCRAFT_READY(),ready:!!info.ready,guests:Number(info.guests)||0,lastSave:info.lastSave||null,error:info.error||'',mode:'vps-persistent',players:[...opusConnections].filter(p=>p.role==='guest'&&p.ws.readyState===1).map(p=>({name:p.user.name,role:p.user.role}))};
+ }catch{return {available:OPUSCRAFT_READY(),ready:false,guests:0,players:[],error:'Servidor do mundo ainda iniciando',mode:'vps-persistent'}}
+}
+function launchOpusHost(){
+ if(opusHostProcess||!OPUSCRAFT_READY()||!fs.existsSync(path.join(ROOT,'ops','opuscraft-relay.mjs')))return;
+ const child=spawn(process.execPath,[path.join(ROOT,'ops','opuscraft-host.cjs')],{cwd:ROOT,env:process.env,stdio:'inherit'});
+ opusHostProcess=child;
+ child.on('error',e=>console.error('[OpusCraft] Processo:',e.message));
+ child.on('exit',()=>{if(opusHostProcess===child)opusHostProcess=null;setTimeout(()=>launchOpusHost(),6000).unref()});
+}
+
 const CLASSICUBE_JS=path.join(CLASSICUBE_DIR,'ClassiCube.js');
 const CLASSICUBE_TEXTURES=path.join(CLASSICUBE_DIR,'default.zip');
 const CLASSICUBE_WASM=path.join(CLASSICUBE_DIR,'ClassiCube.wasm');
 
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;
-res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options',pathname==='/classicube/index.html'?'SAMEORIGIN':'DENY');
+res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options',pathname==='/opuscraft/index.html'||pathname==='/classicube/index.html'?'SAMEORIGIN':'DENY');
 if(pathname==='/api/health')return json(res,200,{ok:true,service:'games-for-children'});
+if(pathname.startsWith('/opuscraft/')&&!checkSession(req)){res.writeHead(401,{'Cache-Control':'no-store'});return res.end('Entre no GamesNavagador para jogar')}
 if(pathname==='/classicube/index.html'){if(!checkSession(req)){res.writeHead(401);return res.end('Login necessário')} }
 if(pathname==='/static/default.zip')return fs.readFile(CLASSICUBE_TEXTURES,(err,b)=>{if(err){res.writeHead(404);return res.end('Pacote de textura não instalado')}res.writeHead(200,{'Content-Type':'application/zip','Cache-Control':'public, max-age=3600'});res.end(b)});
 
@@ -292,6 +311,12 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
+if(pathname==='/api/opuscraft/identity'&&req.method==='GET')return json(res,200,{playerName:opusName(u),joinCode:'GFC2026X'});
+if(pathname==='/api/opuscraft/status'&&req.method==='GET')return json(res,200,await opusStatus());
+if(pathname==='/api/admin/opuscraft/status'&&req.method==='GET'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente responsavel'});
+ return json(res,200,await opusStatus());
+}
 const gameCover=pathname.match(/^\/api\/game-covers\/(pong|snake|minecraft)$/);
 if(gameCover&&req.method==='GET'){
  const slug=gameCover[1],custom=coverPath(slug),target=fs.existsSync(custom)?custom:defaultCoverPath(slug);
@@ -457,17 +482,38 @@ cubeWss.on('connection',(ws,{u,s})=>{
   if(data.length>0&&tcp.writable&&!tcp.destroyed)tcp.write(data);
  });
 });
+const opusWss=new WebSocketServer({noServer:true,maxPayload:20*1024*1024});
+opusWss.on('connection',(ws,ctx)=>{
+ const {u,s,role}=ctx,p={ws,remote:null,session:s,user:u,role};opusConnections.add(p);
+ const remote=new WebSocket('ws://127.0.0.1:4173/__mp?role='+role,{headers:{Origin:'http://127.0.0.1:4173'},maxPayload:20*1024*1024,perMessageDeflate:false});
+ p.remote=remote;let queued=[],queuedBytes=0;
+ const done=()=>{opusConnections.delete(p);if(ws.readyState<2)ws.close();if(remote.readyState<2)remote.close()};
+ remote.on('open',()=>{for(const [b,binary] of queued)remote.send(b,{binary});queued=[];queuedBytes=0});
+ ws.on('message',(b,binary)=>{
+  if(s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000)return done();
+  if(remote.readyState===WebSocket.OPEN){if(remote.bufferedAmount>12*1024*1024)return done();remote.send(b,{binary})}
+  else if(remote.readyState===WebSocket.CONNECTING&&queuedBytes+b.length<524288){queued.push([b,binary]);queuedBytes+=b.length}
+  else done();
+ });
+ remote.on('message',(b,binary)=>{if(ws.readyState===WebSocket.OPEN){if(ws.bufferedAmount>20*1024*1024)return done();ws.send(b,{binary})}});
+ remote.on('error',done);remote.on('close',done);ws.on('error',done);ws.on('close',done);
+});
 const wss=new WebSocketServer({noServer:true,maxPayload:8192});
 server.on('upgrade',(req,socket,head)=>{
  const pathname=new URL(req.url,'http://local').pathname;
  const origin=req.headers.origin;
- if(pathname!=='/ws'||origin!=='https://gamesforchildren.escotilhaprodutora.com'){
+ if(pathname!=='/ws'&&pathname!=='/__mp'||origin!=='https://gamesforchildren.escotilhaprodutora.com'){
    console.warn('[WS] Rejeitado: caminho/origem',pathname,origin||'(ausente)');
    socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return;
  }
  const auth=checkSession(req);
  if(!auth){console.warn('[WS] Rejeitado: sessão ausente ou inválida');socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
+ if(pathname==='/__mp'){
+  const role=new URL(req.url,'http://local').searchParams.get('role');
+  if(!['guest','list'].includes(role)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return}
+  opusWss.handleUpgrade(req,socket,head,ws=>opusWss.emit('connection',ws,{...auth,role}));return;
+ }
  if(new URL(req.url,'http://localhost').searchParams.get('classicube')==='1'){
   if(!mcgalaxyReady||req.headers['sec-websocket-protocol']!=='ClassiCube'){
     socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');socket.destroy();return;
@@ -503,7 +549,7 @@ if(m.type==='peers'){emit(ws,{type:'peers',items:voiceList(p)})}
 if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<14000){const recipient=peers.get(m.to);if(recipient?.voiceActive&&voiceEligible(recipient))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 });
 ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
-setInterval(()=>{for(const [id,cube] of cubeSessions){const u=cube.user,s=cube.session;if(!s||!u||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){cube.close(4001,'Acesso da família encerrado');cubeSessions.delete(id)}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
+setInterval(()=>{for(const [id,cube] of cubeSessions){const u=cube.user,s=cube.session;if(!s||!u||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){cube.close(4001,'Acesso da família encerrado');cubeSessions.delete(id)}}for(const p of opusConnections){const {user:u,session:s}=p;if(!s||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){p.ws.close(4001,'Tempo encerrado pelo responsavel');p.remote?.close()}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});
  // MySQL can replace the local JSON snapshot with a legacy state lacking house metadata.
  // Normalise after selecting the authoritative source, before handlers or MCGalaxy start.
@@ -513,5 +559,5 @@ async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data
  if(missingSkins)state.minecraftSkins={};
  state.minecraftControls=safeSettings({},state.minecraftControls||{});
  if(missingHomes||missingSkins)save();
- ensureAdmin();setupMCGalaxy();server.listen(PORT,HOST,()=>console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local')))}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
+ ensureAdmin();server.listen(PORT,HOST,()=>{console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local'));launchOpusHost()})}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

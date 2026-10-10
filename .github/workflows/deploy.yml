@@ -196,6 +196,7 @@ jobs:
             cd /home/gamesforchildren/apps/games-for-children
             mkdir -p backup
             cp server.cjs backup/server.cjs
+            if test -s vendor/mcgalaxy/plugins/FamilyPlay.dll; then cp vendor/mcgalaxy/plugins/FamilyPlay.dll backup/FamilyPlay.dll; fi
             if test -d public; then cp -a public backup/public; fi
             if test -d vendor/mcgalaxy/levels; then
               tar -czf backup/mcgalaxy-levels-latest.tar.gz -C vendor/mcgalaxy levels
@@ -250,11 +251,22 @@ jobs:
                       fi
                       for p in 1 2 3 4 5 6 7 8 9 10 11 12; do
                         if test -s vendor/mcgalaxy/properties/gfc-familyplay.ready; then
-                          if test -s vendor/mcgalaxy/properties/gfc-family-guides.status && grep -qx "count=3" vendor/mcgalaxy/properties/gfc-family-guides.status && grep -qx "animals=5" vendor/mcgalaxy/properties/gfc-family-guides.status; then
-                            echo GFC_THREE_NPCS_AND_FIVE_PEACEFUL_ANIMALS_CONFIRMED
-                            cat vendor/mcgalaxy/properties/gfc-family-guides.status
+                          if test -s vendor/mcgalaxy/properties/gfc-family-creatures.status \
+                               && grep -Eq "^animals=[1-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-creatures.status \
+                               && grep -Eq "^humans=0$" vendor/mcgalaxy/properties/gfc-family-creatures.status; then
+                            echo GFC_ANIMALS_ONLY_AND_MONSTER_AI_READY
+                            cat vendor/mcgalaxy/properties/gfc-family-creatures.status
                           else
-                            echo "::error::Os 3 NPCs da Vila não foram encontrados"
+                            echo "::error::Os animais não carregaram ou ainda existem NPCs humanos"
+                            /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
+                            exit 1
+                          fi
+                          if test -s vendor/mcgalaxy/properties/gfc-family-portals.status \
+                               && grep -Eq "^entrances=[3-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-portals.status; then
+                            echo GFC_FAMILY_PORTAL_NETWORK_READY
+                            cat vendor/mcgalaxy/properties/gfc-family-portals.status
+                          else
+                            echo "::error::Os portais físicos não foram instalados"
                             /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
                             exit 1
                           fi
@@ -301,6 +313,7 @@ jobs:
             fi
             echo DEPLOY_FAILED_ROLLBACK
             cp backup/server.cjs server.cjs
+            if test -s backup/FamilyPlay.dll; then cp backup/FamilyPlay.dll vendor/mcgalaxy/plugins/FamilyPlay.dll; fi
             if test -d backup/public; then rm -rf public; cp -a backup/public public; fi
             if test -f backup/package.json; then cp backup/package.json package.json; fi
             sudo -n /usr/bin/systemctl restart games-for-children.service

@@ -26,7 +26,7 @@ if(m.type==='voiceReady'&&voiceStream)maybeCall({id:m.id,name:m.name});
 if(m.type==='signal')handleSignal(m);
 };socket.onerror=()=>{if(ws!==socket)return;const label=$('#connectionStatus');if(label)label.textContent='Falha na conexão em tempo real'};socket.onclose=()=>{if(ws!==socket)return;for(const id of [...connections.keys()])hangupPeer(id);updateVoiceDock();const label=$('#connectionStatus');if(label)label.textContent='Reconectando...';if(me){clearTimeout(wsRetry);wsRetry=setTimeout(()=>{if(me)connect()},2500)}}}
 function renderLobby(rooms){const el=$('#availableRooms');if(!el)return;rooms=rooms.filter(r=>r.game==='pong');el.innerHTML=rooms.length?rooms.map(r=>'<div class="lobby-room"><div><strong>'+esc(r.host)+'</strong><span> criou Pong Neon</span></div><button data-room="'+esc(r.code)+'">Entrar</button></div>').join(''):'<p class="hint">Nenhuma partida aguardando. Crie uma e convide um amigo!</p>';el.querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room}))}
-function home(){ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card classicube-card"><span class="art">'+ico('gamepad')+'</span><h2>ClassiCube</h2><p class="sub">Construa com blocos no jogo 3D clássico hospedado aqui.</p><button id="openClassiCube" class="success">Jogar ClassiCube</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openClassiCube').onclick=openClassiCube;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
+function home(){pongCanvasObserver?.disconnect();pongCanvasObserver=null;ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card classicube-card"><span class="art">'+ico('gamepad')+'</span><h2>ClassiCube</h2><p class="sub">Construa com blocos no jogo 3D clássico hospedado aqui.</p><button id="openClassiCube" class="success">Jogar ClassiCube</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openClassiCube').onclick=openClassiCube;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
 
 async function openClassiCube(){
  if(!me)return login();
@@ -52,13 +52,16 @@ async function openClassiCube(){
   $('#classicubeBack').onclick=async()=>{window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
  }catch(e){console.warn('ClassiCube:',e);notify('Não foi possível iniciar ClassiCube: '+e.message)}
 }
-let pongPadDirection=0,pongLocalY=.5,pongLastSend=0,pongRaf=0,pongRender=null,pongVisual=null;
+let pongPadDirection=0,pongLocalY=.5,pongLastSend=0,pongRaf=0,pongRender=null,pongVisual=null,pongCanvasObserver=null;
 function pong(){
- cancelAnimationFrame(pongRaf);pongRender=null;pongVisual=null;pongPadDirection=0;pongLocalY=.5;
+ cancelAnimationFrame(pongRaf);pongCanvasObserver?.disconnect();pongCanvasObserver=null;pongRender=null;pongVisual=null;pongPadDirection=0;pongLocalY=.5;
  app.innerHTML='<main class="mini-game pong-game"><header class="mini-header"><button id="back" class="ghost" aria-label="Voltar à biblioteca">'+ico('left')+'</button><div class="mini-title"><small>ARCADE</small><strong>PONG NEON</strong></div><div class="mini-time">'+ico('clock')+' <b id="clock">60s</b></div><button id="voice" aria-label="Ativar voz">'+ico('mic')+'</button><button id="mute" disabled aria-label="Silenciar">Silenciar</button></header><div class="mini-stage pong-stage"><canvas id="pongCanvas" width="360" height="560" aria-label="Pong: arraste ou use os botões para mover a raquete"></canvas><div class="pong-score" id="pongLiveScore">0 <span>:</span> 0</div><div class="pong-serve" id="pongServe" hidden>PREPARE-SE</div><div id="waiting" class="mini-overlay"><div class="wait-card"><span class="wait-label">PONG MULTIPLAYER</span><h2>Esperando seu rival</h2><p>Compartilhe a sala</p><b>'+esc(room.code)+'</b></div></div><div id="finish" class="mini-overlay" style="display:none"></div></div><footer class="pong-controls"><button id="pongUp" aria-label="Subir raquete">'+ico('up')+' SUBIR</button><span>Arraste na quadra ou use os botões</span><button id="pongDown" aria-label="Descer raquete">'+ico('down')+' DESCER</button></footer><div id="voiceStatus" class="mini-voice-status">Microfone desligado</div></main>';
- $('#back').onclick=()=>{cancelAnimationFrame(pongRaf);pongPadDirection=0;send({type:'leave'});room=null;home()};
+ $('#back').onclick=()=>{cancelAnimationFrame(pongRaf);pongCanvasObserver?.disconnect();pongCanvasObserver=null;pongPadDirection=0;send({type:'leave'});room=null;home()};
  $('#voice').onclick=toggleVoice;$('#mute').onclick=toggleMute;
- const canvas=$('#pongCanvas');
+ const canvas=$('#pongCanvas'),stage=canvas.parentElement;
+ // Use an exact 360:560 CSS box; object-fit letterboxing would desynchronise taps and collisions.
+ const fitPong=()=>{if(!canvas.isConnected)return;const scale=Math.min(stage.clientWidth/360,stage.clientHeight/560);if(scale>0){canvas.style.width=Math.floor(360*scale)+'px';canvas.style.height=Math.floor(560*scale)+'px'}};
+ fitPong();if(typeof ResizeObserver!=='undefined'){pongCanvasObserver=new ResizeObserver(fitPong);pongCanvasObserver.observe(stage)}
  const setPaddle=y=>{if(room?.mode==='spectator')return;pongLocalY=Math.max(.13,Math.min(.87,y));const n=performance.now();if(n-pongLastSend>30){pongLastSend=n;send({type:'paddle',y:pongLocalY})}};
  const touch=e=>{e.preventDefault();const r=canvas.getBoundingClientRect();setPaddle((e.clientY-r.top)/r.height)};
  canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture?.(e.pointerId);touch(e)});
@@ -69,7 +72,14 @@ function pong(){
 }
 function drawPongFrame(m){
  if(room?.game!=='pong')return;
- if(!pongRender||m.round!==pongRender.data.round){pongVisual={x:m.ball.x,y:m.ball.y};}pongRender={data:m,at:performance.now()};const serve=$('#pongServe');if(serve){serve.hidden=m.phase!=='serve';serve.textContent=m.round===1?'COMEÇA EM '+m.serveRemaining:'NOVO SAQUE EM '+m.serveRemaining}const scores=$('#pongLiveScore');
+ const previous=pongRender?.data;
+ // A scoring reset or a real wall/paddle rebound cannot be interpolated as a straight line.
+ const newRally=!previous||previous.round!==m.round||previous.bounceId!==m.bounceId||previous.phase!==m.phase;
+ if(newRally)pongVisual={x:m.ball.x,y:m.ball.y};
+ pongRender={data:m,at:performance.now(),newRally};
+ const serve=$('#pongServe');
+ if(serve){serve.hidden=m.phase!=='serve';serve.textContent=m.round===1?'COMEÇA EM '+m.serveRemaining:'NOVO SAQUE EM '+m.serveRemaining}
+ const scores=$('#pongLiveScore');
  if(scores)scores.innerHTML=(m.players[0]?.score??0)+' <span>:</span> '+(m.players[1]?.score??0);
  if(room?.started){const waiting=$('#waiting');if(waiting)waiting.hidden=true}
 }
@@ -77,30 +87,50 @@ function paintPong(){
  const cv=$('#pongCanvas');if(!cv)return;const ctx=cv.getContext('2d'),w=cv.width,h=cv.height;
  const g=ctx.createLinearGradient(0,0,w,h);g.addColorStop(0,'#0d0f32');g.addColorStop(.55,'#1b164c');g.addColorStop(1,'#260a48');
  ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
- ctx.strokeStyle='#ffffff09';ctx.lineWidth=1;for(let x=0;x<w;x+=30){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}for(let y=0;y<h;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+ ctx.strokeStyle='#ffffff09';ctx.lineWidth=1;
+ for(let x=0;x<w;x+=30){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+ for(let y=0;y<h;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
  ctx.strokeStyle='#66aaff55';ctx.lineWidth=3;ctx.setLineDash([8,14]);ctx.beginPath();ctx.moveTo(w/2,30);ctx.lineTo(w/2,h-20);ctx.stroke();ctx.setLineDash([]);
  ctx.strokeStyle='#714bcc77';ctx.lineWidth=2;ctx.strokeRect(5,5,w-10,h-10);
  if(!pongRender)return;
- const m=pongRender.data;const ids=room?.players?.map(p=>p.id)||[];
- const index=ids.indexOf(me?.id);const spectator=room?.mode==='spectator';
+ const m=pongRender.data,ids=room?.players?.map(p=>p.id)||[];
+ const index=ids.indexOf(me?.id),spectator=room?.mode==='spectator';
  for(let i=0;i<2;i++){
-   const data=m.players.find(p=>p.id===ids[i]);
-   const y=Math.max(.12,Math.min(.88,(!spectator&&index===i)?pongLocalY:(data?.paddle??m.aiPaddle??.5)))*h;
-   const x=i===0?22:w-22,col=i===0?'#38f7e2':'#ff53b6';
-   ctx.shadowColor=col;ctx.shadowBlur=25;ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(x-7,y-48,14,96,7);ctx.fill();ctx.shadowBlur=0;
-   ctx.fillStyle='#ffffffa8';ctx.beginPath();ctx.roundRect(x-3,y-40,3,80,2);ctx.fill();
+  const data=m.players.find(p=>p.id===ids[i]);
+  const y=Math.max(.12,Math.min(.88,(!spectator&&index===i)?pongLocalY:(data?.paddle??m.aiPaddle??.5)))*h;
+  const x=i===0?22:w-22,col=i===0?'#38f7e2':'#ff53b6';
+  ctx.shadowColor=col;ctx.shadowBlur=25;ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(x-7,y-48,14,96,7);ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#ffffffa8';ctx.beginPath();ctx.roundRect(x-3,y-40,3,80,2);ctx.fill();
  }
- const elapsed=m.phase==='play'?Math.min(.055,(performance.now()-pongRender.at)/1000):0;
- const targetX=Math.max(.02,Math.min(.98,m.ball.x+m.ball.vx*elapsed));
- const targetY=Math.max(.03,Math.min(.97,m.ball.y+m.ball.vy*elapsed));
- if(!pongVisual)pongVisual={x:targetX,y:targetY};
- const smooth=m.phase==='serve'?1:.48;
- pongVisual.x+=(targetX-pongVisual.x)*smooth;pongVisual.y+=(targetY-pongVisual.y)*smooth;
+ // Rendering never shows the ball behind the contact plane, even between network packets.
+ // A confirmed rebound resets prediction immediately, preventing lerp across the paddle.
+ const left=Number.isFinite(m.limits?.left)?m.limits.left:38/360;
+ const right=Number.isFinite(m.limits?.right)?m.limits.right:322/360;
+ const elapsed=m.phase==='play'?Math.min(.032,(performance.now()-pongRender.at)/1000):0;
+ let tx=m.ball.x+m.ball.vx*elapsed,ty=m.ball.y+m.ball.vy*elapsed;
+ tx=Math.max(left,Math.min(right,tx));
+ ty=Math.max(9/560,Math.min(1-9/560,ty));
+ if(!pongVisual)pongVisual={x:tx,y:ty};
+ const factor=m.phase==='serve'?1:.75;
+ pongVisual.x+=((tx-pongVisual.x)*factor);
+ pongVisual.y+=((ty-pongVisual.y)*factor);
+ pongVisual.x=Math.max(left,Math.min(right,pongVisual.x));
+ pongVisual.y=Math.max(9/560,Math.min(1-9/560,pongVisual.y));
  const bx=pongVisual.x*w,by=pongVisual.y*h;
- for(let i=m.phase==='serve'?-1:5;i>=0;i--){let px=bx-m.ball.vx*w*(.016*i),py=by-m.ball.vy*h*(.016*i);
-  ctx.globalAlpha=(6-i)/24;ctx.fillStyle='#ffdd67';ctx.beginPath();ctx.arc(px,py,11+i*1.2,0,Math.PI*2);ctx.fill()}
- ctx.globalAlpha=1;ctx.shadowColor='#f9df59';ctx.shadowBlur=28;ctx.fillStyle='#fff9bf';ctx.beginPath();ctx.arc(bx,by,9,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+ // Skip the historical trail on the first frame after a bounce/serve; old velocity
+ // could otherwise paint a glowing ball on the wrong side of the paddle.
+ if(m.phase==='play'&&!pongRender.newRally){
+  for(let i=5;i>=0;i--){
+   const px=Math.max(left*w,Math.min(right*w,bx-m.ball.vx*w*(.012*i)));
+   const py=Math.max(9,Math.min(h-9,by-m.ball.vy*h*(.012*i)));
+   ctx.globalAlpha=(6-i)/24;ctx.fillStyle='#ffdd67';ctx.beginPath();ctx.arc(px,py,8+i*.7,0,Math.PI*2);ctx.fill();
+  }
+ }
+ ctx.globalAlpha=1;ctx.shadowColor='#f9df59';ctx.shadowBlur=28;ctx.fillStyle='#fff9bf';
+ ctx.beginPath();ctx.arc(bx,by,9,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+ pongRender.newRally=false;
 }
+
 let snakeTimer=null,snakeRaf=0,snakeKeyHandler=null;
 function stopSnake(){clearInterval(snakeTimer);cancelAnimationFrame(snakeRaf);snakeTimer=null;snakeRaf=0;if(snakeKeyHandler){window.removeEventListener('keydown',snakeKeyHandler);snakeKeyHandler=null}}
 function snake(){

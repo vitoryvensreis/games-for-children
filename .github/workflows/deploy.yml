@@ -2,6 +2,8 @@ name: Deploy GamesForChildren
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +27,7 @@ jobs:
 
   deploy:
     needs: validate
-    if: ${{ vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

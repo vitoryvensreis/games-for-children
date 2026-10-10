@@ -147,7 +147,11 @@ jobs:
             mkdir -p backup
             cp server.cjs backup/server.cjs
             if test -d public; then cp -a public backup/public; fi
-            if test -d vendor/mcgalaxy/levels; then tar -czf backup/mcgalaxy-levels-latest.tar.gz -C vendor/mcgalaxy levels; fi
+            if test -d vendor/mcgalaxy/levels; then
+              tar -czf backup/mcgalaxy-levels-latest.tar.gz -C vendor/mcgalaxy levels
+              cp backup/mcgalaxy-levels-latest.tar.gz "backup/world-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+              ls -1t backup/world-*.tar.gz 2>/dev/null | tail -n +13 | xargs -r rm -f
+            fi
             if test -f package.json; then cp package.json backup/package.json; fi
             tar -xzf release.tar.gz
             PATH=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin:$PATH /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund
@@ -159,6 +163,14 @@ jobs:
                     && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/static/default.zip; then
                   for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
                     if timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/25565" 2>/dev/null; then
+                      if test -s vendor/mcgalaxy/levels/aventura.lvl; then
+                        echo GFC_ADVENTURE_WORLD_SAVED
+                        ls -lh vendor/mcgalaxy/levels/aventura.lvl
+                        grep -i "^main-name" vendor/mcgalaxy/properties/server.properties || true
+                      else
+                        echo "::warning::Mapa aventura ainda não persistido; consultar logs MCGalaxy"
+                        /usr/bin/journalctl --no-pager -u games-for-children.service -n 22 | grep -E "MCGalaxy|Generate|world|map" || true
+                      fi
                       echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
                       exit 0
                     fi

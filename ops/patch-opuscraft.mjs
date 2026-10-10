@@ -50,6 +50,7 @@ patch('src/main.ts',
     }
     game.opts.renderDistance = 2; // Dedicated host simulates chunks; it does not need far-field graphics.
     await game.startWorld(meta);
+    game.player.profileName = 'Servidor_VPS'; // NPC técnico, não um filho jogando.
     openToLanOnceSpawned(game, 'creative');
   } else if (params.has('gfcJoin')) {
     // Never take a player identity or a join code from child-controlled query parameters.

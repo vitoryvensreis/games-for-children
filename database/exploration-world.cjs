@@ -32,7 +32,7 @@ function generate(){
  for(let z=0;z<LENGTH;z++)for(let x=0;x<WIDTH;x++){
   const h=height(x,z),shore=h<41;top[z*WIDTH+x]=h;
   put(x,0,z,B.BEDROCK);
-  for(let y=1;y<=h;y++)put(x,y,z,y===h?(h>78?B.WHITE:shore?B.SAND:B.GRASS):y>h-4?B.DIRT:B.STONE);
+  for(let y=1;y<=h;y++)put(x,y,z,y===h?(h>67?B.WHITE:shore?B.SAND:B.GRASS):y>h-4?B.DIRT:B.STONE);
   if(h<sea)for(let y=h+1;y<=sea;y++)put(x,y,z,B.WATER);
  }
  const shrub=(x,z)=>{

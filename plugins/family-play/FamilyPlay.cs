@@ -264,8 +264,16 @@ public sealed class FamilyPlay : Plugin {
     bool reverse;
     botPhases.TryGetValue(key,out reverse);
     botPhases[key]=!reverse;
-    int dx=reverse?-2:3,dz=reverse?-2:2;
-    bot.TargetPos=new Position(home.X+dx*32,home.Y,home.Z+dz*32);
+    int dx=random.Next(-4,5),dz=random.Next(-4,5);
+    if(dx==0&&dz==0)dx=reverse?2:-2;
+    int x=home.X/32+dx,y=home.Y/32,z=home.Z/32+dz;
+    if(x>1&&z>1&&y>2&&x<level.Width-2&&z<level.Length-2&&y<level.Height-2
+       &&level.GetBlock((ushort)x,(ushort)y,(ushort)z)==Block.Air
+       &&level.GetBlock((ushort)x,(ushort)(y+1),(ushort)z)==Block.Air
+       &&(level.GetBlock((ushort)x,(ushort)(y-1),(ushort)z)!=Block.Air
+          ||level.GetBlock((ushort)x,(ushort)(y-2),(ushort)z)!=Block.Air)){
+     bot.TargetPos=new Position(home.X+dx*32,home.Y,home.Z+dz*32);
+    }
     bot.movement=true;
     bot.movementSpeed=bot.name.StartsWith("Guia_")?4:3;
    }
@@ -560,9 +568,9 @@ public sealed class FamilyPlay : Plugin {
  }
  private static void InstallWildlife(Level lvl){
   // Wild animals are decorative, with simple walking paths. Never hostile.
-  string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago"};
-  string[] models={"sheep","pig","chicken","sheep"};
-  int[,] places=new int[,]{{187,207},{220,190},{183,167},{245,171}};
+  string[] names={"Ovelha_Bosque","Porco_Montanha","Galinha_Campo","Ovelha_Lago","Porquinho_Rio","Galinha_Trilha","Ovelha_Colina","Porco_Bosque"};
+  string[] models={"sheep","pig","chicken","sheep","pig","chicken","sheep","pig"};
+  int[,] places=new int[,]{{187,207},{220,190},{183,167},{245,171},{206,232},{170,224},{257,207},{217,154}};
   int found=0;
   for(int n=0;n<names.Length;n++){
    bool exists=false;foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==names[n]){exists=true;break;}
@@ -731,6 +739,7 @@ public sealed class FamilyPlay : Plugin {
    }
    if(cmd=="mochila"){ShowBag(p);return;}
    if(cmd=="criar"){Craft(p,arg);return;}
+   if(cmd=="portal"){CreatePortal(p,arg);return;}
    if(cmd=="minerar"){if(MoveToWorld(p,"mineracao"))p.Message("&aBem-vindo ao Mundo Mineracao! Corte uma arvore e fabrique ferramentas.");return;}
    if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
    if(cmd=="premios"){ShowAdventures(p);return;}

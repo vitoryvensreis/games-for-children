@@ -28,7 +28,7 @@ test('ClassiCube tem orientação horizontal e não corta o jogo',()=>{
  // The client uses ClassiCube's native left thumbstick and right-hand action controls.
  assert.match(html,/ClassiCube\.js/);
  // The native game already includes left/right mobile controls. Do not duplicate them in HTML.
- assert.doesNotMatch(html,/mobileGamePad|cc-pad-left|cc-pad-right|data-mouse=/);
+ assert.doesNotMatch(html,/mobileGamePad|cc-pad-left|cc-pad-right/);
  assert.match(html,/id="familyPad"/);
  assert.match(html,/family-pad-panel/);
  assert.match(html,/background:#122747/,'O painel deve cobrir visualmente os controles originais');

@@ -45,12 +45,47 @@ function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x
 function end(s){touch(s);s.revoked=true;for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
 function cubePlayerName(u){const clean=u.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]/g,'').slice(0,11)||'Piloto';return clean+'_'+u.id.replace(/-/g,'').slice(0,4)}
 function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
+// O gerador só roda caso o mapa ainda não exista. Nunca apagamos mapas ou blocos existentes.
+const ADVENTURE_MAP='aventura',ADVENTURE_SEED='481516',ADVENTURE_SIZE='192 96 192';
+let worldInitStarted=false;
+function startFamilyAdventureWorld(){
+ if(worldInitStarted||!mcgalaxyProcess?.stdin?.writable)return;
+ worldInitStarted=true;
+ const levels=path.join(MCGALAXY_DIR,'levels');
+ const world=path.join(levels,ADVENTURE_MAP+'.lvl');
+ const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\\n')};
+ // No momento da primeira atualização preservamos "main" e criamos "aventura".
+ // Se a geração já ocorreu antes, o MCGalaxy restaura o "main-name" salvo e NÃO regenera.
+ if(!fs.existsSync(world)){
+  console.log('[MCGalaxy] Criando mapa familia-aventura (terreno Classic, árvores, água e morros)');
+  const original=path.join(levels,'main.lvl');
+  if(fs.existsSync(original)){
+   const backup=path.join(MCGALAXY_DIR,'backups-gfc');fs.mkdirSync(backup,{recursive:true});
+   const stamp=new Date().toISOString().slice(0,10);
+   const archive=path.join(backup,'mapa-original-'+stamp+'.lvl');
+   if(!fs.existsSync(archive))fs.copyFileSync(original,archive);
+  }
+  writeCommand('/newlvl '+ADVENTURE_MAP+' '+ADVENTURE_SIZE+' Classic '+ADVENTURE_SEED);
+ }
+ let tries=0;
+ const awaitMap=setInterval(()=>{
+  tries++;
+  if(!mcgalaxyProcess){clearInterval(awaitMap);return}
+  if(fs.existsSync(world)){
+   clearInterval(awaitMap);
+   // Command /main retains old map; changes only which saved world children join by default.
+   writeCommand('/main '+ADVENTURE_MAP);
+   setTimeout(()=>writeCommand('/save all'),1200).unref();
+   console.log('[MCGalaxy] Mapa da familia restaurado; construções são persistidas em '+world);
+  }else if(tries>=65){clearInterval(awaitMap);console.warn('[MCGalaxy] Aguardando geração do mundo; original mantido')}
+ },1500);awaitMap.unref();
+}
 function setupMCGalaxy(){
  if(process.env.MCGALAXY_EXTERNAL==='true'){const check=setInterval(async()=>{if(await cubePortReady()){mcgalaxyReady=true;clearInterval(check)}},150);check.unref();return}
  const exec=path.join(MCGALAXY_DIR,'MCGalaxyCLI');if(!fs.existsSync(exec)||process.env.MCGALAXY_ENABLED==='false')return;
  const cfgDir=path.join(MCGALAXY_DIR,'properties');fs.mkdirSync(cfgDir,{recursive:true});
  const cfg=path.join(cfgDir,'server.properties');
- const required={'server-name':'GamesForChildren Privado','public':'false','verify-names':'false','listen-ip':'127.0.0.1','port':String(MCGALAXY_PORT),'support-web-client':'true','allow-ip-forwarding':'false','max-players':'12','max-guests':'12','use-whitelist':'false','autoload':'true'};
+ const required={'server-name':'GamesForChildren Privado','public':'false','verify-names':'false','listen-ip':'127.0.0.1','port':String(MCGALAXY_PORT),'support-web-client':'true','allow-ip-forwarding':'false','max-players':'12','max-guests':'12','use-whitelist':'false','autoload':'true','backup-time':'300'};
  let lines=fs.existsSync(cfg)?fs.readFileSync(cfg,'utf8').split(/\r?\n/):[];
  for(const [key,value] of Object.entries(required)){const matcher=new RegExp('^\\s*'+key+'\\s*=','i');let found=false;lines=lines.map(line=>{if(matcher.test(line)){found=true;return key+' = '+value}return line});if(!found)lines.push(key+' = '+value)}
  fs.writeFileSync(cfg,lines.join('\n')+'\n',{mode:0o600});
@@ -59,9 +94,10 @@ function setupMCGalaxy(){
  mcgalaxyProcess.stdout.on('data',d=>log('out',d));mcgalaxyProcess.stderr.on('data',d=>log('err',d));
  mcgalaxyProcess.on('error',e=>{mcgalaxyReady=false;console.error('[MCGalaxy] Falha na inicialização:',e.message)});
  mcgalaxyProcess.on('exit',(code)=>{mcgalaxyReady=false;mcgalaxyProcess=null;console.warn('[MCGalaxy] Encerrado, código',code)});
- const probe=setInterval(async()=>{if(!mcgalaxyProcess){clearInterval(probe);return}if(await cubePortReady()){mcgalaxyReady=true;clearInterval(probe);console.log('[MCGalaxy] Mundo privado disponível em localhost')}},1500);probe.unref();
+ const saveTimer=setInterval(()=>{if(mcgalaxyReady&&mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write('/save all\\n')},300000);saveTimer.unref();
+ const probe=setInterval(async()=>{if(!mcgalaxyProcess){clearInterval(probe);return}if(await cubePortReady()){mcgalaxyReady=true;clearInterval(probe);console.log('[MCGalaxy] Mundo privado disponível em localhost');startFamilyAdventureWorld();}},1500);probe.unref();
 }
-process.once('SIGTERM',()=>{try{mcgalaxyProcess?.stdin?.write('stop\n')}catch{};setTimeout(()=>process.exit(0),1000).unref()});
+process.once('SIGTERM',()=>{try{mcgalaxyProcess?.stdin?.write('/save all\n');mcgalaxyProcess?.stdin?.write('stop\n')}catch{};setTimeout(()=>process.exit(0),3200).unref()});
 function userInfo(u){return {id:u.id,name:u.name,role:u.role,enabled:u.enabled,loginEnabled:u.loginEnabled,dailyLimit:u.dailyLimit,voiceEnabled:u.voiceEnabled,usedSeconds:Math.floor(usage(u)/1000),online:activeUser(u),hasPhoto:Boolean(u.photo)}}
 function json(res,status,obj,cookie){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...(cookie?{'Set-Cookie':cookie}:{})});res.end(JSON.stringify(obj))}
 function readBody(req){return new Promise((resolve,reject)=>{let text='';req.on('data',b=>{text+=b;if(text.length>20000){reject(Error('payload excessivo'));req.destroy()}});req.on('end',()=>{try{resolve(JSON.parse(text||'{}'))}catch{reject(Error('JSON inválido'))}});req.on('error',reject)})}

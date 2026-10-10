@@ -128,6 +128,12 @@ html,body{position:fixed;inset:0;margin:0;padding:0;width:100%;height:100%;overf
 #familyPanel .family-action.family-primary{background:#148c71;border-color:#75e7cc}
 #familyPanel .family-hint{font-size:11px;color:#d5e5fa;line-height:1.4;margin:6px 0 0}
 #familyPanel #familyMessage{font-size:12px;color:#ffe1a9;min-height:15px;margin-top:8px}
+#familyPanel .skin-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+#familyPanel .skin-option{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid #7b99d0;background:#263e6b;color:white;padding:10px 3px;border-radius:10px;font:700 10px system-ui,sans-serif;min-height:80px;touch-action:manipulation}
+#familyPanel .skin-option.selected{outline:2px solid #7ce6b5;background:#175d59}
+#familyPanel .skin-face{display:block;width:32px;height:32px;border:2px solid #dcefff;border-radius:5px;image-rendering:pixelated;background-repeat:no-repeat;background-size:256px 128px;background-position:-32px -32px}
+#familyPanel .skin-option span:last-child{text-align:center;line-height:1.25}
+
 #desktopControlsHint[hidden]{display:none!important}
 #desktopControlsHint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:17;border:1px solid #b5ddff90;background:#10264be9;color:white;border-radius:12px;padding:8px 14px;pointer-events:none;white-space:nowrap;font:bold 13px system-ui,sans-serif}
 @media(pointer:coarse){#desktopControlsHint{display:none!important}}

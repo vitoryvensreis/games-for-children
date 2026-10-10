@@ -54,6 +54,7 @@ jobs:
           fi
           echo "Verified VPS-compatible WebGL2 game host, relay, and world save"
           curl -fsS http://127.0.0.1:4173/__health
+          node ops/opuscraft-guest-smoke.cjs
 
 
   deploy:

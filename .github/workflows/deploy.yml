@@ -32,6 +32,29 @@ jobs:
           test -s public/opuscraft/index.html
           test -s ops/opuscraft-relay.mjs
           grep -q '/opuscraft/assets/' public/opuscraft/index.html
+      - name: Smoke test persistent headless multiplayer host
+        shell: bash
+        run: |
+          set -euo pipefail
+          node ops/opuscraft-host.cjs >/tmp/opuscraft-host.log 2>&1 &
+          HOST_PID=$!
+          trap 'kill "$HOST_PID" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 95); do
+            if curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"ready":true' &&
+               curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"lastSave":"20'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if test "$ready" -ne 1; then
+            cat /tmp/opuscraft-host.log
+            exit 1
+          fi
+          echo "Verified VPS-compatible WebGL2 game host, relay, and world save"
+          curl -fsS http://127.0.0.1:4173/__health
+
 
   deploy:
     needs: validate

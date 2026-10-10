@@ -33,7 +33,7 @@ test('MCGalaxy mining is server-authoritative and villagers actively wander',()=
  assert.match(s,/OnBlockChangingEvent\.Register\(MiningChange, Priority\.Low\)/);
  assert.match(s,/p\.level\.GetBlock\(x,y,z\)/,'Resource determined from block actually present on server');
  assert.match(s,/required>b\.Tool/,'Ore mining requires better pickaxe');
- assert.match(s,/bag\.Apples<1/,'No unlimited free meals');
+ assert.match(s,/b\.Iron<2/,'Portals require genuinely mined resources');
  assert.match(s,/gfc-mining-inventory\.tsv/);
  assert.match(s,/WanderBots\(\)/);
  assert.match(s,/bot\.movement=true/);

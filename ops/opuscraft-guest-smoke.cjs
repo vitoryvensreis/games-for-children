@@ -85,6 +85,15 @@ server.on('upgrade',(req,socket,head)=>{
    ws.on('close',()=>clearTimeout(timeout));
   });
   console.log('OPUSCRAFT_PUBLIC_RELAY_DISCOVERY_OK worlds='+worlds.length);
+  // Prove localhost-only teleport POST is routed to the host handler,
+  // rather than accidentally rejected by the static-file GET guard.
+  const teleportProbe=await fetch('http://127.0.0.1:4173/__teleport',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:'',to:''})
+  });
+  if(teleportProbe.status!==400)
+   throw Error('Teleport endpoint is not active (expected 400 for invalid names, got '+teleportProbe.status+')');
+  console.log('OPUSCRAFT_TELEPORT_ROUTE_OK');
   stage='launch-browser';console.log('Guest smoke: launching guest browser');
   browser=await puppeteer.launch({
    executablePath:await chromium.executablePath(),

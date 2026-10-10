@@ -229,8 +229,8 @@ public sealed class FamilyPlay : Plugin {
  }
 
  private static bool ValidSpot(SavedSpot spot) {
-  return spot!=null&&(spot.World=="vila_familia"||spot.World=="aventura")&&
-         spot.X>=1&&spot.X<6144&&spot.Z>=1&&spot.Z<6144&&spot.Y>=1&&spot.Y<3072;
+  return spot!=null&&(spot.World=="vila_familia"||spot.World=="aventura"||spot.World=="exploracao")&&
+         spot.X>=1&&spot.X<12288&&spot.Z>=1&&spot.Z<12288&&spot.Y>=1&&spot.Y<3584;
  }
  private static void LoadSpots(){
   lock(Gate){
@@ -289,7 +289,7 @@ public sealed class FamilyPlay : Plugin {
    if(p.Socket.Disconnected)return;
    SavedSpot saved;
    lock(Gate){if(!returningPlayers.Contains(p.name)||!savedSpots.TryGetValue(p.name,out saved))return;}
-   if(saved.World!="vila_familia"&&saved.World!="aventura")return;
+   if(saved.World!="vila_familia"&&saved.World!="aventura"&&saved.World!="exploracao")return;
    if(!p.level.MapName.Equals(saved.World,StringComparison.OrdinalIgnoreCase))
     PlayerActions.ChangeMap(p,saved.World);
   },null,TimeSpan.FromMilliseconds(600));
@@ -304,7 +304,7 @@ public sealed class FamilyPlay : Plugin {
  private static void SavePlayerSpot(Player p,Position pos,byte yaw,byte pitch,bool force){
   if(p.level==null)return;
   string world=p.level.MapName;
-  if(world!="vila_familia"&&world!="aventura")return;
+  if(world!="vila_familia"&&world!="aventura"&&world!="exploracao")return;
   // The initial spawn briefly lands in the main world before the saved world
   // is restored. Never overwrite the last exit location during that transfer.
   SavedSpot restoring;
@@ -505,6 +505,7 @@ public sealed class FamilyPlay : Plugin {
    if(cmd=="casa"){MoveHome(p);return;}
    if(cmd=="vila"){if(MoveToWorld(p,"vila_familia"))p.Message("&aBem-vindo a Vila da Familia!");return;}
    if(cmd=="aventura"){if(MoveToWorld(p,"aventura"))p.Message("&aVoce entrou no Mundo Aventura!");return;}
+   if(cmd=="exploracao"){if(MoveToWorld(p,"exploracao"))p.Message("&aExplore a floresta, montanhas e novas construcoes!");return;}
    if(cmd=="amigo") {
     if(arg.Length<3||arg.Length>22||!KnownUser(arg)){p.Message("&eEscolha um amigo conectado no menu Familia.");return;}
     Player target=PlayerInfo.FindExact(arg);
@@ -549,6 +550,7 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&T/familia amigo NOME &H- Encontrar um amigo");
    p.Message("&T/familia vila  &H- Ir para a vila");
    p.Message("&T/familia aventura &H- Explorar o mundo antigo");
+   p.Message("&T/familia exploracao &H- Mundo maior de exploracao");
    p.Message("&T/familia pele COR &H- Escolher a cor do personagem");
    p.Message("&T/familia tesouro &H- Caca ao tesouro");
    p.Message("&T/familia corrida &H- Circuito de exploracao");

@@ -12,6 +12,30 @@ patch('src/main.ts',
  "import { openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';",
  "import { openToLanOnceSpawned, joinFirstLanWorld, guestIdentity, guestModeParam, JoinMultiplayerScreen } from './gui/screens/multiplayer';");
 patch('src/main.ts',
+ "  installScreens(game);",
+ `  installScreens(game);
+  if (!params.has('gfcHost')) {
+    let accessLost=false;
+    setInterval(async () => {
+      if (accessLost)return;
+      try {
+        const r=await fetch('/api/me',{credentials:'same-origin',cache:'no-store'});
+        if(!r.ok)throw Error('Sessao familiar encerrada');
+        const data=await r.json() as {user?:{role:string;dailyLimit:number;usedSeconds:number}};
+        if(data.user?.role==='child'&&data.user.usedSeconds>=data.user.dailyLimit*60)
+         throw Error('Tempo de jogo encerrado pelo responsavel');
+      }catch{
+        accessLost=true;
+        try{if(game.inWorld)await game.leaveWorld()}catch{}
+        game.clock.stop();
+        const panel=document.createElement('div');
+        panel.textContent='Acesso encerrado pelo responsavel. Volte ao GamesNavagador.';
+        panel.style.cssText='position:fixed;z-index:999;inset:0;background:#0c1930;color:white;display:grid;place-items:center;padding:24px;text-align:center;font:700 19px system-ui';
+        document.body.appendChild(panel);
+      }
+    },15000);
+  }`);
+patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
  "import { getWorldMeta, saveWorldMeta } from './storage/worldStore';");
 patch('src/main.ts',

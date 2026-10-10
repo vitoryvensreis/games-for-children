@@ -83,6 +83,22 @@ patch('src/gui/screens/menus.ts',
 patch('src/gui/screens/menus.ts',
  "    this.list = this.add(new WorldList(this, this.width, 48, this.height - 112));",
  "    this.list = this.add(new WorldList(this, this.width, 48, this.height - 142));");
+
+patch('src/gui/screens/menus.ts',
+ "  creative: \"Create, build, and explore without limits. You can fly, have endless materials, and can't be hurt by monsters\",",
+ "  creative: \"Create, build, and explore without limits. You can fly, have endless materials, and can't be hurt by monsters\",\\n  adventure: 'Explore maps with limited block interactions',\\n  spectator: 'Observe and fly through the world without building',");
+patch('src/gui/screens/menus.ts',
+ "  private mode: 'survival' | 'hardcore' | 'creative' = 'survival';",
+ "  private mode: 'survival' | 'hardcore' | 'creative' | 'adventure' | 'spectator' = 'survival';");
+patch('src/gui/screens/menus.ts',
+ "      this.mode = recreate.hardcore ? 'hardcore' : recreate.gameMode === 'creative' ? 'creative' : 'survival';",
+ "      this.mode = recreate.hardcore ? 'hardcore' : recreate.gameMode === 'creative' || recreate.gameMode === 'adventure' || recreate.gameMode === 'spectator' ? recreate.gameMode : 'survival';");
+patch('src/gui/screens/menus.ts',
+ "      const modes: ('survival' | 'hardcore' | 'creative')[] = ['survival', 'hardcore', 'creative'];",
+ "      const modes: ('survival' | 'hardcore' | 'creative' | 'adventure' | 'spectator')[] = ['survival', 'creative', 'adventure', 'spectator', 'hardcore'];");
+patch('src/gui/screens/menus.ts',
+ "      this.mode === 'creative' ? 'creative' : 'survival',",
+ "      this.mode === 'hardcore' ? 'survival' : this.mode,");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");

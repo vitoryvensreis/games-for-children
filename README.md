@@ -61,3 +61,12 @@ node --test tests/integration.cjs
 - Notificações não são Push em background.
 - Os controles e o placar precisam de homologação em aparelhos reais antes do uso por crianças.
 - O sistema salva pequenos volumes em JSON e não é voltado para usuários públicos.
+
+
+## Minecraft — exploração criativa com mineração
+- Removido o painel de corações/fome; o limite de tempo do responsável permanece ativo.
+- Inventário de recursos e picaretas continuam controlados pelo servidor.
+- Espadas de madeira/pedra/ferro e armaduras de ferro/ouro podem ser fabricadas e persistem como itens colecionáveis, ainda sem aparência 3D equipada e sem combate.
+- Portais físicos são montados em terreno livre e plano nos mapas Exploração/Mineração; exigem 8 pedras e 2 ferros (ADM isento). O plugin usa portais persistidos no banco do MCGalaxy: os backups também devem incluir esse banco, além dos arquivos .lvl.
+- Ovelhas, porcos e galinhas caminham pelo servidor; validar comportamento no Safari/PWA iOS.
+- Perfis infantis, controle parental e autenticação existentes foram preservados.

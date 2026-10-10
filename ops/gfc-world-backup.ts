@@ -4,8 +4,8 @@
 import type { WorldMeta } from './storage/worldStore';
 import { exportWorld, importWorld } from './storage/worldTransfer';
 
-export async function backupToVps(world: WorldMeta): Promise<void> {
- if(!window.confirm('Enviar um backup de "'+world.name+'" para sua conta familiar na VPS?'))return;
+export async function backupToVps(world: WorldMeta): Promise<boolean> {
+ if(!window.confirm('Enviar um backup de "'+world.name+'" para sua conta familiar na VPS?'))return false;
  const blob=await exportWorld(world.id);
  if(blob.size>64*1024*1024)throw new Error('Este mundo passou de 64 MB. Use a opção Make Backup para baixar uma cópia.');
  const response=await fetch('/api/opuscraft/world-backups/'+encodeURIComponent(world.id),{
@@ -15,6 +15,7 @@ export async function backupToVps(world: WorldMeta): Promise<void> {
   const error=await response.json().catch(()=>({error:'Falha ao salvar'}));
   throw new Error(error.error||'O servidor recusou o backup');
  }
+ return true;
 }
 export async function restoreFromVps(): Promise<void> {
  const r=await fetch('/api/opuscraft/world-backups',{credentials:'same-origin',cache:'no-store'});

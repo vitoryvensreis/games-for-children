@@ -169,3 +169,41 @@ body:has(.classicube-embed) .family-voice-panel button{min-height:34px;padding:7
 body:has(.classicube-embed) .family-voice-info{font-size:10px;min-width:54px}
 body:has(.classicube-embed) .family-voice-info strong{font-size:10px}
 body:has(.classicube-embed) .family-voice-info span{font-size:9px}
+
+
+/* Pong mobile stability: no horizontal page scrolling or sideways touch gestures.
+   Keep the Canvas CSS box exactly aligned to its internal 360x560 coordinates. */
+html:has(.pong-game),body:has(.pong-game){
+ width:100%!important;max-width:100%!important;
+ overflow-x:hidden!important;overflow-y:hidden!important;
+ overscroll-behavior:none!important;
+ touch-action:none;
+}
+body:has(.pong-game) #app{position:fixed;inset:0;width:100%;height:100dvh;min-width:0;max-width:100%;overflow:hidden;padding:0;margin:0}
+.pong-game{
+ position:fixed!important;inset:0!important;
+ width:100%!important;max-width:100%!important;min-width:0!important;
+ height:100dvh!important;max-height:100dvh!important;
+ overflow:hidden!important;overscroll-behavior:none!important;touch-action:none;
+}
+.pong-game .mini-header{flex-shrink:0;min-width:0;width:100%;max-width:100%;overflow:hidden}
+.pong-game .mini-title{flex:1 1 auto;min-width:0}
+.pong-game .mini-title strong{overflow:hidden;text-overflow:ellipsis}
+.pong-game .mini-time,.pong-game .mini-header button{flex:0 0 auto}
+.pong-game .pong-stage{
+ width:100%;max-width:100%;min-width:0;min-height:0;
+ overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none;
+}
+.pong-game .pong-stage canvas{
+ display:block;flex:0 0 auto;
+ width:auto;height:auto;min-width:0;max-width:100%;max-height:100%;
+ border:0!important;box-sizing:border-box;
+ object-fit:fill;touch-action:none;overscroll-behavior:none;
+ box-shadow:inset 3px 0 0 #1bf4db55,inset -3px 0 0 #ff5bcc55;
+}
+.pong-game .pong-controls{
+ flex-shrink:0;width:100%;max-width:100%;min-width:0;overflow:hidden;touch-action:none;
+}
+.pong-game .pong-controls button{min-width:0;touch-action:none}
+.pong-game .pong-controls span{min-width:0;overflow-wrap:break-word}
+.pong-game .pong-serve{max-width:calc(100% - 20px);font-size:clamp(13px,4vw,20px)}

@@ -32,28 +32,26 @@ test('Bloco D: configuration clamps touch controls and rejects invalid values',(
  assert.throws(()=>safeSettings({padSize:'invalid'}),/Valor inválido/);
 });
 
-test('Bloco D and Block C: plugin must check existing maps, persist position and expose guide status',()=>{
+test('Bloco D: creatures, map portals and positions stay server-owned',()=>{
  const plugin=fs.readFileSync(path.join(__dirname,'../plugins/family-play/FamilyPlay.cs'),'utf8');
  const server=fs.readFileSync(path.join(__dirname,'../server.cjs'),'utf8');
- assert.match(plugin,/foreach\(Level existing in LevelInfo\.Loaded\.Items\)InstallGuides\(existing\)/);
- assert.match(plugin,/File\.WriteAllText\(GuideStatusFile/);
- assert.match(plugin,/OnLevelLoadedEvent\.Register\(InstallGuides/);
- assert.match(plugin,/OnPlayerSpawningEvent\.Register\(RestoreSpotOnSpawn/);
+ const menu=fs.readFileSync(path.join(__dirname,'../public/classicube/family-menu.js'),'utf8');
+ const ui=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
+ assert.match(plugin,/OnLevelLoadedEvent\.Register\(SetupFamilyWorld/);
+ assert.match(plugin,/PlayerBot\.Remove\(old,false\)/);
+ assert.match(plugin,/new WalkInstruction\(\)\.Parse/);
+ assert.match(plugin,/SetupHubPortals\(lvl\)/);
  assert.match(plugin,/OnPlayerDisconnectEvent\.Register\(TrackDisconnect/);
  assert.match(plugin,/OnJoinedLevelEvent\.Register\(RestorePreviousWorld/);
  assert.match(plugin,/p\.Socket\.Disconnected/);
  assert.match(plugin,/gfc-family-positions\.tsv/);
- assert.match(plugin,/if\(cmd=="guia"\)/);
- assert.match(plugin,/Gui[a-z_ ]*da Praca|Guia encontrado/);
- const menu=fs.readFileSync(path.join(__dirname,'../public/classicube/family-menu.js'),'utf8');
- assert.match(menu,/data-place="praca"/);
- assert.match(menu,/data-place="ponte"/);
- assert.match(menu,/data-place="torre"/);
-
- assert.match(server,/function minecraftGuidesStatus/);
+ assert.match(plugin,/gfc-family-creatures\.status/);
+ assert.match(plugin,/gfc-family-portals\.status/);
+ assert.match(menu,/data-action="hub"/);
+ assert.doesNotMatch(menu,/data-action="guide"/);
+ assert.match(server,/function minecraftCreatureStatus/);
  assert.match(server,/function minecraftPlayersOverview/);
  assert.match(server,/action==='restore'/);
- const ui=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
  assert.match(ui,/refreshMinecraftDashboard/);
  assert.match(ui,/data-mc-restore/);
  assert.match(ui,/padSize:Number\(size.value\)/);
@@ -79,7 +77,8 @@ test('Bloco D: admin-only dashboard and saved touch settings',async()=>{
   assert.equal(data.status,200);
   const dash=await data.json();
   assert.equal(dash.worlds.length,4);
-  assert.equal(dash.guides.ready,false,'Without loaded plugin NPC readiness must not be invented');
+  assert.equal(dash.creatures.animals,0,'Creatures are not invented offline');
+  assert.equal(dash.creatures.portalEntrances,0);
   assert.ok(dash.players.some(u=>u.name==='Aluno'));
   const changed=await request('admin/minecraft/controls',{cookie:admin,method:'POST',body:{padSize:181,padOpacity:89,buildingEnabled:false}});
   assert.equal(changed.status,200);

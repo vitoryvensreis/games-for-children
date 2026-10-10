@@ -10,17 +10,18 @@ const PORT=4182;
 const sockets=new Set();
 const wss=new WebSocketServer({noServer:true,perMessageDeflate:false});
 const errors=[];
-let stage='init',guestPage=null;
+let stage='init',guestPage=null,guestPage2=null;
 const watchdog=setTimeout(()=>{
  console.error('OPUSCRAFT_GUEST_TIMEOUT stage='+stage,errors.slice(-12));
  process.exit(3);
-},190000);
+},255000);
 const diagnostics=setInterval(async()=>{
  try{
   const info=await guestPage?.evaluate(()=>{const g=window.__game,c=g?.client;return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,clientState:c?.state,connection:c?.transport?.state,reason:c?.endReason,screen:g?.screen?.constructor?.name,wait:c?.loading,recent:c?.latelyIds?.slice(-5)};});
-  const relayState=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json()).catch(()=>({}));
+  const second=await guestPage2?.evaluate(()=>({mode:window.__game?.mode,spawned:window.__game?.spawned,screen:window.__game?.screen?.constructor?.name})).catch(()=>({error:'second busy'}));
+ const relayState=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json()).catch(()=>({}));
   const hostState=await fetch('http://127.0.0.1:4173/__debug',{signal:AbortSignal.timeout(2500)}).then(r=>r.json()).catch(()=>({error:'host busy'}));
-  console.log('Guest smoke progress:',stage,JSON.stringify({info,relay:{hosting:relayState.hosting,guests:relayState.guests},host:hostState}));
+  console.log('Guest smoke progress:',stage,JSON.stringify({info,second,relay:{hosting:relayState.hosting,guests:relayState.guests},host:hostState}));
  }catch{console.log('Guest smoke progress:',stage)}
 },12000);
 diagnostics.unref?.();
@@ -28,7 +29,8 @@ const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
  if(u.pathname==='/api/opuscraft/identity'){
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  return res.end(JSON.stringify({playerName:'KID_TESTPLAYER',joinCode:'GFC2026X'}));
+  const playerName=req.headers['x-gfc-test-profile']==='adult'?'ADM_TESTPLAYER':'KID_TESTPLAYER';
+  return res.end(JSON.stringify({playerName,joinCode:'GFC2026X'}));
  }
  if(!u.pathname.startsWith('/opuscraft/')){res.writeHead(404).end();return}
  const proxy=http.get('http://127.0.0.1:4173'+req.url,upstream=>{
@@ -100,7 +102,7 @@ server.on('upgrade',(req,socket,head)=>{
    headless:true,
    args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader','--use-angle=swiftshader',
      '--ignore-gpu-blocklist','--disable-background-timer-throttling','--window-size=960,600'],
-   defaultViewport:{width:960,height:600},protocolTimeout:180000
+   defaultViewport:{width:780,height:500},protocolTimeout:180000
   });
   stage='new-page';
   const page=await browser.newPage();guestPage=page;
@@ -126,6 +128,44 @@ server.on('upgrade',(req,socket,head)=>{
   console.log('OPUSCRAFT_LIVE_ROSTER_OK');
 
   console.log('OPUSCRAFT_GUEST_JOIN_SUCCESS',JSON.stringify({status,serverGuests:stats.guests}));
+  // The family client must work on two different devices and user accounts at once.
+  stage='second-player-join';
+  const page2=await browser.newPage();guestPage2=page2;
+  await page2.setExtraHTTPHeaders({'x-gfc-test-profile':'adult'});
+  page2.on('pageerror',e=>errors.push('second page: '+e.message));
+  page2.on('console',m=>{if(m.type()==='error')errors.push('second console: '+m.text().slice(0,240))});
+  await page2.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcJoin=1',
+    {waitUntil:'domcontentloaded',timeout:45000});
+  await page2.waitForFunction(()=>{const g=window.__game;return !!(g?.mode==='client'&&g.inWorld&&g.spawned)},{
+   timeout:105000,polling:1000
+  });
+  const readyPlayers=await fetch('http://127.0.0.1:4173/__players').then(r=>r.json());
+  const kid=readyPlayers.players?.find(p=>p.name==='KID_TESTPLAYER');
+  const adm=readyPlayers.players?.find(p=>p.name==='ADM_TESTPLAYER');
+  if(!kid||!adm)throw Error('The server did not show both family players: '+JSON.stringify(readyPlayers));
+  const live=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json());
+  if(live.guests!==2)throw Error('Expected two simultaneous connections, got '+JSON.stringify(live));
+  console.log('OPUSCRAFT_TWO_PLAYERS_ONLINE_OK',JSON.stringify({guests:live.guests,players:[kid.name,adm.name]}));
+  stage='cross-client-visibility';
+  await Promise.all([page,page2].map((p,i)=>p.waitForFunction(expected=>{
+   const g=window.__game;
+   return !!(g?.spawned&&g.level?.players()?.some(p=>p.profileName===expected));
+  },{timeout:25000,polling:750},i===0?'ADM_TESTPLAYER':'KID_TESTPLAYER')));
+  console.log('OPUSCRAFT_TWO_PLAYERS_VISIBLE_OK');
+
+  // Exercise the real authority-side teleport RPC using two live sessions.
+  // The game server, not the caller's JavaScript, must accept and execute it.
+  stage='server-teleport';
+  const tp=await fetch('http://127.0.0.1:4173/__teleport',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:kid.name,to:adm.name}),
+   signal:AbortSignal.timeout(20000)
+  });
+  const tpResult=await tp.json();
+  if(tp.status!==200||!tpResult.ok)
+   throw Error('The live two-player teleport failed: '+JSON.stringify({status:tp.status,result:tpResult}));
+  console.log('OPUSCRAFT_TWO_PLAYER_TELEPORT_OK',JSON.stringify(tpResult));
+
  }catch(err){
   console.error('OpusCraft guest multiplayer smoke failed:',err?.stack||err);
   if(errors.length)console.error('Diagnostics:',errors.slice(-20));

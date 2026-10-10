@@ -27,7 +27,7 @@ patch('src/main.ts',
       }catch{
         accessLost=true;
         try{if(game.inWorld)await game.leaveWorld()}catch{}
-        game.clock.stop();
+        // The game's own leaveWorld() stops its internal tick clock safely.
         const panel=document.createElement('div');
         panel.textContent='Acesso encerrado pelo responsavel. Volte ao GamesNavagador.';
         panel.style.cssText='position:fixed;z-index:999;inset:0;background:#0c1930;color:white;display:grid;place-items:center;padding:24px;text-align:center;font:700 19px system-ui';

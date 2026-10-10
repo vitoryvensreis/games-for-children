@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {NAME:FAMILY_VILLAGE,installFamilyVillage}=require('./database/family-village.cjs');
+const {NAME:EXPLORATION_WORLD,install:installExplorationWorld}=require('./database/exploration-world.cjs');
 const {ROOMS:FAMILY_HOMES,SKINS:FAMILY_SKINS,playerName:familyName,initHomes,familyInfo,writePolicy,makeSkin}=require('./database/family-play.cjs');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
 const {WORLDS,BACKUP_PATTERN,makeBackup,listBackups,restoreOffline,checkWorld,safeSettings}=require('./database/minecraft-control.cjs');
@@ -89,6 +90,27 @@ function adventureStatus(u){
  ]};
 }
 
+function minecraftSurvival(u){
+ const file=path.join(MCGALAXY_DIR,'properties','gfc-survival.tsv');
+ let hearts=10,hunger=10;
+ try{
+  const lines=fs.readFileSync(file,'utf8').split(/\r?\n/);
+  const name=cubePlayerName(u);
+  const parts=lines.find(line=>line.startsWith(name+'|'))?.split('|');
+  if(parts?.length===4){hearts=Math.max(1,Math.min(10,Number(parts[1])||1));hunger=Math.max(0,Math.min(10,Number(parts[2])||0))}
+ }catch{}
+ let climate={phase:'Manhã',weather:'sol'};
+ try{
+  const text=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-climate.status'),'utf8');
+  for(const line of text.split(/\r?\n/)){
+   const index=line.indexOf('=');if(index<0)continue;
+   const key=line.slice(0,index),value=line.slice(index+1);
+   if(key==='phase'&&/^[\wÀ-ÿ ]{1,25}$/.test(value))climate.phase=value;
+   if(key==='weather'&&(value==='sol'||value==='chuva'))climate.weather=value;
+  }
+ }catch{}
+ return {hearts,hunger,climate,simplified:true};
+}
 function minecraftGuidesStatus(){
  const file=path.join(MCGALAXY_DIR,'properties','gfc-family-guides.status');
  try{
@@ -183,6 +205,8 @@ function setupMCGalaxy(){
  // Generate only once: MCGalaxy subsequently owns persistence and modifications.
  try{
   const village=installFamilyVillage(path.join(MCGALAXY_DIR,'levels'));
+  const explored=installExplorationWorld(path.join(MCGALAXY_DIR,'levels'));
+  console.log('[MCGalaxy] Exploração '+(explored.created?'gerada':'preservada')+': '+explored.path);
   console.log('[MCGalaxy] Vila da Família '+(village.created?'criada':'preservada')+': '+village.path);
  }catch(err){console.error('[MCGalaxy] Não foi possível preparar a vila; mapa atual será preservado:',err.message)}
  const cfgDir=path.join(MCGALAXY_DIR,'properties');fs.mkdirSync(cfgDir,{recursive:true});
@@ -280,6 +304,7 @@ if(gameCover&&req.method==='GET'){
 
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
 if(pathname==='/api/minecraft/controls'&&req.method==='GET')return json(res,200,{controls:state.minecraftControls});
+if(pathname==='/api/minecraft/survival'&&req.method==='GET')return json(res,200,minecraftSurvival(u));
 if(pathname==='/api/minecraft/family'&&req.method==='GET'){
  const connected=new Set([...cubeSessions.keys()].filter(id=>cubeSessions.get(id)?.readyState===1));
  return json(res,200,{...familyInfo(state,u,connected),adventures:adventureStatus(u),multiplayerReady:mcgalaxyReady,familyFeaturesReady:mcgalaxyReady&&fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))});
@@ -336,7 +361,7 @@ if(pathname==='/api/admin/minecraft/command'&&req.method==='POST'){
   }catch(e){return json(res,400,{error:e.message})}
  }
  if(action==='restore'){
-  const id=String(b.id||''),world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('aventura-')?'aventura':'';
+  const id=String(b.id||''),world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('aventura-')?'aventura':id.startsWith('exploracao-')?'exploracao':'';
   if(!BACKUP_PATTERN.test(id))return json(res,400,{error:'Identificador de backup inválido'});
   if(!WORLDS[world]||b.confirm!=='RESTAURAR '+world)return json(res,400,{error:'Confirmação inválida'});
   if(minecraftPlayersOverview().some(x=>x.online))return json(res,409,{error:'Peça às crianças para sair do Minecraft antes de restaurar'});

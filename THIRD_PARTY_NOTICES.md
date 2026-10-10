@@ -36,3 +36,11 @@ O repositório Refloow/Minecraft-Like-Voxel-Game (MIT) foi examinado como refer�
 - Multiplayer de construção e posição via WebSocket existente.
 - Não inclui mobs, crafting, sobrevivência, mundo infinito, física avançada ou chat de texto.
 - Teste em aparelhos reais ainda necessário para validar FPS e compatibilidade WebGL.
+
+
+## OpusCraft (MIT)
+Fonte independente: https://github.com/Oppenheimerism/OpusCraft
+Commit fixado: bc0c753f730ef15bc8f8acf093d40797700b87ee.
+Licença MIT inclusa em /opuscraft/OPUSCRAFT-LICENSE.txt.
+Não associado nem endossado pela Mojang/Microsoft.
+O Chromium e Puppeteer seguem suas respectivas licenças.

@@ -61,6 +61,32 @@ const server=http.createServer((req,res)=>{
    }
   });return;
  }
+ if(url.pathname==='/__ci/world-block'&&process.env.OPUSCRAFT_CI_MARKER==='yes'){
+  // Test-only route for the CI runner, disabled completely in production.
+  Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(async ({mode,x,z})=>{
+   const g=window.__game;
+   if(!g||g.mode!=='host'||!g.inWorld||!g.spawned)return {ok:false,error:'host unavailable'};
+   const px=mode==='write'?Math.floor(g.player.x):x;
+   const pz=mode==='write'?Math.floor(g.player.z):z;
+   const y=315;
+   if(mode==='write'){
+    let state=0;
+    for(let yy=Math.min(Math.floor(g.player.y)-2,250);yy>=-60;yy--){
+      const candidate=g.level.getState(px,yy,pz);
+      if(candidate!==0){state=candidate;break}
+    }
+    if(state===0)return {ok:false,error:'no non-air block for persistence marker'};
+    g.level.setBlock(px,y,pz,state,false);
+    await g.saveWorld();
+    return {ok:true,x:px,y,z:pz,state,actual:g.level.getState(px,y,pz)};
+   }
+   return {ok:true,x:px,y,z:pz,state:g.level.getState(px,y,pz)};
+  },{mode:url.searchParams.get('mode'),x:Number(url.searchParams.get('x')),z:Number(url.searchParams.get('z'))}):{ok:false}).then(out=>{
+   res.writeHead(out?.ok?200:503,{'Content-Type':'application/json','Cache-Control':'no-store'});
+   res.end(JSON.stringify(out));
+  }).catch(err=>{res.writeHead(503).end(JSON.stringify({ok:false,error:String(err.message).slice(0,150)}))});
+  return;
+ }
  if(url.pathname==='/__debug'){
   // Localhost-only runtime diagnostics; never exposed as a public route.
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{

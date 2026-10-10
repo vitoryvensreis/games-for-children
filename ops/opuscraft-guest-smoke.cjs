@@ -27,6 +27,11 @@ const diagnostics=setInterval(async()=>{
 diagnostics.unref?.();
 const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
+ if(u.pathname==='/api/me'){
+  res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+  const adult=req.headers['x-gfc-test-profile']==='adult';
+  return res.end(JSON.stringify({user:{id:adult?'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',role:adult?'admin':'child',dailyLimit:1440,usedSeconds:0}}));
+ }
  if(u.pathname==='/api/opuscraft/identity'){
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
   const playerName=req.headers['x-gfc-test-profile']==='adult'?'ADM_TESTPLAYER':'KID_TESTPLAYER';

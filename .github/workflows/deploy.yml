@@ -20,8 +20,8 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check database/exploration-world.cjs && node --check public/classicube/survival-hud.js && node --check public/classicube/family-menu.js
-      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs tests/minecraft-admin.cjs tests/expanded-minecraft.cjs
+      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check database/exploration-world.cjs && node --check database/mining-world.cjs && node --check public/classicube/survival-hud.js && node --check public/classicube/family-menu.js
+      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs tests/minecraft-admin.cjs tests/expanded-minecraft.cjs tests/mining-survival.cjs
 
   deploy:
     needs: validate
@@ -242,6 +242,23 @@ jobs:
                           else
                             echo "::error::Clima dinâmico não iniciou"
                             exit 1
+                          fi
+                          if test -s vendor/mcgalaxy/levels/mineracao.lvl && gzip -t vendor/mcgalaxy/levels/mineracao.lvl; then
+                            echo GFC_MINING_WORLD_PERSISTED
+                          else
+                            echo "::error::O novo mundo de mineração não está disponível"
+                            exit 1
+                          fi
+                          for movement_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
+                            if test -s vendor/mcgalaxy/properties/gfc-family-bot-movement.status && grep -Eq "^moved=[1-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-bot-movement.status; then
+                              echo GFC_NPCS_ACTUALLY_MOVING
+                              cat vendor/mcgalaxy/properties/gfc-family-bot-movement.status
+                              break
+                            fi
+                            sleep 1
+                          done
+                          if ! test -s vendor/mcgalaxy/properties/gfc-family-bot-movement.status || ! grep -Eq "^moved=[1-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-bot-movement.status; then
+                            echo "::warning::NPCs carregaram, mas ainda não foi comprovado movimento neste deploy"
                           fi
                           echo FAMILYPLAY_HOUSE_PROTECTION_ACTIVE
                           echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING

@@ -127,6 +127,11 @@ patch('src/gui/screens/menus.ts',
 patch('src/gui/screens/menus.ts',
  "      hardcore ? false : this.cheats,",
  "      hardcore ? false : this.mode === 'spectator' || this.cheats,");
+// Render the first nearby chunks immediately and continue streaming terrain afterward.
+// This avoids waiting for a full 5x5 region on slow iPhones or busy VPS instances.
+patch('src/game/game.ts',
+ "this.chunks.isReady(this.player.x, this.player.z, LOADING_RADIUS, vd ?",
+ "this.chunks.isReady(this.player.x, this.player.z, this.mode === 'client' ? 1 : LOADING_RADIUS, vd ?");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");

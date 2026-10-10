@@ -60,6 +60,32 @@ function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=
 function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
 function end(s){touch(s);s.revoked=true;for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
 function cubePlayerName(u){return familyName(u)}
+function adventureStatus(u){
+ const filename=path.join(MCGALAXY_DIR,'properties','gfc-family-adventures.tsv');
+ let lines=[];try{const info=fs.statSync(filename);if(info.size<128*1024)lines=fs.readFileSync(filename,'utf8').split(/\r?\n/)}catch(e){if(e.code!=='ENOENT')console.warn('[FamilyPlay] adventure read:',e.message)}
+ let coopWins=0,waiting=0;
+ const progress=new Map();
+ for(const line of lines){
+  const values=line.split('|');
+  if(values[0]==='T'&&values.length===2){coopWins=Math.max(0,Number(values[1])||0);continue}
+  if(values[0]==='W'&&values.length===2){waiting++;continue}
+  if(values[0]==='P'&&values.length===8){
+   const [kind,name,stars,treasures,sprints,mode,stage,deadline]=values;
+   progress.set(name,{stars:Math.max(0,Number(stars)||0),treasures:Math.max(0,Number(treasures)||0),sprints:Math.max(0,Number(sprints)||0),mode:['tesouro','corrida'].includes(mode)?mode:'',stage:Math.max(0,Math.min(3,Number(stage)||0))});
+  }
+ }
+ const scores=state.users.filter(v=>v.enabled&&(v.role==='child'||v.role==='admin')).map(v=>({
+  name:v.name,playerName:familyName(v),
+  ...(progress.get(familyName(v))||{stars:0,treasures:0,sprints:0,mode:'',stage:0})
+ }));
+ const own=scores.find(p=>p.playerName===familyName(u))||{stars:0,treasures:0,sprints:0,mode:'',stage:0};
+ return {own,scoreboard:scores,coopWins,waiting,locations:[
+  {title:'Guia da Praça',hint:'Encontre a fonte na praça central'},
+  {title:'Guardião da Ponte',hint:'Atravesse a ponte sobre o rio'},
+  {title:'Explorador da Torre',hint:'Procure a torre junto ao lago'}
+ ]};
+}
+
 function cubePortReady(){return new Promise(resolve=>{const sock=net.connect({host:'127.0.0.1',port:MCGALAXY_PORT});sock.once('connect',()=>{sock.destroy();resolve(true)});sock.once('error',()=>resolve(false));sock.setTimeout(900,()=>{sock.destroy();resolve(false)})})}
 // O gerador só roda caso o mapa ainda não exista. Nunca apagamos mapas ou blocos existentes.
 const ADVENTURE_MAP='aventura',ADVENTURE_SEED='481516',ADVENTURE_SIZE='192 96 192';
@@ -212,7 +238,7 @@ if(gameCover&&req.method==='GET'){
 if(pathname==='/api/classicube/status'&&req.method==='GET')return json(res,200,{available:fs.existsSync(CLASSICUBE_JS)&&fs.existsSync(CLASSICUBE_WASM)&&fs.existsSync(CLASSICUBE_TEXTURES),mode:'family-multiplayer',multiplayerConfigured:mcgalaxyReady,playerName:cubePlayerName(u)});
 if(pathname==='/api/minecraft/family'&&req.method==='GET'){
  const connected=new Set([...cubeSessions.keys()].filter(id=>cubeSessions.get(id)?.readyState===1));
- return json(res,200,{...familyInfo(state,u,connected),multiplayerReady:mcgalaxyReady,familyFeaturesReady:mcgalaxyReady&&fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))});
+ return json(res,200,{...familyInfo(state,u,connected),adventures:adventureStatus(u),multiplayerReady:mcgalaxyReady,familyFeaturesReady:mcgalaxyReady&&fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready'))});
 }
 const skinMatch=pathname.match(/^\/api\/minecraft\/skins\/(azul|verde|rosa|roxo)\.png$/);
 if(skinMatch&&req.method==='GET'){

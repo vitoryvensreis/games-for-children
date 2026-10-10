@@ -5,7 +5,7 @@ const crypto=require('node:crypto');
 const {NAME:FAMILY_VILLAGE,installFamilyVillage}=require('./database/family-village.cjs');
 const {ROOMS:FAMILY_HOMES,SKINS:FAMILY_SKINS,playerName:familyName,initHomes,familyInfo,writePolicy,makeSkin}=require('./database/family-play.cjs');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
-const {WORLDS,makeBackup,listBackups,restoreOffline,checkWorld,safeSettings}=require('./database/minecraft-control.cjs');
+const {WORLDS,BACKUP_PATTERN,makeBackup,listBackups,restoreOffline,checkWorld,safeSettings}=require('./database/minecraft-control.cjs');
 const net=require('node:net');
 const {spawn}=require('node:child_process');
 const {WebSocketServer}=require('ws');
@@ -337,6 +337,7 @@ if(pathname==='/api/admin/minecraft/command'&&req.method==='POST'){
  }
  if(action==='restore'){
   const id=String(b.id||''),world=id.startsWith('vila_familia-')?'vila_familia':id.startsWith('aventura-')?'aventura':'';
+  if(!BACKUP_PATTERN.test(id))return json(res,400,{error:'Identificador de backup inválido'});
   if(!WORLDS[world]||b.confirm!=='RESTAURAR '+world)return json(res,400,{error:'Confirmação inválida'});
   if(minecraftPlayersOverview().some(x=>x.online))return json(res,409,{error:'Peça às crianças para sair do Minecraft antes de restaurar'});
   if(!mcgalaxyReady||!mcgalaxyProcess)return json(res,503,{error:'Servidor indisponível'});

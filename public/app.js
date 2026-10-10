@@ -45,6 +45,14 @@ async function openClassiCube(){
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
   app.innerHTML='<main class="classicube-embed" id="cubeRoot" aria-label="ClassiCube em tela horizontal"><iframe id="classicubeFrame" src="/classicube/index.html" title="ClassiCube — jogo 3D" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe><button id="classicubeBack" class="classicube-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button><div id="classicubeRotate" class="classicube-rotate" aria-live="polite"><span class="rotate-illustration" aria-hidden="true">'+ico('gamepad')+'</span><strong>Vire o celular na horizontal</strong><p>Assim a tela inteira e os controles ficam visíveis.</p><button id="classicubeTryLandscape">Ativar tela horizontal</button></div></main>';
+  const gameFrame=$('#classicubeFrame');
+  gameFrame.addEventListener('load',()=>{
+   // The launch button remains focused in the parent document on desktops.
+   // Hand input control to the same-origin ClassiCube iframe after its navigation.
+   if(window.matchMedia('(pointer:fine)').matches){
+    try{gameFrame.contentWindow.focus();gameFrame.contentDocument?.getElementById('canvas')?.focus({preventScroll:true})}catch{}
+   }
+  });
   const root=$('#cubeRoot'),overlay=$('#classicubeRotate');
   const sync=()=>{const portrait=window.innerHeight>window.innerWidth&&window.matchMedia('(pointer: coarse)').matches;root.classList.toggle('needs-landscape',portrait);overlay.hidden=!portrait;};
   sync();window.addEventListener('resize',sync);screen.orientation?.addEventListener?.('change',sync);

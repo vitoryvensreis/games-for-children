@@ -210,10 +210,11 @@ public sealed class FamilyPlay : Plugin {
   string[] critters=new string[]{"Ovelha_01","Ovelha_02","Porquinho_01","Porquinho_02","Galinha_01"};
   string[] models=new string[]{"sheep","sheep","pig","pig","chicken"};
   int[,] areas=new int[,]{{83,118},{113,120},{111,86},{76,117},{118,109}};
+  int animalCount=0;
   for(int a=0;a<critters.Length;a++){
    bool exists=false;
    foreach(PlayerBot bot in lvl.Bots.Items)if(bot.name==critters[a]){exists=true;break;}
-   if(exists)continue;
+   if(exists){animalCount++;continue;}
    int x=areas[a,0],z=areas[a,1],ground=44;
    for(int y=lvl.Height-5;y>1;y--)if(lvl.GetBlock((ushort)x,(ushort)y,(ushort)z)!=0){ground=y+2;break;}
    PlayerBot animal=new PlayerBot(critters[a],lvl);
@@ -222,9 +223,10 @@ public sealed class FamilyPlay : Plugin {
    animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x+3)*32+"",ground*32+"",(z+2)*32+"","0","0"}));
    animal.Instructions.Add(new MCGalaxy.Bots.WalkInstruction().Parse(new string[]{"walk",(x-2)*32+"",ground*32+"",(z-2)*32+"","0","0"}));
    PlayerBot.Add(animal);
+   animalCount++;
   }
   // Written only after verification against real loaded bot entities, not on DLL compilation.
-  try{File.WriteAllText(GuideStatusFile,"map="+lvl.MapName+"\ncount="+found+"\ncreated="+created+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
+  try{File.WriteAllText(GuideStatusFile,"map="+lvl.MapName+"\ncount="+found+"\ncreated="+created+"\nanimals="+animalCount+"\nupdated="+DateTime.UtcNow.ToString("O")+"\n");}
   catch(Exception e){Logger.Log(LogType.Warning,"FamilyPlay guide status: "+e.Message);}
  }
 

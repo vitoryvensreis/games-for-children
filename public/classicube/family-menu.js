@@ -25,7 +25,11 @@
    if(!r.ok)throw Error('Faça login novamente para acessar a família');
    const data=await r.json();
    if(!visible)return;
-   const friends=data.players.filter(p=>!p.me&&p.online&&p.role==='child');
+   if(!data.familyFeaturesReady){
+    content.innerHTML='<p class="family-hint">A conexão da família ainda está sendo preparada no servidor. Tente novamente em alguns segundos.</p>';
+    return;
+   }
+   const friends=data.players.filter(p=>!p.me&&p.online);
    const myHome=data.homes.find(h=>h.mine);
    content.innerHTML=
     '<section class="family-section"><h3>Meus amigos</h3><div class="family-row">'+

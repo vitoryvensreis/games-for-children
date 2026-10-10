@@ -54,7 +54,11 @@ jobs:
           fi
           echo "Verified VPS-compatible WebGL2 game host, relay, and world save"
           curl -fsS http://127.0.0.1:4173/__health
-          node ops/opuscraft-guest-smoke.cjs
+          if ! node ops/opuscraft-guest-smoke.cjs; then
+            echo "::error::Two-player smoke failed: permanent world host logs follow"
+            tail -n 170 /tmp/opuscraft-host.log
+            exit 1
+          fi
           # Test recovery using the SAME Chromium profile, never a newly generated world.
           original_id="$(curl -fsS http://127.0.0.1:4173/__debug | node -e '
             let s="";process.stdin.on("data",b=>s+=b).on("end",()=>{

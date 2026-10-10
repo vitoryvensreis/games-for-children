@@ -17,6 +17,17 @@ const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; ch
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1');
  if(req.method!=='GET'){res.writeHead(405).end();return}
+ if(url.pathname==='/__debug'){
+  // Localhost-only runtime diagnostics; never exposed as a public route.
+  Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
+   const g=window.__game,server=g?.server;
+   return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,ticks:g?.ticks,
+    hostSessions:[...(server?.sessions?.values()||[])].map(p=>({state:p.state,player:p.name||null})),
+    hostTicks:server?.ticks||0};
+  }):{}).then(info=>{res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(info))})
+  .catch(e=>{res.writeHead(503).end(String(e.message).slice(0,100))});
+  return;
+ }
  if(url.pathname==='/__health'){
   const stats=relay?.stats()||{};
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
@@ -42,15 +53,21 @@ async function start(){
   log('Starting browser host attempt',tries);
   browser=await puppeteer.launch({
    executablePath:await chromium.executablePath(),
-   args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader','--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=1000,700'],
+   args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader','--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows','--window-size=320,240'],
    headless:true,
    userDataDir:PROFILE,
-   defaultViewport:{width:1000,height:700,deviceScaleFactor:1},
+   defaultViewport:{width:320,height:240,deviceScaleFactor:1},
    protocolTimeout:180000
   });
   browser.on('disconnected',()=>{hostPage=null;browser=null;log('Browser disconnected');});
   const page=await browser.newPage();
   hostPage=page;
+  // Rendering an unseen 3D scene consumes VPS CPU without helping players.
+  // Keep simulation/network ticks alive while the authoritative host draws nothing.
+  await page.evaluateOnNewDocument(()=>{
+   Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+   Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});
+  });
   page.on('pageerror',err=>{lastError=String(err.message).slice(0,250);log('Game page error:',lastError)});
   page.on('console',msg=>{if(msg.type()==='error')log('Browser console:',msg.text().slice(0,300))});
   await page.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcHost=1',{waitUntil:'domcontentloaded',timeout:45000});

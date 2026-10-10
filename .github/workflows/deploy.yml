@@ -16,33 +16,44 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check database/migrate.cjs && node --check public/snake-rules.js && node --check database/family-village.cjs && node --check database/family-play.cjs && node --check database/minecraft-control.cjs && node --check database/exploration-world.cjs && node --check database/mining-world.cjs && node --check public/classicube/family-menu.js && node --check public/classicube/touch-controls.js
-      - run: node --test --test-concurrency=1 tests/integration.cjs tests/snake.cjs tests/catalog-layout.cjs tests/classicube-gateway.cjs tests/pong-physics.cjs tests/game-covers.cjs tests/family-village.cjs tests/family-play.cjs tests/family-adventures.cjs tests/minecraft-admin.cjs tests/expanded-minecraft.cjs tests/mining-survival.cjs tests/creative-controls.cjs
-      - name: Preparar SDK para compilação MCGalaxy no PR
-        if: github.event_name == 'pull_request'
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-      - name: Verificar compilação real do plugin FamilyPlay
-        if: github.event_name == 'pull_request'
+      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-host.cjs && node --check ops/patch-opuscraft.mjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs
+      - name: Build pinned OpusCraft
+        run: bash ops/build-opuscraft.sh
+      - name: Validate compiled web assets
+        run: |
+          test -s public/opuscraft/index.html
+          test -s ops/opuscraft-relay.mjs
+          grep -q '/opuscraft/assets/' public/opuscraft/index.html
+      - name: Smoke test persistent headless multiplayer host
         shell: bash
         run: |
           set -euo pipefail
-          git clone --no-checkout --filter=blob:none https://github.com/ClassiCube/MCGalaxy.git /tmp/gfc-ci-mcgalaxy
-          cd /tmp/gfc-ci-mcgalaxy
-          git fetch --depth 1 origin 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-          git checkout --detach 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-          cd "$GITHUB_WORKSPACE"
-          dotnet build /tmp/gfc-ci-mcgalaxy/MCGalaxy/MCGalaxy_dotnet.csproj -c Release
-          lib="/tmp/gfc-ci-mcgalaxy/MCGalaxy/bin/Release/net6.0/MCGalaxy_.dll"
-          test -s "$lib"
-          dotnet build plugins/family-play/FamilyPlay.csproj -c Release -p:MCGALAXY_REFERENCE="$lib"
+          node ops/opuscraft-host.cjs >/tmp/opuscraft-host.log 2>&1 &
+          HOST_PID=$!
+          trap 'kill "$HOST_PID" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 95); do
+            if curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"ready":true' &&
+               curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"lastSave":"20'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if test "$ready" -ne 1; then
+            cat /tmp/opuscraft-host.log
+            exit 1
+          fi
+          echo "Verified VPS-compatible WebGL2 game host, relay, and world save"
+          curl -fsS http://127.0.0.1:4173/__health
 
 
   deploy:
@@ -92,230 +103,25 @@ jobs:
             public/classicube/ClassiCube.wasm
             public/classicube/default.zip
           key: classicube-web-1.3.8-ubuntu-emscripten-v1
-      - name: Compilar ClassiCube oficial para web, quando necessário
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p public/classicube
-          if test -s public/classicube/ClassiCube.js && test -s public/classicube/ClassiCube.wasm && test -s public/classicube/default.zip; then
-            echo "ClassiCube oficial recuperado do cache seguro."
-          else
-            echo "Compilando fontes oficiais ClassiCube, versão 1.3.8, no runner de CI."
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq emscripten
-            git clone --depth 1 --branch 1.3.8 https://github.com/ClassiCube/ClassiCube.git /tmp/classicube-official
-            cd /tmp/classicube-official
-            git rev-parse HEAD
-            make web RELEASE=1
-            test -s ClassiCube.js
-            test -s ClassiCube.wasm
-            cp ClassiCube.js ClassiCube.wasm "$GITHUB_WORKSPACE/public/classicube/"
-            curl --fail --location --silent --show-error --retry 2 --max-time 60 --proto '=https' --proto-redir '=https' \
-              "https://raw.githubusercontent.com/ClassiCube/ClassiCube/master/misc/cc_textures.zip" \
-              -o "$GITHUB_WORKSPACE/public/classicube/default.zip"
-            cd "$GITHUB_WORKSPACE"
-          fi
-          test "$(wc -c < public/classicube/ClassiCube.js)" -gt 50000
-          test "$(wc -c < public/classicube/ClassiCube.wasm)" -gt 200000
-          test "$(wc -c < public/classicube/default.zip)" -gt 10000
-          head -c 4 public/classicube/ClassiCube.wasm | od -An -tx1 | tr -d ' ' | grep -q '^0061736d'
-          sha256sum public/classicube/ClassiCube.js public/classicube/ClassiCube.wasm public/classicube/default.zip
-      - name: Preparar SDK .NET para MCGalaxy
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-node@v4
         with:
-          dotnet-version: '8.0.x'
-      - name: Restaurar MCGalaxy privado em cache
-        uses: actions/cache@v4
-        with:
-          path: vendor/mcgalaxy
-          key: gfc-mcgalaxy-dotnet8-420d0b2-v1
-      - name: Compilar servidor privado MCGalaxy (fonte oficial fixada)
-        shell: bash
+          node-version: '24'
+      - run: npm install --no-audit --no-fund
+      - name: Build pinned OpusCraft for production
+        run: bash ops/build-opuscraft.sh
+      - name: Package application (remove old client from release)
         run: |
-          set -euo pipefail
-          if test -x vendor/mcgalaxy/MCGalaxyCLI; then
-            echo "MCGalaxy encontrado no cache."
-          else
-            mkdir -p vendor/mcgalaxy
-            git clone --no-checkout --filter=blob:none https://github.com/ClassiCube/MCGalaxy.git /tmp/gfc-mcgalaxy
-            cd /tmp/gfc-mcgalaxy
-            git fetch --depth 1 origin 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-            git checkout --detach 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-            dotnet publish CLI/MCGalaxyCLI_dotnet8.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o "$GITHUB_WORKSPACE/vendor/mcgalaxy"
-            cp LICENSE "$GITHUB_WORKSPACE/vendor/mcgalaxy/GPL-3.0-LICENSE"
-            cp LICENSE.txt "$GITHUB_WORKSPACE/vendor/mcgalaxy/THIRD-PARTY-LICENSES"
-            cd "$GITHUB_WORKSPACE"
-            chmod +x vendor/mcgalaxy/MCGalaxyCLI
-          fi
-          test -x vendor/mcgalaxy/MCGalaxyCLI
-          file vendor/mcgalaxy/MCGalaxyCLI
-      - name: Restaurar plugin FamilyPlay compilado
-        uses: actions/cache@v4
-        with:
-          path: vendor/mcgalaxy/plugins/FamilyPlay.dll
-          key: gfc-familyplay-1-${{ hashFiles('plugins/family-play/*.cs', 'plugins/family-play/*.csproj') }}
-      - name: Compilar proteção de casas e comandos familiares no MCGalaxy
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p vendor/mcgalaxy/plugins
-          if test -s vendor/mcgalaxy/plugins/FamilyPlay.dll; then
-            echo "FamilyPlay carregado do cache."
-          else
-            if [ ! -d /tmp/gfc-mcgalaxy ]; then
-              git clone --no-checkout --filter=blob:none https://github.com/ClassiCube/MCGalaxy.git /tmp/gfc-mcgalaxy
-              cd /tmp/gfc-mcgalaxy
-              git fetch --depth 1 origin 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-              git checkout --detach 420d0b2d62ea364cf7759a770b7260fb4b6c9b41
-              cd "$GITHUB_WORKSPACE"
-            fi
-            dotnet build /tmp/gfc-mcgalaxy/MCGalaxy/MCGalaxy_dotnet.csproj -c Release
-            lib="/tmp/gfc-mcgalaxy/MCGalaxy/bin/Release/net6.0/MCGalaxy_.dll"
-            test -s "$lib"
-            dotnet build plugins/family-play/FamilyPlay.csproj -c Release \
-              -p:MCGALAXY_REFERENCE="$lib"
-            cp plugins/family-play/bin/Release/net6.0/FamilyPlay.dll vendor/mcgalaxy/plugins/FamilyPlay.dll
-          fi
-          test -s vendor/mcgalaxy/plugins/FamilyPlay.dll
-      - name: Empacotar aplicação
-        run: tar -czf release.tar.gz server.cjs package.json public database vendor/mcgalaxy
-      - name: Enviar servidor
+          rm -rf public/classicube
+          tar -czf release.tar.gz server.cjs package.json public database ops
+      - name: Upload release to the VPS
         env:
           HOST: ${{ secrets.VPS_HOST }}
           USER: ${{ secrets.VPS_USER }}
           PORT: ${{ secrets.VPS_PORT }}
-        run: |
-          scp -B -P "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes release.tar.gz "$USER@$HOST:/home/gamesforchildren/apps/games-for-children/release.tar.gz"
-      - name: Ativar e validar nova versão
+        run: scp -B -P "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes release.tar.gz "$USER@$HOST:/home/gamesforchildren/apps/games-for-children/release.tar.gz"
+      - name: Activate and validate permanent VPS world or rollback
         env:
           HOST: ${{ secrets.VPS_HOST }}
           USER: ${{ secrets.VPS_USER }}
           PORT: ${{ secrets.VPS_PORT }}
-        run: |
-          ssh -p "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'set -eu
-            cd /home/gamesforchildren/apps/games-for-children
-            mkdir -p backup
-            cp server.cjs backup/server.cjs
-            if test -s vendor/mcgalaxy/plugins/FamilyPlay.dll; then cp vendor/mcgalaxy/plugins/FamilyPlay.dll backup/FamilyPlay.dll; fi
-            if test -d public; then cp -a public backup/public; fi
-            if test -d vendor/mcgalaxy/levels; then
-              tar -czf backup/mcgalaxy-levels-latest.tar.gz -C vendor/mcgalaxy levels
-              cp backup/mcgalaxy-levels-latest.tar.gz "backup/world-$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
-              ls -1t backup/world-*.tar.gz 2>/dev/null | tail -n +13 | xargs -r rm -f
-            fi
-            if test -s vendor/mcgalaxy/properties/gfc-family-positions.tsv; then
-              cp vendor/mcgalaxy/properties/gfc-family-positions.tsv backup/gfc-family-positions-latest.tsv
-            fi
-            if test -d data/minecraft-backups; then
-              echo "Backups ADM preservados em data/minecraft-backups"
-            fi
-            if test -s vendor/mcgalaxy/properties/gfc-family-adventures.tsv; then
-              cp vendor/mcgalaxy/properties/gfc-family-adventures.tsv backup/gfc-family-adventures-latest.tsv
-              cp vendor/mcgalaxy/properties/gfc-family-adventures.tsv "backup/gfc-family-adventures-$(date -u +%Y%m%dT%H%M%SZ).tsv"
-              ls -1t backup/gfc-family-adventures-*.tsv 2>/dev/null | tail -n +13 | xargs -r rm -f
-            fi
-            if test -d vendor/mcgalaxy/bots; then
-              tar -czf backup/mcgalaxy-family-bots-latest.tar.gz -C vendor/mcgalaxy bots
-            fi
-            if test -f package.json; then cp package.json backup/package.json; fi
-            tar -xzf release.tar.gz
-            PATH=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin:$PATH /home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm install --omit=dev --no-audit --no-fund
-            if sudo -n /usr/bin/systemctl restart games-for-children.service; then
-              for i in 1 2 3 4 5; do
-                if curl --fail --silent --max-time 3 http://127.0.0.1:3100/api/health | grep -q ok \
-                    && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/classicube/ClassiCube.js \
-                    && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/classicube/ClassiCube.wasm \
-                    && curl --fail --silent --output /dev/null --max-time 3 http://127.0.0.1:3100/static/default.zip; then
-                  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-                    if timeout 2 bash -c "echo > /dev/tcp/127.0.0.1/25565" 2>/dev/null; then
-                      if test -s vendor/mcgalaxy/levels/aventura.lvl; then
-                        echo GFC_ADVENTURE_WORLD_SAVED
-                        ls -lh vendor/mcgalaxy/levels/aventura.lvl
-                        grep -i "^main-name" vendor/mcgalaxy/properties/server.properties || true
-                      else
-                        echo "::warning::Mapa aventura ainda não persistido; consultar logs MCGalaxy"
-                        /usr/bin/journalctl --no-pager -u games-for-children.service -n 22 | grep -E "MCGalaxy|Generate|world|map" || true
-                      fi
-                      if test -s vendor/mcgalaxy/levels/exploracao.lvl && gzip -t vendor/mcgalaxy/levels/exploracao.lvl; then
-                        echo GFC_EXPLORATION_WORLD_PERSISTED
-                        ls -lh vendor/mcgalaxy/levels/exploracao.lvl
-                      else
-                        echo "::error::Mundo Exploração não criado"
-                        exit 1
-                      fi
-                      if test -s vendor/mcgalaxy/levels/vila_familia.lvl && gzip -t vendor/mcgalaxy/levels/vila_familia.lvl; then
-                        echo "GFC_FAMILY_VILLAGE_VALID_AND_PERSISTED"
-                        ls -lh vendor/mcgalaxy/levels/vila_familia.lvl
-                      else
-                        echo "::warning::Vila da Família indisponível; mundo aventura foi preservado"
-                      fi
-                      for p in 1 2 3 4 5 6 7 8 9 10 11 12; do
-                        if test -s vendor/mcgalaxy/properties/gfc-familyplay.ready; then
-                          if test -s vendor/mcgalaxy/properties/gfc-family-creatures.status \
-                               && grep -Eq "^animals=[1-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-creatures.status \
-                               && grep -Eq "^humans=0$" vendor/mcgalaxy/properties/gfc-family-creatures.status; then
-                            echo GFC_ANIMALS_ONLY_AND_MONSTER_AI_READY
-                            cat vendor/mcgalaxy/properties/gfc-family-creatures.status
-                          else
-                            echo "::error::Os animais não carregaram ou ainda existem NPCs humanos"
-                            /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
-                            exit 1
-                          fi
-                          if test -s vendor/mcgalaxy/properties/gfc-family-portals.status \
-                               && grep -Eq "^entrances=([3-9]|[1-9][0-9]+)$" vendor/mcgalaxy/properties/gfc-family-portals.status; then
-                            echo GFC_FAMILY_PORTAL_NETWORK_READY
-                            cat vendor/mcgalaxy/properties/gfc-family-portals.status
-                          else
-                            echo "::error::Os portais físicos não foram instalados"
-                            cat vendor/mcgalaxy/properties/gfc-family-portals.status 2>/dev/null || true
-                            /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
-                            exit 1
-                          fi
-                          if test -s vendor/mcgalaxy/properties/gfc-climate.status && grep -q "^weather=" vendor/mcgalaxy/properties/gfc-climate.status; then
-                            echo GFC_WEATHER_DAY_NIGHT_ACTIVE
-                            cat vendor/mcgalaxy/properties/gfc-climate.status
-                          else
-                            echo "::error::Clima dinâmico não iniciou"
-                            exit 1
-                          fi
-                          if test -s vendor/mcgalaxy/levels/mineracao.lvl && gzip -t vendor/mcgalaxy/levels/mineracao.lvl; then
-                            echo GFC_MINING_WORLD_PERSISTED
-                          else
-                            echo "::error::O novo mundo de mineração não está disponível"
-                            exit 1
-                          fi
-                          for movement_wait in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24; do
-                            if test -s vendor/mcgalaxy/properties/gfc-family-bot-movement.status && grep -Eq "^moved=[1-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-bot-movement.status; then
-                              echo GFC_NPCS_ACTUALLY_MOVING
-                              cat vendor/mcgalaxy/properties/gfc-family-bot-movement.status
-                              break
-                            fi
-                            sleep 1
-                          done
-                          if ! test -s vendor/mcgalaxy/properties/gfc-family-bot-movement.status || ! grep -Eq "^moved=[1-9][0-9]*$" vendor/mcgalaxy/properties/gfc-family-bot-movement.status; then
-                            echo "::warning::NPCs carregaram, mas ainda não foi comprovado movimento neste deploy"
-                          fi
-                          echo FAMILYPLAY_HOUSE_PROTECTION_ACTIVE
-                          echo DEPLOY_HEALTH_OK_CLASSICUBE_ASSETS_OK_MCGALAXY_RUNNING
-                          exit 0
-                        fi
-                        sleep 1
-                      done
-                      echo "::error::FamilyPlay não carregou; casas ainda não estão protegidas"
-                      /usr/bin/journalctl --no-pager -u games-for-children.service -n 45 || true
-                    fi
-                    sleep 2
-                  done
-                  echo "::error::O servidor privado MCGalaxy não iniciou em 30 segundos"
-                  /usr/bin/journalctl --no-pager -u games-for-children.service -n 35 || true
-                fi
-                sleep 2
-              done
-            fi
-            echo DEPLOY_FAILED_ROLLBACK
-            cp backup/server.cjs server.cjs
-            if test -s backup/FamilyPlay.dll; then cp backup/FamilyPlay.dll vendor/mcgalaxy/plugins/FamilyPlay.dll; fi
-            if test -d backup/public; then rm -rf public; cp -a backup/public public; fi
-            if test -f backup/package.json; then cp backup/package.json package.json; fi
-            sudo -n /usr/bin/systemctl restart games-for-children.service
-            exit 1'
+        run: ssh -p "$PORT" -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'bash -s' < ops/deploy-opuscraft-vps.sh

@@ -66,19 +66,19 @@ test('Game covers: default images, admin replace/reset, access control, persiste
  }
 });
 
-test('Catalog and admin expose three game covers and Minecraft listing',()=>{
+test('Catalog and admin expose three game covers and OpusCraft listing',()=>{
  const app=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
  const css=fs.readFileSync(path.join(__dirname,'../public/style.css'),'utf8');
- const html=fs.readFileSync(path.join(__dirname,'../public/classicube/index.html'),'utf8');
+ const host=fs.readFileSync(path.join(__dirname,'../ops/opuscraft-host.cjs'),'utf8');
  for(const slug of ['pong','snake','minecraft']){
   assert.ok(css.includes("url('/api/game-covers/"+slug+"')"),slug+' illustration is set in CSS');
  }
  assert.ok(app.includes('admin/game-covers'), 'Admin can update cover images');
  assert.match(app,/class="game-card game-card--cover card-minecraft"/);
- assert.match(app,/<h2>Minecraft<\/h2>/);
+ assert.match(app,/<h2>OpusCraft<\/h2>/);
  assert.match(app,/function refreshGameCovers\(\)/);
  assert.match(app,/data-action="reset"/);
  assert.match(css,/linear-gradient\(180deg,rgba\(9,15,48/,'Cover overlay is present');
- assert.match(html,/left:env\(safe-area-inset-left,0px\)/);
- assert.match(html,/right:env\(safe-area-inset-right,0px\)/);
+ assert.match(css,/left:env\(safe-area-inset-left,0px\)/);
+ assert.match(css,/right:env\(safe-area-inset-right,0px\)/);
 });

@@ -70,6 +70,7 @@
  function close(){
   visible=false;panel.hidden=true;opener.setAttribute('aria-expanded','false');
   if(poll){clearInterval(poll);poll=null}
+  if(window.matchMedia('(pointer:fine)').matches)requestAnimationFrame(()=>document.getElementById('canvas')?.focus({preventScroll:true}));
  }
  opener.onclick=()=>{
   if(visible){close();return}

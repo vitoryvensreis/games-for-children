@@ -78,7 +78,7 @@ test('Bloco D: admin-only dashboard and saved touch settings',async()=>{
   const data=await request('admin/minecraft/dashboard',{cookie:admin});
   assert.equal(data.status,200);
   const dash=await data.json();
-  assert.equal(dash.worlds.length,3);
+  assert.equal(dash.worlds.length,4);
   assert.equal(dash.guides.ready,false,'Without loaded plugin NPC readiness must not be invented');
   assert.ok(dash.players.some(u=>u.name==='Aluno'));
   const changed=await request('admin/minecraft/controls',{cookie:admin,method:'POST',body:{padSize:181,padOpacity:89,buildingEnabled:false}});

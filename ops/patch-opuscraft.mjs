@@ -124,6 +124,9 @@ patch('src/gui/screens/menus.ts',
 patch('src/gui/screens/menus.ts',
  "      this.mode === 'creative' ? 'creative' : 'survival',",
  "      this.mode === 'hardcore' ? 'survival' : this.mode,");
+patch('src/gui/screens/menus.ts',
+ "      hardcore ? false : this.cheats,",
+ "      hardcore ? false : this.mode === 'spectator' || this.cheats,");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");

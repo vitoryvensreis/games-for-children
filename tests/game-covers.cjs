@@ -71,9 +71,9 @@ test('Catalog and admin expose three game covers and Minecraft listing',()=>{
  const css=fs.readFileSync(path.join(__dirname,'../public/style.css'),'utf8');
  const html=fs.readFileSync(path.join(__dirname,'../public/classicube/index.html'),'utf8');
  for(const slug of ['pong','snake','minecraft']){
-  assert.match(css,new RegExp("url\\('/api/game-covers/"+slug+"'\\)"));
-  assert.match(app,new RegExp("data-slug=\\"\\+'\\w|admin/game-covers"));
+  assert.ok(css.includes("url('/api/game-covers/"+slug+"')"),slug+' illustration is set in CSS');
  }
+ assert.ok(app.includes('admin/game-covers'), 'Admin can update cover images');
  assert.match(app,/class="game-card game-card--cover card-minecraft"/);
  assert.match(app,/<h2>Minecraft<\/h2>/);
  assert.match(app,/function refreshGameCovers\(\)/);

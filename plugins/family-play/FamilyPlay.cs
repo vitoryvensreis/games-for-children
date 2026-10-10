@@ -58,6 +58,7 @@ public sealed class FamilyPlay : Plugin {
   OnPlayerMoveEvent.Register(AdventureMove, Priority.Low);
   OnLevelLoadedEvent.Register(InstallGuides, Priority.Low);
   OnPlayerSpawningEvent.Register(RestoreSpotOnSpawn,Priority.High);
+  OnJoinedLevelEvent.Register(RestorePreviousWorld,Priority.Low);
   OnPlayerConnectEvent.Register(RememberReturningPlayer,Priority.Low);
   OnPlayerDisconnectEvent.Register(TrackDisconnect,Priority.Low);
   // Main village may have loaded before this plugin subscribed to OnLevelLoaded.
@@ -70,6 +71,7 @@ public sealed class FamilyPlay : Plugin {
   OnPlayerMoveEvent.Unregister(AdventureMove);
   OnLevelLoadedEvent.Unregister(InstallGuides);
   OnPlayerSpawningEvent.Unregister(RestoreSpotOnSpawn);
+  OnJoinedLevelEvent.Unregister(RestorePreviousWorld);
   OnPlayerConnectEvent.Unregister(RememberReturningPlayer);
   OnPlayerDisconnectEvent.Unregister(TrackDisconnect);
   try{File.Delete(GuideStatusFile);}catch{}
@@ -232,6 +234,24 @@ public sealed class FamilyPlay : Plugin {
     returningPlayers.Remove(p.name);
    }
   }
+ }
+
+ private static void RestorePreviousWorld(Player p,Level from,Level joined,ref bool announce){
+  if(!IsAllowed(p)||joined==null)return;
+  SavedSpot target;
+  lock(Gate){
+   if(!returningPlayers.Contains(p.name)||!savedSpots.TryGetValue(p.name,out target)||!ValidSpot(target))return;
+  }
+  if(joined.MapName.Equals(target.World,StringComparison.OrdinalIgnoreCase))return;
+  // Do not change map synchronously during the level join callback.
+  Server.MainScheduler.QueueOnce(task=>{
+   if(p.Socket.Disconnected)return;
+   SavedSpot saved;
+   lock(Gate){if(!returningPlayers.Contains(p.name)||!savedSpots.TryGetValue(p.name,out saved))return;}
+   if(saved.World!="vila_familia"&&saved.World!="aventura")return;
+   if(!p.level.MapName.Equals(saved.World,StringComparison.OrdinalIgnoreCase))
+    PlayerActions.ChangeMap(p,saved.World);
+  },null,TimeSpan.FromMilliseconds(600));
  }
  private static void TrackDisconnect(Player p,string reason){
   if(!IsAllowed(p))return;

@@ -4,6 +4,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const {NAME:FAMILY_VILLAGE,installFamilyVillage}=require('./database/family-village.cjs');
 const {NAME:EXPLORATION_WORLD,install:installExplorationWorld}=require('./database/exploration-world.cjs');
+const {NAME:MINING_WORLD,install:installMiningWorld}=require('./database/mining-world.cjs');
 const {ROOMS:FAMILY_HOMES,SKINS:FAMILY_SKINS,playerName:familyName,initHomes,familyInfo,writePolicy,makeSkin}=require('./database/family-play.cjs');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
 const {WORLDS,BACKUP_PATTERN,makeBackup,listBackups,restoreOffline,checkWorld,safeSettings}=require('./database/minecraft-control.cjs');
@@ -133,7 +134,7 @@ function minecraftStatus(){
   try{const st=fs.statSync(filename);return {id,title,exists:st.size>0,bytes:st.size,updatedAt:st.mtime.toISOString()}}catch{return {id,title,exists:false,bytes:0}}
  });
  const props=path.join(MCGALAXY_DIR,'properties','server.properties');
- let main=WORLDS[state.minecraftMainWorld]?state.minecraftMainWorld:'vila_familia';try{const m=/^main-name\s*=\s*(\S+)/mi.exec(fs.readFileSync(props,'utf8'));if(m&&WORLDS[m[1]])main=m[1]}catch{}
+ let main=WORLDS[state.minecraftMainWorld]?state.minecraftMainWorld:'mineracao';try{const m=/^main-name\s*=\s*(\S+)/mi.exec(fs.readFileSync(props,'utf8'));if(m&&WORLDS[m[1]])main=m[1]}catch{}
  return {ready:mcgalaxyReady,pluginActive:fs.existsSync(path.join(MCGALAXY_DIR,'properties','gfc-familyplay.ready')),guides,worlds,main,players:minecraftPlayersOverview(),backups:listBackups(MINECRAFT_BACKUPS),controls:state.minecraftControls,maintenance:minecraftMaintenance};
 }
 async function minecraftSave(){
@@ -164,7 +165,7 @@ function startFamilyAdventureWorld(){
  const writeCommand=cmd=>{if(mcgalaxyProcess?.stdin?.writable)mcgalaxyProcess.stdin.write(cmd+'\n')};
  // Prefer the newly built village without changing any block in the older adventure.
  if(fs.existsSync(familyVillage)){
-  writeCommand('/main '+(WORLDS[state.minecraftMainWorld]&&fs.existsSync(path.join(levels,state.minecraftMainWorld+'.lvl'))?state.minecraftMainWorld:FAMILY_VILLAGE));
+  writeCommand('/main '+(WORLDS[state.minecraftMainWorld]&&fs.existsSync(path.join(levels,state.minecraftMainWorld+'.lvl'))?state.minecraftMainWorld:(fs.existsSync(path.join(levels,MINING_WORLD+'.lvl'))?MINING_WORLD:FAMILY_VILLAGE)));
   console.log('[MCGalaxy] Vila existente preservada e mundo principal restaurado');
   return;
  }
@@ -206,6 +207,8 @@ function setupMCGalaxy(){
  try{
   const village=installFamilyVillage(path.join(MCGALAXY_DIR,'levels'));
   const explored=installExplorationWorld(path.join(MCGALAXY_DIR,'levels'));
+  const mined=installMiningWorld(path.join(MCGALAXY_DIR,'levels'));
+  console.log('[MCGalaxy] Mineração '+(mined.created?'gerada':'preservada')+': '+mined.path);
   console.log('[MCGalaxy] Exploração '+(explored.created?'gerada':'preservada')+': '+explored.path);
   console.log('[MCGalaxy] Vila da Família '+(village.created?'criada':'preservada')+': '+village.path);
  }catch(err){console.error('[MCGalaxy] Não foi possível preparar a vila; mapa atual será preservado:',err.message)}

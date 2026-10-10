@@ -39,12 +39,12 @@ const server=http.createServer((req,res)=>{
 });
 server.on('upgrade',(req,socket,head)=>{
  const u=new URL(req.url,'http://localhost');
- if(u.pathname!=='/ws'||u.searchParams.get('opus')!=='1'||u.searchParams.get('role')!=='guest'){
+ if(u.pathname!=='/ws'||u.searchParams.get('opus')!=='1'||!['guest','list'].includes(u.searchParams.get('role'))){
   socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');return;
  }
  wss.handleUpgrade(req,socket,head,ws=>{
   sockets.add(ws);
-  const dest=new WebSocket('ws://127.0.0.1:4173/__mp?role=guest',{
+  const dest=new WebSocket('ws://127.0.0.1:4173/__mp?role='+u.searchParams.get('role'),{
    headers:{Origin:'http://127.0.0.1:4173'},perMessageDeflate:false,maxPayload:20*1024*1024
   });
   let queue=[];
@@ -67,6 +67,24 @@ server.on('upgrade',(req,socket,head)=>{
  let browser;
  try{
   await new Promise((resolve,reject)=>server.listen(PORT,'127.0.0.1',e=>e?reject(e):resolve()));
+  // Verify the same public route used by the PWA before launching the game.
+  const worlds=await new Promise((resolve,reject)=>{
+   const ws=new WebSocket('ws://127.0.0.1:'+PORT+'/ws?opus=1&role=list');
+   const timeout=setTimeout(()=>{ws.terminate();reject(new Error('OpusCraft public WebSocket list timed out'))},7000);
+   ws.on('message',data=>{
+    clearTimeout(timeout);
+    try{
+     const result=JSON.parse(String(data));
+     if(result.t!=='worlds'||!Array.isArray(result.worlds)||!result.worlds.length)
+      throw new Error('Expected a real OpusCraft world announcement, got '+String(data).slice(0,100));
+     resolve(result.worlds);
+    }catch(error){reject(error)}
+    ws.close();
+   });
+   ws.on('error',error=>{clearTimeout(timeout);reject(error)});
+   ws.on('close',()=>clearTimeout(timeout));
+  });
+  console.log('OPUSCRAFT_PUBLIC_RELAY_DISCOVERY_OK worlds='+worlds.length);
   stage='launch-browser';console.log('Guest smoke: launching guest browser');
   browser=await puppeteer.launch({
    executablePath:await chromium.executablePath(),

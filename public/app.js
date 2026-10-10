@@ -29,6 +29,42 @@ if(m.type==='signal')handleSignal(m);
 function renderLobby(rooms){const el=$('#availableRooms');if(!el)return;rooms=rooms.filter(r=>r.game==='pong');el.innerHTML=rooms.length?rooms.map(r=>'<div class="lobby-room"><div><strong>'+esc(r.host)+'</strong><span> criou Pong Neon</span></div><button data-room="'+esc(r.code)+'">Entrar</button></div>').join(''):'<p class="hint">Nenhuma partida aguardando. Crie uma e convide um amigo!</p>';el.querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room}))}
 function home(){pongCanvasObserver?.disconnect();pongCanvasObserver=null;ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card game-card--cover card-pong"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card game-card--cover card-snake"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card game-card--cover card-minecraft"><span class="art">'+ico('gamepad')+'</span><h2>OpusCraft</h2><p class="sub">Explore o mundo familiar permanente com animais, construções e inventário — OpusCraft.</p><button id="openOpusCraft" class="success">Jogar OpusCraft</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openOpusCraft').onclick=openOpusCraft;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
 
+async function verifyOpuscraftWebSocket(){
+ // Probe the exact public WebSocket route. A normal game-lobby socket replies
+ // with {type:'hello'}, while the actual OpusCraft relay must send {t:'worlds'}.
+ const url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws?opus=1&role=list';
+ const timeoutMs=7000;
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   return await new Promise((resolve,reject)=>{
+    let socket,complete=false;
+    const finish=(error)=>{
+     if(complete)return;
+     complete=true;clearTimeout(timer);
+     if(socket&&socket.readyState<2)socket.close(1000,'preflight');
+     error?reject(error):resolve(true);
+    };
+    const timer=setTimeout(()=>finish(new Error('O servidor não respondeu ao WebSocket da família.')),timeoutMs);
+    try{
+     socket=new WebSocket(url);
+     socket.onmessage=event=>{
+      let message;
+      try{message=JSON.parse(event.data)}catch{finish(new Error('O proxy retornou dados incompatíveis com OpusCraft.'));return}
+      if(message?.t==='worlds'&&Array.isArray(message.worlds)){
+       if(message.worlds.length)finish();
+       else finish(new Error('O servidor multiplayer ainda não anunciou o mundo da família.'));
+      }else finish(new Error('A rota WebSocket está conectando ao serviço errado, não ao OpusCraft.'));
+     };
+     socket.onerror=()=>finish(new Error('Não foi possível conectar ao WebSocket multiplayer da VPS.'));
+     socket.onclose=()=>finish(new Error('O WebSocket multiplayer foi encerrado antes de receber o mundo.'));
+    }catch(error){finish(new Error('Este navegador não conseguiu abrir o WebSocket do jogo.'))}
+   });
+  }catch(error){
+   if(attempt===1)throw error;
+   await new Promise(resolve=>setTimeout(resolve,850));
+  }
+ }
+}
 async function openOpusCraft(){
  if(!me)return login();
  // O bloqueio de orientação só funciona em navegadores que permitem fullscreen.
@@ -43,10 +79,11 @@ async function openOpusCraft(){
  try{
   const status=await api('opuscraft/status');
   if(!status.available||!status.ready){notify('O mundo OpusCraft está iniciando na VPS; tente novamente em instantes.');return}
+  await verifyOpuscraftWebSocket();
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
   app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft em tela horizontal">'+
-  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?gfcJoin=1" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
+  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?gfcJoin=1&v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
@@ -66,7 +103,7 @@ async function openOpusCraft(){
   $('#familyChatForm').onsubmit=e=>{e.preventDefault();const input=$('#familyChatInput'),message=input.value.trim();if(message&&send({type:'familyChat',text:message})){input.value='';input.blur()}};
   renderFamilyChat();
   $('#opuscraftBack').onclick=async()=>{window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
- }catch(e){console.warn('OpusCraft:',e);notify('Não foi possível iniciar OpusCraft: '+e.message)}
+ }catch(e){console.warn('OpusCraft:',e);notify('Não foi possível entrar no mundo familiar: '+e.message)}
 }
 function renderFamilyChat(){
  const el=$('#familyChatHistory');if(!el)return;

@@ -22,9 +22,7 @@ test('OpusCraft websocket probe validates real world listing, not any /ws respon
  assert.ok(start>=0&&end>start,'preflight must be implemented');
  const source=src.slice(start,end);
  const urls=[];
- let respond=()=>{
-  JSON.stringify({t:'worlds',worlds:[{name:'Mundo da Família'}]});
- };
+ let respond=()=>JSON.stringify({t:'worlds',worlds:[{name:'Mundo da Família'}]});
  class MockSocket {
   constructor(url){
    urls.push(url);

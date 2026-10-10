@@ -237,7 +237,7 @@ public sealed class FamilyPlay : Plugin {
   // Remove old stationary human guides (including persisted copies on the VPS).
   bool removed=false;
   foreach(PlayerBot old in lvl.Bots.Items){
-   if(old.name.StartsWith("Guia_") || (old.Owner=="GamesForChildren"&&!IsWildlife(old))){
+   if(old.name.StartsWith("Guia_") || !IsWildlife(old)){
     PlayerBot.Remove(old,false);removed=true;
    }
   }

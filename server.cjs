@@ -110,7 +110,16 @@ function minecraftSurvival(u){
    if(key==='weather'&&(value==='sol'||value==='chuva'))climate.weather=value;
   }
  }catch{}
- return {hearts,hunger,climate,simplified:true};
+ let inventory={wood:0,stone:0,coal:0,iron:0,gold:0,apples:0,tool:0};
+ try{
+  const lines=fs.readFileSync(path.join(MCGALAXY_DIR,'properties','gfc-mining-inventory.tsv'),'utf8').split(/\r?\n/);
+  const p=lines.find(line=>line.startsWith(cubePlayerName(u)+'|'))?.split('|');
+  if(p?.length===8){
+   const v=p.slice(1).map(x=>Math.max(0,Number(x)||0));
+   inventory={wood:v[0],stone:v[1],coal:v[2],iron:v[3],gold:v[4],apples:v[5],tool:v[6]};
+  }
+ }catch{}
+ return {hearts,hunger,climate,inventory,simplified:true,miningEnabled:true};
 }
 function minecraftGuidesStatus(){
  const file=path.join(MCGALAXY_DIR,'properties','gfc-family-guides.status');

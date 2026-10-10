@@ -12,14 +12,28 @@ using MCGalaxy.Maths;
 public sealed class FamilyPlay : Plugin {
  public override string name { get { return "FamilyPlay"; } }
  public override string creator { get { return "GamesForChildren"; } }
- public override int build { get { return 1; } }
+ public override int build { get { return 2; } }
  public override bool LoadAtStartup { get { return true; } }
  private static readonly string ConfigPath = "properties/gfc-family-policy.txt";
+ private static readonly string QuestFile = "properties/gfc-family-adventures.tsv";
  private static readonly object Gate = new object();
  private static DateTime checkedAt = DateTime.MinValue;
  private static Dictionary<string, string> users = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
  private static Dictionary<int, string> owners = new Dictionary<int, string>();
  private static readonly FamilyCommand family = new FamilyCommand();
+ private static readonly Dictionary<string, Quest> quests = new Dictionary<string, Quest>(StringComparer.OrdinalIgnoreCase);
+ private static readonly HashSet<string> teamReady = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+ private static int teamWins=0;
+ private static readonly int[,] treasureTargets=new int[,] { {102,106,13},{96,50,19},{143,89,16} };
+ private static readonly int[,] sprintTargets=new int[,] { {96,50,19},{143,89,16},{102,106,13} };
+ private static readonly string[] treasureClues=new string[]{"Procure o Guia da Praca perto da fonte!", "Encontre o Guardiao da Ponte sobre o rio!", "Visite a Torre do Explorador junto ao lago!"};
+ private static readonly string[] sprintClues=new string[]{"Corra ate a Ponte!", "Agora chegue a Torre!", "Volte para a Fonte da Praca!"};
+ private sealed class Quest {
+  public int Stars,Treasures,Sprints,Stage;
+  public string Mode="";
+  public long Deadline;
+ }
+
  private static readonly int[,] bounds = new int[,] {
   {64,82,82,99},{118,138,82,99},{69,88,122,141},{109,131,121,140}
  };
@@ -30,12 +44,15 @@ public sealed class FamilyPlay : Plugin {
 
  public override void Load(bool auto) {
   Refresh(true);
+  LoadAdventures();
   OnBlockChangingEvent.Register(ProtectHouse, Priority.High);
+  OnPlayerMoveEvent.Register(AdventureMove, Priority.Low);
   Command.Register(family);
   File.WriteAllText("properties/gfc-familyplay.ready","ready");
  }
  public override void Unload(bool auto) {
   OnBlockChangingEvent.Unregister(ProtectHouse);
+  OnPlayerMoveEvent.Unregister(AdventureMove);
   Command.Unregister(family);
   try{File.Delete("properties/gfc-familyplay.ready");}catch{}
  }
@@ -118,6 +135,115 @@ public sealed class FamilyPlay : Plugin {
   PlayerOperations.TeleportToCoords(p,Position.FromFeetBlockCoords(homeSpawns[slot-1,0],homeSpawns[slot-1,1],homeSpawns[slot-1,2]),p.Rot);
   p.Message("&aVoce chegou a sua casinha!");
  }
+
+ // Real in-world quests: progress advances exclusively from server-validated player positions.
+ private static Quest GetQuest(string player) {
+  Quest q;if(!quests.TryGetValue(player,out q)){q=new Quest();quests[player]=q;}return q;
+ }
+ private static void LoadAdventures() {
+  lock(Gate){
+   quests.Clear();teamReady.Clear();teamWins=0;
+   try{
+    if(!File.Exists(QuestFile))return;
+    foreach(string line in File.ReadAllLines(QuestFile)){
+     string[] parts=line.Split('|');
+     if(parts.Length==2&&parts[0]=="T"){int.TryParse(parts[1],out teamWins);continue;}
+     if(parts.Length==2&&parts[0]=="W"){if(users.ContainsKey(parts[1]))teamReady.Add(parts[1]);continue;}
+     if(parts.Length!=8||parts[0]!="P"||!users.ContainsKey(parts[1]))continue;
+     Quest q=GetQuest(parts[1]);
+     int.TryParse(parts[2],out q.Stars);
+     int.TryParse(parts[3],out q.Treasures);
+     int.TryParse(parts[4],out q.Sprints);
+     q.Mode=parts[5]=="tesouro"||parts[5]=="corrida"?parts[5]:"";
+     int.TryParse(parts[6],out q.Stage);
+     long.TryParse(parts[7],out q.Deadline);
+     q.Stage=Math.Max(0,Math.Min(3,q.Stage));
+     q.Stars=Math.Max(0,Math.Min(100000,q.Stars));
+     q.Treasures=Math.Max(0,Math.Min(10000,q.Treasures));
+     q.Sprints=Math.Max(0,Math.Min(10000,q.Sprints));
+    }
+   }catch(Exception ex){Logger.Log(LogType.Warning,"FamilyPlay could not restore adventures: "+ex.Message);}
+  }
+ }
+ private static void SaveAdventures(){
+  // The existing world .lvl is never touched by the adventure save.
+  List<string> lines=new List<string>();
+  lines.Add("T|"+teamWins);
+  foreach(string name in teamReady)lines.Add("W|"+name);
+  foreach(KeyValuePair<string,Quest> item in quests){
+   Quest q=item.Value;
+   lines.Add("P|"+item.Key+"|"+q.Stars+"|"+q.Treasures+"|"+q.Sprints+"|"+q.Mode+"|"+q.Stage+"|"+q.Deadline);
+  }
+  string temp=QuestFile+".tmp";
+  try{File.WriteAllLines(temp,lines.ToArray());File.Move(temp,QuestFile,true);}
+  catch(Exception ex){Logger.Log(LogType.Warning,"FamilyPlay cannot save adventures: "+ex.Message);}
+ }
+ private static void StartAdventure(Player p,string mode){
+  Refresh();
+  if(!IsAllowed(p))return;
+  lock(Gate){
+   Quest q=GetQuest(p.name);
+   q.Mode=mode;q.Stage=0;
+   q.Deadline=mode=="corrida"?DateTime.UtcNow.AddMinutes(3).Ticks:0;
+   SaveAdventures();
+  }
+  if(!MoveToWorld(p,"vila_familia"))return;
+  p.Message(mode=="tesouro"?"&aCaca ao tesouro iniciada! Encontre tres lugares da vila.":"&aDesafio relampago: visite tres lugares em 3 minutos!");
+  p.Message("&e"+(mode=="tesouro"?treasureClues[0]:sprintClues[0]));
+ }
+ private static void ShowAdventures(Player p){
+  lock(Gate){
+   Quest q=GetQuest(p.name);
+   p.Message("&6Aventuras: &a"+q.Stars+" estrelas &f| "+q.Treasures+" tesouros | "+q.Sprints+" circuitos");
+   p.Message("&bMissao em dupla: "+(teamWins>0?"concluida "+teamWins+" vez(es)":"aguardando dois exploradores"));
+   if(q.Mode!="")p.Message("&eMissao ativa: "+q.Mode+" passo "+(q.Stage+1)+"/3");
+  }
+ }
+ private static void AdventureMove(Player p,Position next,byte yaw,byte pitch,ref bool cancel){
+  if(cancel||p.level==null||!String.Equals(p.level.MapName,"vila_familia",StringComparison.OrdinalIgnoreCase))return;
+  if(!IsAllowed(p))return;
+  var coords=next.FeetBlockCoords;
+  lock(Gate){
+   Quest q=GetQuest(p.name);
+   if(q.Mode=="")return;
+   if(q.Mode=="corrida"&&DateTime.UtcNow.Ticks>q.Deadline){
+    q.Mode="";q.Stage=0;SaveAdventures();
+    p.Message("&cO tempo terminou. Tente o circuito novamente!");
+    return;
+   }
+   int[,] targets=q.Mode=="tesouro"?treasureTargets:sprintTargets;
+   int stage=Math.Max(0,Math.Min(2,q.Stage));
+   int dx=coords.X-targets[stage,0],dz=coords.Z-targets[stage,1];
+   if((long)dx*dx+(long)dz*dz>(long)targets[stage,2]*targets[stage,2])return;
+   q.Stage++;
+   if(q.Stage<3){
+    SaveAdventures();
+    p.Message("&bGuia da Vila: voce encontrou a pista "+q.Stage+" de 3!");
+    p.Message("&e"+(q.Mode=="tesouro"?treasureClues[q.Stage]:sprintClues[q.Stage]));
+    return;
+   }
+   string mode=q.Mode;q.Mode="";q.Stage=0;q.Deadline=0;
+   if(mode=="tesouro"){
+    q.Treasures++;q.Stars+=3;
+    p.Message("&aTesouro encontrado! +3 estrelas. Parabens!");
+    string role;
+    if(users.TryGetValue(p.name,out role)&&role=="child"){
+     teamReady.Add(p.name);
+     if(teamReady.Count>=2){
+      teamWins++;
+      foreach(string kid in teamReady){Quest friend=GetQuest(kid);friend.Stars+=5;}
+      teamReady.Clear();
+      p.Message("&6META COOPERATIVA: duas criancas acharam o tesouro! +5 estrelas para cada uma!");
+     }else p.Message("&eAgora falta outro explorador completar o tesouro para ganharem +5 estrelas!");
+    }
+   }else{
+    q.Sprints++;q.Stars+=5;
+    p.Message("&6Circuito completo! +5 estrelas e medalha de explorador!");
+   }
+   SaveAdventures();
+  }
+ }
+
  private sealed class FamilyCommand : Command2 {
   public override string name { get { return "Familia"; } }
   public override string type { get { return CommandTypes.Other; } }
@@ -139,6 +265,8 @@ public sealed class FamilyPlay : Plugin {
     p.Message("&aPronto! Voce encontrou "+target.name);
     return;
    }
+   if(cmd=="tesouro"||cmd=="corrida"){StartAdventure(p,cmd);return;}
+   if(cmd=="premios"){ShowAdventures(p);return;}
    if(cmd=="pele") {
     if(arg!="azul"&&arg!="verde"&&arg!="rosa"&&arg!="roxo"){p.Message("&eEscolha uma cor do menu Familia.");return;}
     string url="https://gamesforchildren.escotilhaprodutora.com/api/minecraft/skins/"+arg+".png";
@@ -154,6 +282,9 @@ public sealed class FamilyPlay : Plugin {
    p.Message("&T/familia vila  &H- Ir para a vila");
    p.Message("&T/familia aventura &H- Explorar o mundo antigo");
    p.Message("&T/familia pele COR &H- Escolher a cor do personagem");
+   p.Message("&T/familia tesouro &H- Caca ao tesouro");
+   p.Message("&T/familia corrida &H- Circuito de exploracao");
+   p.Message("&T/familia premios &H- Estrelas e medalhas");
   }
  }
 }

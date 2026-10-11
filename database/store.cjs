@@ -34,7 +34,7 @@ function persist(state){
  queue.catch(e=>console.error('Falha de persistência MySQL:',e.message));
 }
 const validTypes=new Set(['question','decision','step','error']);
-const validActions=new Set(['build','explore','hide','observe']);
+const validActions=new Set(['build','explore','hide','observe','seek_water','seek_food','rest','warm_up','cool_down','surface']);
 async function appendNpcEvent(event){
  if(!npcAuditReady||!pool)return null;
  const eventType=validTypes.has(event?.type)?event.type:null;

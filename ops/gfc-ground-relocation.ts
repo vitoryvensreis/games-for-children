@@ -8,7 +8,7 @@ export type FamilyKind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden
 export type FamilyBlock={x:number;y:number;z:number;name:string};
 export type FamilySite={kind:FamilyKind;x:number;y:number;z:number;elevated?:boolean};
 type Relocation={kind:FamilyKind;from:FamilySite;to:FamilySite;phase:'fill'|'copy'|'saveNew'|'erase'|'saveOld';cursor:number;foundation:{x:number;y:number;z:number;name:string}[]};
-type State={completed:FamilySite[];relocation?:Relocation|null;movedKinds?:FamilyKind[]};
+type State={completed:FamilySite[];relocation?:Relocation|null;movedKinds?:FamilyKind[];blockedKinds?:FamilyKind[]};
 const SOIL=new Set(['grass_block','dirt','coarse_dirt','podzol','stone','sand','gravel','snow_block','moss_block','mycelium']);
 const TREE=/^(?:[a-z_]+_leaves|[a-z_]+_log|[a-z_]+_wood|vine|hanging_roots|mangrove_roots|azalea|flowering_azalea|oak_sapling|birch_sapling|spruce_sapling|jungle_sapling|acacia_sapling|dark_oak_sapling)$/;
 const FLORA=new Set(['air','short_grass','tall_grass','grass','fern','large_fern','dead_bush','dandelion','poppy','cornflower','oxeye_daisy','snow','moss_carpet','blue_orchid','allium','pink_tulip','red_tulip','white_tulip','orange_tulip','sunflower','peony','rose_bush','lilac']);
@@ -69,8 +69,8 @@ export function installGroundRelocation(
  let choice=0;
  function tryStart(){
   if(!canWork())return;
-  const existing=state.completed.find(s=>!state.movedKinds?.includes(s.kind));
-  if(!existing){reason='Todas as estruturas estão apoiadas no terreno';return}
+  const existing=state.completed.find(s=>s.elevated===true&&!state.movedKinds?.includes(s.kind)&&!state.blockedKinds?.includes(s.kind));
+  if(!existing){reason=(state.blockedKinds?.length||0)?'Estruturas alteradas manualmente aguardam revisão':'Estruturas flutuantes verificadas já foram tratadas';return}
   if(existing.kind==='names'&&!marqueeReady()){reason='Aguardando correção segura do letreiro';return}
   // Original floating structures are outside the VPS host's two-chunk view.
   // Load their footprint first, or the source validation never progresses.
@@ -119,7 +119,7 @@ export function installGroundRelocation(
   }
   if(recognized<Math.floor(source.length*0.90)||unknown>0){
    reason='Construção original modificada por jogador; protegida';
-   state.movedKinds=[...(state.movedKinds||[]),existing.kind];
+   state.blockedKinds=[...(state.blockedKinds||[]),existing.kind];
    persist();return;
   }
   const target={...candidate,y:answer.base};

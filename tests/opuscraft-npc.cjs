@@ -89,7 +89,7 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/prepareFamilyClient\(game\)/);
  assert.match(family,/game\.opts\.renderDistance = mobile \? 2 : 3/);
- assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 2\)/);
+ assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 1\)/);
  assert.match(family,/game\.opts\.graphics = 0/);
  assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, mobile \? 30 : 40\)/);
  assert.match(family,/game\.opts\.particles = 0/);

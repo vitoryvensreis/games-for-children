@@ -51,7 +51,10 @@ test('Agent keeps roaming safely if no buildable plot exists',()=>{
  assert.match(agent,/distance\(x,z,start\.x,start\.z\)>16\)continue/);
  assert.match(agent,/kids\.some\(p=>distance\(p\.x,p\.z,x,z\)<18\)\)continue/);
  assert.match(agent,/if\(move\(x,z\)\)\{roamMoves\+\+;return true;/);
- assert.match(agent,/now-lastPlotSearch>60000/);
+ assert.match(agent,/now-lastPlotSearch>=18000/);
+ assert.match(agent,/for\(let checked=0;checked<4;checked\+\+\)/);
+ assert.match(agent,/nextPlotCandidate\+\+%candidates\.length/);
+ assert.match(agent,/plotSearchChecked:nextPlotCandidate/);
  assert.match(agent,/roamMoves,lastMoveOk/);
  assert.match(agent,/if\(old!==0\)return/);
 });

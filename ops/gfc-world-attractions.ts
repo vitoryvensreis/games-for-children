@@ -8,7 +8,7 @@ type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number;elevated?:boolean};
 type Work={site:Site;cursor:number};
-type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[]};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[];blockedKinds?:Kind[]};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SEARCH_REVISION=3;
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
@@ -165,7 +165,8 @@ export function installGfcWorldAttractions(game:Game){
     phase:Number.isFinite(data.phase)?data.phase:0,
     relocation:data.relocation?.kind&&KINDS.includes(data.relocation.kind)&&
       ['fill','copy','saveNew','erase','saveOld'].includes(data.relocation.phase)?data.relocation:null,
-    movedKinds:Array.isArray(data.movedKinds)?data.movedKinds.filter((k:any)=>KINDS.includes(k)):[]};
+    movedKinds:Array.isArray(data.movedKinds)?data.movedKinds.filter((k:any)=>KINDS.includes(k)):[],
+    blockedKinds:Array.isArray(data.blockedKinds)?data.blockedKinds.filter((k:any)=>KINDS.includes(k)):[]};
   }
  }catch{}
  const state=saved;

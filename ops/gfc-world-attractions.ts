@@ -5,10 +5,11 @@ import { S, blockOf } from './world/block';
 
 type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 type Block={x:number;y:number;z:number;name:string};
-type Site={kind:Kind;x:number;y:number;z:number};
+type Site={kind:Kind;x:number;y:number;z:number;elevated?:boolean};
 type Work={site:Site;cursor:number};
 type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
+const SEARCH_REVISION=3;
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
 const LAND=['grass_block','dirt','coarse_dirt','podzol','stone','sand','gravel','snow_block'];
 const OPEN=new Set(['air','short_grass','tall_grass','grass','fern','large_fern','dead_bush',
@@ -140,19 +141,19 @@ export function installGfcWorldAttractions(game:Game){
  const planFor=(kind:Kind)=>plans.get(kind)!;
  const anchor={x:Math.floor(game.player.x),z:Math.floor(game.player.z)};
  const key=SAVE_KEY+':'+String(game.meta?.id||'family');
- const fresh=():State=>({version:1,searchRevision:2,anchor,completed:[],work:null,attempts:0,phase:0});
+ const fresh=():State=>({version:1,searchRevision:SEARCH_REVISION,anchor,completed:[],work:null,attempts:0,phase:0});
  let saved:State=fresh();
  try{
   const data=JSON.parse(localStorage.getItem(key)||'null');
   if(data?.version===1&&Array.isArray(data.completed)&&data.anchor&&
     Math.abs(data.anchor.x-anchor.x)<5&&Math.abs(data.anchor.z-anchor.z)<5){
-   saved={version:1,searchRevision:2,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
+   saved={version:1,searchRevision:SEARCH_REVISION,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
     Number.isFinite(x.x)&&Number.isFinite(x.y)&&Number.isFinite(x.z)).slice(0,10),
     work:data.work?.site&&KINDS.includes(data.work.site.kind)?
       {site:data.work.site,cursor:0}:null,
     // Migration: previous search exhaustively scanned and pushed the cursor
     // many kilometres away. Restart its *search*, not the family world.
-    attempts:data.searchRevision===2&&Number.isFinite(data.attempts)?Math.max(0,Math.floor(data.attempts)):0,
+    attempts:data.searchRevision===SEARCH_REVISION&&Number.isFinite(data.attempts)?Math.max(0,Math.floor(data.attempts)):0,
     phase:Number.isFinite(data.phase)?data.phase:0};
   }
  }catch{}
@@ -165,14 +166,16 @@ export function installGfcWorldAttractions(game:Game){
    session=>session.state==='play'&&session.player&&!session.player.removed):[];
  const parked=()=>visitors().length===0;
  const siteFor=(kind:Kind,tries:number)=>{
-  const dir:[number,number][]=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,-1],[1,-1]];
-  const i=KINDS.indexOf(kind),[dx,dz]=dir[Math.max(0,i)];
-  const baseline=[45,78,110,142,170,200,230][Math.max(0,i)];
-  const offsets=[[0,0],[12,0],[-12,0],[0,12],[0,-12],[16,16],[-16,-16],[-16,16],[16,-16]];
-  const probe=tries%270;
-  const [ox,oz]=offsets[probe%offsets.length],extra=Math.floor(probe/offsets.length)*22;
-  return {x:anchor.x+Math.round(dx*(baseline+extra))+ox,
-   z:anchor.z+Math.round(dz*(baseline+extra))+oz};
+  // Rotate ALL compass directions instead of searching a single narrow ray.
+  // Forest at the spawn can otherwise reject every candidate indefinitely.
+  const dir:[number,number][]=[[1,0],[0,1],[-1,0],[0,-1],
+    [1,1],[-1,1],[1,-1],[-1,-1]];
+  const probe=tries%256,turn=probe%8,ring=Math.floor(probe/8);
+  const i=KINDS.indexOf(kind);
+  const [dx,dz]=dir[turn],radius=44+(ring*13)+i*9;
+  const sideways=(Math.floor(probe/8)%3-1)*9;
+  return {x:anchor.x+dx*radius+(dz?sideways:0),
+    z:anchor.z+dz*radius+(dx?-sideways:0)};
  };
  const nameAt=(x:number,y:number,z:number)=>blockOf(game.level.getState(x,y,z)).name;
  const surface=(x:number,z:number):number|null=>{
@@ -224,6 +227,33 @@ export function installGfcWorldAttractions(game:Game){
   }
   return maxY;
  }
+ function skySiteAllowed(kind:Kind,x:number,z:number):number|null{
+  // Last-resort forest lookout built ABOVE the canopy, never by cutting
+  // down trees or modifying old buildings. Creative players can fly up.
+  // The ordinary grounded clearing always takes priority.
+  if(Math.hypot(x-anchor.x,z-anchor.z)<36)return null;
+  if(state.completed.some(p=>Math.hypot(p.x-x,p.z-z)<42))return null;
+  if(visitors().some(v=>Math.hypot(v.player!.x-x,v.player!.z-z)<35))return null;
+  const {w,d,h}=dims[kind];
+  let tallest=-1000,shortest=1000;
+  for(let xx=x-w-1;xx<=x+w+1;xx++)for(let zz=z-d-1;zz<=z+d+1;zz++){
+   if(!game.level.world.isLoaded(xx,zz))return null;
+   const high=game.level.world.heightAt(xx,zz);
+   if(high<40||high>164)return null;
+   tallest=Math.max(tallest,high);shortest=Math.min(shortest,high);
+   // Do not treat visibly constructed rooftops as natural terrain.
+   const top=nameAt(xx,high-1,zz);
+   if(!/^(?:air|grass_block|dirt|stone|sand|gravel|snow_block|oak_leaves|spruce_leaves|birch_leaves|jungle_leaves|acacia_leaves|dark_oak_leaves|cherry_leaves|mangrove_leaves|pale_oak_leaves|short_grass|tall_grass|grass|fern|large_fern)$/.test(top))return null;
+  }
+  if(tallest-shortest>64)return null;
+  const platform=tallest+4;
+  if(platform+h>=245)return null;
+  // Test the exact new blocks, not a large arbitrary rectangle. If anything
+  // unexpected exists in the build volume, reject the site before building.
+  for(const block of planFor(kind))
+   if(!OPEN.has(nameAt(x+block.x,platform+block.y,z+block.z)))return null;
+  return platform;
+ }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
   if(!kind||state.work||!parked())return;
@@ -254,15 +284,19 @@ export function installGfcWorldAttractions(game:Game){
   }
   surveyed++;
   const y=surface(x,z);
-  const platformY=y!==null?siteAllowed(kind,x,y,z):null;
+  const normal=y!==null?siteAllowed(kind,x,y,z):null;
+  // After repeated failed ground surveys in dense forest, use a safe
+  // tree-top lookout. It adds blocks in OPEN space; no natural blocks removed.
+  const elevated=normal===null&&state.attempts>=15?skySiteAllowed(kind,x,z):null;
+  const platformY=normal!==null?normal:elevated;
   pending=null;state.attempts++;
   if(platformY!==null){
-   state.work={site:{kind,x,y:platformY,z},cursor:0};
+   state.work={site:{kind,x,y:platformY,z,elevated:normal===null},cursor:0};
    blocked='';persist();
   }else{
    rejected++;
    game.chunks.setTicket('gfc-landmarks',null);
-   blocked='Terreno não aprovado; avaliando outra região';
+   blocked='Terreno não aprovado; procurando clareira ou região acima da floresta';
   }
  }
  function buildBatch(){
@@ -396,7 +430,7 @@ export function installGfcWorldAttractions(game:Game){
   return {role:'landmark_builder',hiddenHost:true,aiEnabled:false,
    placedAttractions:state.completed.length,totalAttractions:KINDS.length,
    attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z})),
-   building:w?{name:w.site.kind,done:w.cursor,total:planFor(w.site.kind).length}:null,
+   building:w?{name:w.site.kind,done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
    blocked,searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),

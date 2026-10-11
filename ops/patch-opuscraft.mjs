@@ -89,17 +89,17 @@ patch('src/main.ts',
     // mesh an entire world on entry. Keep individual single-player settings intact.
     game.opts.renderDistance = Math.min(game.opts.renderDistance, 2);
     game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
-    const lightweight = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
-    if (lightweight) {
-      game.opts.graphics = 0;
-      game.opts.fancy = false;
-      game.opts.clouds = 0;
-      game.opts.particles = 2;
-      game.opts.entityShadows = false;
-      game.opts.smoothLighting = false;
-      game.opts.maxFps = Math.min(game.opts.maxFps, 45);
-    }
+    // Use economical multiplayer defaults on every device, including desktop.
+    // The browser's own GPU still renders the world, but without heavy weather
+    // sprites, clouds, leaf transparency, shadows or decorative particles.
+    // These are not saved to the player's personal single-player settings.
+    game.opts.graphics = 0;
+    game.opts.fancy = false;
+    game.opts.clouds = 0;
+    game.opts.particles = 2;
+    game.opts.entityShadows = false;
+    game.opts.smoothLighting = false;
+    game.opts.maxFps = Math.min(game.opts.maxFps, 60);
     await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
 
@@ -191,5 +191,15 @@ patch('src/net/transport/webSocket.ts',
   const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
+// The family multiplayer can rain in the simulation (weather and crops
+// still behave normally), without drawing thousands of fullscreen streaks
+// above dense jungle foliage. Solo worlds retain vanilla precipitation.
+patch('src/render/renderer.ts',
+ "    if (e.level && e.weather.rain > 0) {",
+ "    if (e.level && e.weather.rain > 0 && !location.search.includes('gfcJoin')) {");
+patch('src/net/config.ts',
+ "export const CHUNKS_PER_TICK = 3;",
+ "export const CHUNKS_PER_TICK = 5;");
+
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

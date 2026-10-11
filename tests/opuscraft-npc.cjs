@@ -24,7 +24,7 @@ test('The family world attractions are additive, idempotent and preserve existin
  assert.match(a,/const OPEN=new Set/);
  assert.match(a,/if\(!OPEN\.has\(current\)\)/);
  assert.match(a,/if\(!OPEN\.has\(nameAt\(xx,yy,zz\)\)\)return null/);
- assert.match(a,/state\.work=\{site:\{kind,x,y:platformY,z\},cursor:0\}/);
+ assert.match(a,/state\.work=\{site:\{kind,x,y:platformY,z,elevated:normal===null\},cursor:0\}/);
  assert.match(a,/game\.level\.setBlock\(x,y,z,S\(b\.name\)\)/);
  assert.match(a,/await|\.then\(\(\)=>/);
  assert.match(a,/game\.saveWorld\(\)/);
@@ -84,8 +84,24 @@ test('Only family multiplayer receives lower graphics defaults on weak devices',
   patch.indexOf("} else if (params.has('seed')"));
  assert.match(p,/game\.opts\.renderDistance = Math\.min\(game\.opts\.renderDistance, 2\)/);
  assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
- assert.match(p,/if \(lightweight\) \{/);
+ assert.match(p,/game\.opts\.graphics = 0/);
+ assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
+ assert.match(patch,/location\.search\.includes\('gfcJoin'\)/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 5/);
  assert.match(p,/game\.opts\.particles = 2/);
  assert.match(p,/game\.opts\.entityShadows = false/);
  assert.doesNotMatch(p,/game\.saveOptions\(\)/);
+});
+
+test('Dense forest fallback adds buildings above treetops without removing trees or overwriting existing blocks',()=>{
+ const a=read('ops/gfc-world-attractions.ts');
+ assert.match(a,/const SEARCH_REVISION=3/);
+ assert.match(a,/const dir:\[number,number\]\[\]=\[\[1,0\],\[0,1\],\[-1,0\],\[0,-1\]/);
+ assert.match(a,/function skySiteAllowed\(kind:Kind,x:number,z:number\):number\|null/);
+ assert.match(a,/normal===null&&state\.attempts>=15\?skySiteAllowed/);
+ assert.match(a,/for\(const block of planFor\(kind\)\)/);
+ assert.match(a,/if\(!OPEN\.has\(nameAt\(x\+block\.x,platform\+block\.y,z\+block\.z\)\)\)return null/);
+ assert.match(a,/elevated:normal===null/);
+ assert.match(a,/if\(!OPEN\.has\(current\)\)\{/);
+ assert.doesNotMatch(a,/deleteWorld|removeChunk|resetWorld/);
 });

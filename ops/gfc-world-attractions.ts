@@ -193,26 +193,31 @@ export function installGfcWorldAttractions(game:Game){
   if(visitors().some(v=>Math.hypot(v.player!.x-x,v.player!.z-z)<26))return null;
   let minY=y,maxY=y;
   const x0=x-w-1,x1=x+w+1,z0=z-d-1,z1=z+d+1;
-  // Pass one: cheap coarse check rejects cliffs, trees and existing roofs.
+  // Coarse check: reject trees, buildings and cliffs without scanning
+  // every vertical block in every column.
   for(let xx=x0;xx<=x1;xx+=3)for(let zz=z0;zz<=z1;zz+=3){
    const fy=surface(xx,zz);
    if(fy===null)return null;
    minY=Math.min(minY,fy);maxY=Math.max(maxY,fy);
    if(maxY-minY>5)return null;
   }
-  // Pass two: exact footprint verification; *no* stone/wood placed by a
-  // player is overwritten, including inside an elevated construction.
+  const ground:number[]=[];
   for(let xx=x0;xx<=x1;xx++)for(let zz=z0;zz<=z1;zz++){
    const fy=surface(xx,zz);
    if(fy===null)return null;
+   ground.push(fy);
    minY=Math.min(minY,fy);maxY=Math.max(maxY,fy);
    if(maxY-minY>5)return null;
+  }
+  // Check the actual construction volume *after* maxY is known.
+  // Never overlook a raised roof just because that column was visited first.
+  let index=0;
+  for(let xx=x0;xx<=x1;xx++)for(let zz=z0;zz<=z1;zz++){
+   const fy=ground[index++];
    for(let yy=Math.max(fy,maxY);yy<=maxY+h;yy++){
     if(!OPEN.has(nameAt(xx,yy,zz)))return null;
    }
   }
-  // Structures are placed above the highest natural ground without
-  // excavating or levelling even one solid block.
   return maxY;
  }
  function trySelect(){
@@ -229,17 +234,20 @@ export function installGfcWorldAttractions(game:Game){
    return;
   }
   const {x,z}=pending,{w,d}=dims[kind];
-  // Fast bounds check: do not scan partially loaded terrain.
-  for(let xx=x-w-1;xx<=x+w+1;xx+=8)
-   for(let zz=z-d-1;zz<=z+d+1;zz+=8)
-    if(!game.level.world.isLoaded(xx,zz)){
+  // Check every intersected chunk, including the far border.
+  // Sampling at eight-block intervals could miss an unloaded outer chunk.
+  let ready=true;
+  for(let cx=(x-w-1)>>4;cx<=((x+w+1)>>4);cx++)
+   for(let cz=(z-d-1)>>4;cz<=((z+d+1)>>4);cz++)
+    if(!game.level.world.isLoaded(cx*16,cz*16))ready=false;
+  if(!ready){
      waiting++;
      if(Date.now()-firstCandidateAt>45000){
       pending=null;state.attempts++;game.chunks.setTicket('gfc-landmarks',null);
       blocked='Região indisponível, tentando outra área';
      }else blocked='Aguardando carregar terreno';
      return;
-    }
+  }
   surveyed++;
   const y=surface(x,z);
   const platformY=y!==null?siteAllowed(kind,x,y,z):null;
@@ -350,11 +358,21 @@ export function installGfcWorldAttractions(game:Game){
  function tick(){
   if(!game.inWorld||game.mode!=='host'||!game.spawned)return;
   ticks++;
-  if(ticks%40===0&&state.work){
+  // Chunk generation and block updates compete with kids joining the server.
+  // Suspend optional attractions whenever the multiplayer is occupied.
+  if(!parked()){
+   if(pending){
+    pending=null;
+    game.chunks.setTicket('gfc-landmarks',null);
+   }
+   if(state.work)game.chunks.setTicket('gfc-landmarks',null);
+   blocked='Atrações pausadas enquanto a família joga';
+  }
+  if(ticks%40===0&&state.work&&parked()){
    const s=state.work.site;game.chunks.setTicket('gfc-landmarks',[s.x>>4,s.z>>4,2]);
   }
-  if(ticks%4===0&&state.work)buildBatch();
-  if(ticks%60===0&&!state.work&&state.completed.length<KINDS.length)trySelect();
+  if(ticks%4===0&&state.work&&parked())buildBatch();
+  if(ticks%60===0&&!state.work&&state.completed.length<KINDS.length&&parked())trySelect();
   if(ticks%40===0){
    const mill=state.completed.find(s=>s.kind==='windmill');
    const close=mill&&game.server&&[...game.server.sessions.values()].some(v=>

@@ -295,6 +295,11 @@ $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{con
 let npcAuditHistory=[],npcAuditCursor=0,npcAuditBusy=false,npcAuditEnabled=true;
 const NPC_ACTION_LABELS={build:'Construir',explore:'Explorar',hide:'Esconder',observe:'Observar',seek_water:'Buscar água',seek_food:'Buscar comida',rest:'Descansar',warm_up:'Aquecer-se',cool_down:'Refrescar-se',surface:'Emergir para respirar'};
 const NPC_REASON_LABELS={
+ block_placed:'Bloco colocado',natural_terrain_excavated:'Terreno natural preparado',
+ project_completed:'Obra concluída',project_started:'Obra iniciada',
+ protected_structure_detected:'Blocos protegidos encontrados: obra pausada',
+ visitors_near_site:'Jogadores perto da obra: aguardando',
+ searching_untouched_land:'Procurando terreno não construído',chunk_unloaded:'Aguardando terreno carregado',
  placed_block:'Bloco colocado',visitor_in_build_area:'Jogador na área da obra',
  existing_block_preserved:'Bloco existente preservado',blueprint_finished:'Projeto concluído',
  no_plot:'Aguardando terreno',not_started:'Ainda não iniciou',
@@ -327,17 +332,17 @@ function renderNpcAudit(){
   const date=new Date(e.at),at=Number.isNaN(date.getTime())?'':date.toLocaleString('pt-BR');
   let title='',description='',extra='';
   if(e.type==='question'){
-   title='Pergunta enviada à Groq';
+   title='Planejamento solicitado ao Gemini';
    description='Modelo: '+esc(d.model||'não informado')+' • Consulta #'+Number(d.number||0);
    extra='<details><summary>Ver pergunta e contexto</summary><p>'+esc(d.system||'')+'</p><pre>'+esc(JSON.stringify(d.input||{},null,2))+'</pre></details>';
   }else if(e.type==='decision'){
-   title='Decisão: '+esc(label);
-   description=(e.source==='groq'?'Resposta da Groq':'Decisão local')+
+   title=d.project?'Nova obra: '+esc(d.goal||d.project):'Decisão: '+esc(label);
+   description=(e.source==='gemini'?'Resposta do Gemini':'Decisão local')+
     ' • Consulta #'+Number(d.number||0)+(d.error?' • '+esc(d.error):'');
   }else if(e.type==='step'){
-   title='Execução: '+esc(label);
+   title=d.kind?'Construindo: '+esc(d.goal||d.kind):'Execução: '+esc(label);
    description=esc(NPC_REASON_LABELS[d.reason]||d.reason||'Execução monitorada')+
-    ' • '+Number(d.built||0)+' blocos construídos • passo '+Number(d.step||0);
+    ' • '+Number(d.built||0)+' blocos no mundo • passo '+Number(d.step||0);
   }else{
    title='Erro da Andarilha';
    description=esc(d.reason||'Erro não especificado');
@@ -369,17 +374,22 @@ async function refreshMinecraftDashboard(){
    '<div class="panel"><strong>Servidor OpusCraft</strong><p>'+(data.ready?'Mundo online':'Iniciando')+'</p></div>'+
    '<div class="panel"><strong>Jogadores</strong><p>'+Number(data.guests||0)+'</p></div>'+
    '<div class="panel"><strong>Último salvamento</strong><p>'+(data.lastSave?new Date(data.lastSave).toLocaleTimeString('pt-BR'):'Aguardando')+'</p></div></div>'+
-   (npc?.needs?'<div class="panel"><h3>Andarilha — Sobrevivência</h3>'+
-    '<p class="sub"><strong>Objetivo próprio:</strong> '+esc(npc.currentGoal||'continuar viva')+'</p>'+
-    '<p class="sub">'+esc(npc.goalReason||'Sem decisão registrada')+'</p>'+
-    '<div class="npc-vitals">'+[
-      ['Saúde',npc.needs.health,20],['Oxigênio',npc.needs.oxygen,100],
-      ['Fome',npc.needs.hunger,100],['Sede',npc.needs.thirst,100],
-      ['Energia',npc.needs.energy,100]
-    ].map(([name,val,max])=>'<div class="npc-vital"><span>'+name+'</span><strong>'+Math.round(Number(val)||0)+'/'+max+'</strong>'+
-      '<div class="npc-vital-track"><i style="width:'+Math.max(0,Math.min(100,100*(Number(val)||0)/Number(max)))+'%"></i></div></div>').join('')+'</div>'+
-    '<p class="sub">Temperatura: '+Number(npc.needs.temperature||0).toFixed(1)+' °C • Mortes: '+Number(npc.deaths||0)+
-    ' • Memórias recentes: '+Number(npc.memoryCount||0)+'</p></div>':'')+
+   (npc?.role==='world_architect'?'<div class="panel"><h3>Andarilha — Arquiteta do Universo</h3>'+
+    '<p class="sub"><strong>Motor:</strong> '+esc(npc.model||'Gemini')+' • '+(npc.configured?'Gemini configurado':'Sem chave Gemini: ideias locais')+'</p>'+
+    '<p class="sub"><strong>Projetos concluídos:</strong> '+Number(npc.completedCount||0)+
+      ' • Blocos colocados: '+Number(npc.placedTotal||0)+'</p>'+
+    (npc.project?'<p><strong>Obra atual:</strong> '+esc(npc.project.title||npc.project.kind)+'</p>'+
+     '<p class="sub">'+esc(npc.project.reason||'')+'</p>'+
+     '<div class="npc-vital-track"><i style="width:'+
+      Math.max(0,Math.min(100,100*Number(npc.project.progress||0)/Math.max(1,Number(npc.project.total||1))))+
+      '%"></i></div>'+
+     '<p class="sub">Etapa '+Number(npc.project.progress||0)+' de '+Number(npc.project.total||0)+
+      ' • '+esc(npc.project.state==='blocked'?'Obra pausada: '+(npc.project.blockedReason||'área protegida'):'Construindo bloco a bloco')+'</p>':
+     '<p class="sub">Buscando terreno seguro ou planejando a próxima obra.</p>')+
+    '<p class="sub">Terreno natural pode ser preparado; obras existentes são áreas protegidas.</p>'+
+    (npc.completed?.length?'<p class="sub"><strong>Últimas obras:</strong> '+
+      npc.completed.slice(-4).map(x=>esc(x.title)).join(' • ')+'</p>':'')+
+    '</div>':'')+
    '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+

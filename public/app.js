@@ -297,7 +297,12 @@ const NPC_ACTION_LABELS={build:'Construir',explore:'Explorar',hide:'Esconder',ob
 const NPC_REASON_LABELS={
  placed_block:'Bloco colocado',visitor_in_build_area:'Jogador na área da obra',
  existing_block_preserved:'Bloco existente preservado',blueprint_finished:'Projeto concluído',
- no_plot:'Aguardando terreno',not_started:'Ainda não iniciou'
+ no_plot:'Aguardando terreno',not_started:'Ainda não iniciou',
+ water_not_found:'Não encontrou água acessível',walking_to_water:'Caminhando até a água',water_drunk:'Bebeu água',
+ food_not_found:'Não encontrou comida',no_food_in_inventory:'Sem comida no inventário',food_eaten:'Comeu alimento do inventário',
+ exploring:'Explorando arredores',avoiding_players:'Mantendo distância',observing:'Observando',
+ resting:'Descansando',warming_up:'Procurando abrigo contra o frio',cooling_down:'Procurando local fresco',
+ trying_to_surface:'Tentando voltar à superfície'
 };
 function appendNpcAudit(item){
  if(!item||!Number.isSafeInteger(Number(item.id))||Number(item.id)<=0)return;

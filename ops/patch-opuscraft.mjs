@@ -197,6 +197,24 @@ patch('src/net/transport/webSocket.ts',
   const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
+// Defer far-field terrain meshing until guests have spawned and can play.
+// The host advertises five chunks for the desktop, but rendering starts at two
+// and adds one ring at a time. This avoids a startup burst of WebGL mesh jobs.
+patch('src/game/game.ts',
+ "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
+ `    this.chunks.renderDistance = login && location.search.includes('gfcJoin') ? 2 : this.opts.renderDistance;
+    this.chunks.smoothLighting = this.opts.smoothLighting;`);
+patch('src/game/game.ts',
+ "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
+ `    client?.receive();
+    if (this.mode === 'client' && this.inWorld && this.spawned &&
+        location.search.includes('gfcJoin') && this.chunks &&
+        this.ticks % 120 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
+      this.chunks.renderDistance++;
+      this.renderer.renderDistance = this.chunks.renderDistance;
+      this.chunks.refreshRadius();
+    }
+    if (!this.inWorld) return client?.sendTick();`);
 // The family multiplayer can rain in the simulation (weather and crops
 // still behave normally), without drawing thousands of fullscreen streaks
 // above dense jungle foliage. Solo worlds retain vanilla precipitation.
@@ -205,7 +223,7 @@ patch('src/render/renderer.ts',
  "    if (e.level && e.weather.rain > 0 && !location.search.includes('gfcJoin')) {");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 3;",
- "export const CHUNKS_PER_TICK = 5;");
+ "export const CHUNKS_PER_TICK = 2;");
 
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

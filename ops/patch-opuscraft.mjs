@@ -112,6 +112,7 @@ patch('src/gui/screens/multiplayer.ts',
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
       (window as any).__gfcFamilyJoining = false;
     } catch (error) {
+      (window as any).__gfcRestoreVideo?.();
       (window as any).__gfcFamilyJoining = false;
       this.game.setScreen(this);
       window.alert('Nao foi possivel entrar no Servidor da Familia: ' + String(error));
@@ -202,6 +203,15 @@ patch('src/game/game.ts',
       this.chunks.refreshRadius();
     }
     if (!this.inWorld) return client?.sendTick();`);
+// Apply the lower pixel ratio as soon as a real multiplayer connection begins,
+// then restore the exact solo framebuffer and options on returning to the title.
+patch('src/game/game.ts',
+ "    this.mode = 'client';\n    this.joinedWith = me.code;",
+ "    this.mode = 'client';\n    if ((window as any).__gfcFamilySession === true) this.resize();\n    this.joinedWith = me.code;");
+patch('src/game/game.ts',
+ "    this.mode = 'single';\n    this.clock.stop();",
+ "    this.mode = 'single';\n    (window as any).__gfcRestoreVideo?.();\n    this.clock.stop();");
+
 // Reduce framebuffer pixel count in the family multiplayer: the GPU
 // draws the same voxel geometry but at 70% of desktop resolution (85%
 // mobile) and CSS upscales it. Does not change anyone's solo settings.

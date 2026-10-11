@@ -4,9 +4,9 @@
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
 
-type Intent = 'build' | 'explore' | 'hide' | 'observe';
+type Intent = 'build' | 'explore' | 'hide' | 'observe' | 'seek_water' | 'seek_food' | 'rest' | 'warm_up' | 'cool_down' | 'surface';
 type Plot = { x:number; y:number; z:number };
-const intents: readonly Intent[] = ['build','explore','hide','observe'];
+const intents: readonly Intent[] = ['build','explore','hide','observe','seek_water','seek_food','rest','warm_up','cool_down','surface'];
 const MAX_BUILD = 130;
 const ENCOUNTER_COOLDOWN = 25 * 60 * 1000;
 const greetings = [
@@ -28,6 +28,91 @@ export function installGfcNpc(game: Game): void {
   let driveTicks=0, walkingTicks=0, walkedBlocks=0, stuckSamples=0;
   let lastX=resident.x, lastZ=resident.z;
   let canAdvance=true;
+  // NPC-only survival simulation. Guests keep their original creative rules.
+  type Vitals={hunger:number;thirst:number;energy:number;temperature:number;oxygen:number;health:number};
+  let vitals:Vitals={hunger:100,thirst:100,energy:100,temperature:23,oxygen:100,health:20};
+  let livedSeconds=0,deaths=0,underwaterSeconds=0;
+  let currentGoal='survive',goalReason='Ainda não conheço este mundo.';
+  const experiences:{kind:string;detail:string;at:number}[]=[];
+  const discoveries:{x:number;z:number;kind:string}[]=[];
+  let safe={x:resident.x,y:resident.y,z:resident.z};
+  const clip=(n:number,lo=0,hi=100)=>Math.max(lo,Math.min(hi,n));
+  function remember(kind:string,detail:string){
+    if(experiences.at(-1)?.kind===kind && experiences.at(-1)?.detail===detail)return;
+    experiences.push({kind:kind.slice(0,32),detail:detail.slice(0,160),at:livedSeconds});
+    if(experiences.length>25)experiences.shift();
+  }
+  function survivalTick(){
+    // Only one cheap update per second. The upstream Player.isUnderWater()
+    // checks its *eyes*, so surface swimming doesn't consume breath.
+    if(driveTicks%20!==0)return;
+    livedSeconds++;
+    const submerged=resident.isUnderWater();
+    if(submerged){
+      underwaterSeconds++;
+      vitals.oxygen=clip(vitals.oxygen-7);
+      if(underwaterSeconds===1)remember('water','Entrei em água profunda; preciso manter a cabeça fora da água.');
+      if(vitals.oxygen===0) vitals.health=clip(vitals.health-1,0,20);
+    } else{
+      if(underwaterSeconds>0)remember('air','Recuperei o ar ao chegar à superfície.');
+      underwaterSeconds=0;
+      vitals.oxygen=clip(vitals.oxygen+24);
+      if(!resident.inWater && resident.onGround && livedSeconds%10===0)
+        safe={x:resident.x,y:resident.y,z:resident.z};
+    }
+    vitals.hunger=clip(vitals.hunger-0.025);
+    vitals.thirst=clip(vitals.thirst-(resident.inWater?0.065:0.05));
+    vitals.energy=clip(vitals.energy-(lastAction==='rest'?-0.45:0.035));
+    const x=Math.floor(resident.x),y=Math.floor(resident.y),z=Math.floor(resident.z);
+    const wet=resident.inWater||game.level.isRainingAt(x,y,z);
+    const night=game.level.dayTime%24000>=12500;
+    const target=wet?15:night?19:y>110?17:26;
+    vitals.temperature=clip(vitals.temperature+(target-vitals.temperature)*0.08,-30,55);
+    if(vitals.hunger<1||vitals.thirst<1||vitals.temperature<8||vitals.temperature>41)
+      vitals.health=clip(vitals.health-0.13,0,20);
+    else if(!submerged&&vitals.hunger>35&&vitals.thirst>35&&vitals.energy>35)
+      vitals.health=clip(vitals.health+0.02,0,20);
+    if(vitals.oxygen<35) {
+      // Immediate reflex takes precedence over the language model's long-term plan.
+      waypoint=null;resident.input.jump=true;currentGoal='breathe';
+    }
+    if(vitals.health<=0){
+      deaths++;
+      remember('death',submerged?'Morri afogada. Preciso evitar permanecer submersa.':'Não consegui atender às minhas necessidades de sobrevivência.');
+      // Never kill the actual host Player: it is keeping the family's world online.
+      // Recover the NPC at its last safe ground without altering any blocks or inventory.
+      resident.moveTo(safe.x,safe.y,safe.z);
+      vitals={hunger:45,thirst:45,energy:55,temperature:23,oxygen:100,health:20};
+      underwaterSeconds=0;waypoint=null;currentGoal='survive';
+    }
+  }
+  function lifeSnapshot(){
+    return {version:1,vitals,livedSeconds,deaths,currentGoal,goalReason,
+      experiences:experiences.slice(-25),discoveries:discoveries.slice(-12),
+      safe,position:{x:resident.x,y:resident.y,z:resident.z}};
+  }
+  function restoreLife(data:any){
+    if(!data||data.version!==1||livedSeconds!==0)return false;
+    const n=data.vitals;
+    if(!n||typeof n!=='object')return false;
+    const valid=(x:unknown)=>typeof x==='number'&&Number.isFinite(x);
+    if(![n.hunger,n.thirst,n.energy,n.temperature,n.oxygen,n.health].every(valid))return false;
+    vitals={hunger:clip(n.hunger),thirst:clip(n.thirst),energy:clip(n.energy),
+      temperature:clip(n.temperature,-30,55),oxygen:clip(n.oxygen),health:clip(n.health,1,20)};
+    livedSeconds=clip(Number(data.livedSeconds)||0,0,1e9);
+    deaths=clip(Number(data.deaths)||0,0,1e6);
+    currentGoal=typeof data.currentGoal==='string'?data.currentGoal.slice(0,90):'survive';
+    goalReason=typeof data.goalReason==='string'?data.goalReason.slice(0,160):'';
+    for(const e of (Array.isArray(data.experiences)?data.experiences:[]).slice(-25))
+      if(typeof e?.kind==='string'&&typeof e?.detail==='string')
+        experiences.push({kind:e.kind.slice(0,32),detail:e.detail.slice(0,160),at:clip(Number(e.at)||0,0,1e9)});
+    for(const d of (Array.isArray(data.discoveries)?data.discoveries:[]).slice(-12))
+      if(valid(d?.x)&&valid(d?.z)&&typeof d.kind==='string')
+        discoveries.push({x:Math.round(d.x),z:Math.round(d.z),kind:d.kind.slice(0,30)});
+    if(data.safe&&[data.safe.x,data.safe.y,data.safe.z].every(valid))
+      safe={x:data.safe.x,y:data.safe.y,z:data.safe.z};
+    return true;
+  }
   const blueprint: {x:number;y:number;z:number;block:string}[] = [];
   for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)
     blueprint.push({x,y:0,z,block:'oak_planks'});
@@ -133,9 +218,13 @@ export function installGfcNpc(game: Game): void {
       stuckSamples=0;
     }
     lastX=resident.x;lastZ=resident.z;
+    survivalTick();
+    if(vitals.oxygen<35&&resident.isUnderWater()){
+      waypoint=null;inp.jump=true;return;
+    }
     // A long-running 'build' plan should not freeze the character at one spot.
     // Even an 'observe' plan allows an occasional short, believable walk.
-    if(!waypoint&&lastAction!=='build'&&driveTicks%120===0)roam();
+    if(!waypoint&&lastAction!=='build'&&lastAction!=='rest'&&driveTicks%120===0)roam();
     if(!waypoint)return;
     const dx=waypoint.x-resident.x,dz=waypoint.z-resident.z;
     if(Math.hypot(dx,dz)<0.65){waypoint=null;return;}
@@ -195,13 +284,54 @@ export function installGfcNpc(game: Game): void {
     if(!game.inWorld||game.mode!=='host'||!game.spawned)
       return {ok:false,error:'Servidor ainda carregando'};
     const now=Date.now();
-    if(!plot && (!lastPlotSearch || now-lastPlotSearch>=18000)){
+    if(intent==='build' && !plot && (!lastPlotSearch || now-lastPlotSearch>=18000)){
       lastPlotSearch=now;
       plot=choosePlot();
     }
     const action=intents.includes(intent as Intent)?intent as Intent:'observe';
     const nearby=guests().filter(p=>p.name.startsWith('KID_')&&distance(p.x,p.z,resident.x,resident.z)<25);
     stepCount++;lastAction=action;
+    if(action==='seek_water' || action==='cool_down'){
+      const cx=Math.floor(resident.x),cy=Math.floor(resident.y),cz=Math.floor(resident.z);
+      // Only inspect a small local grid once per NPC step, not in a game tick.
+      let found=false;
+      for(let radius=1;radius<=7&&!found;radius++)
+        for(const [ox,oz] of [[radius,0],[-radius,0],[0,radius],[0,-radius],[radius,radius],[-radius,-radius]]){
+          const bx=cx+ox,bz=cz+oz;
+          if(!game.level.world.isLoaded(bx,bz))continue;
+          let water=false;
+          for(const yy of [cy-1,cy,cy+1]){
+            const name=blockOf(game.level.getState(bx,yy,bz)).name;
+            if(name.includes('water')){water=true;break;}
+          }
+          if(!water)continue;
+          // Stand on land near the water, keep the head above it.
+          for(const [ax,az] of [[bx+1,bz],[bx-1,bz],[bx,bz+1],[bx,bz-1]]){
+            if(nearFeet(ax,az)===null)continue;
+            if(distance(resident.x,resident.z,ax,az)<2.3){
+              vitals.thirst=clip(vitals.thirst+48);
+              remember('drink','Encontrei água acessível e consegui matar a sede.');
+              discoveries.push({x:bx,z:bz,kind:'water'});
+              if(discoveries.length>12)discoveries.shift();
+              found=true;break;
+            }
+            if(move(ax,az)){found=true;break;}
+          }
+          if(found)break;
+        }
+      if(!found)remember('search','Procurei água por perto, mas ainda não encontrei acesso seguro.');
+    }
+    if(action==='rest' && vitals.energy<97) waypoint=null;
+    if(action==='seek_food') remember('food','Procurei alimento; preciso localizar uma fonte comestível acessível.');
+    if(action==='surface'){waypoint=null;resident.input.jump=true;}
+    if(action==='warm_up'||action==='cool_down')remember('temperature','Procuro um lugar de temperatura mais confortável.');
+    if(action==='explore' && stepCount%5===0){
+      const px=Math.floor(resident.x),pz=Math.floor(resident.z);
+      if(!discoveries.some(d=>distance(d.x,d.z,px,pz)<8)){
+        discoveries.push({x:px,z:pz,kind:'visited'});
+        if(discoveries.length>12)discoveries.shift();
+      }
+    }
     if(nearby.length && now>visibleUntil && now-lastMeet>ENCOUNTER_COOLDOWN){
       // A rare, short greeting. Children never receive arbitrary AI-generated text.
       if(Math.random()<0.12){
@@ -213,7 +343,7 @@ export function installGfcNpc(game: Game): void {
       hide();
     } else if(action==='hide' && now-lastVisit>120000){
       hide();
-    } else if(!plot && action!=='observe'){
+    } else if(!plot && ['explore','hide','seek_food','seek_shelter'].includes(action)){
       // Still roam while the site finder waits for chunks/flat terrain.
       roam();
     } else if(plot && action==='build'){
@@ -251,7 +381,16 @@ export function installGfcNpc(game: Game): void {
       roamMoves,lastMoveOk,plotSearchChecked:nextPlotCandidate,
       walkingTicks,walkedBlocks:Math.round(walkedBlocks*10)/10,walkingTo:waypoint,
       buildCursor:nextBlock,buildReason:lastBuildReason,buildPlot:plot,
+      needs:{...vitals},livedSeconds,deaths,currentGoal,goalReason,underwater:resident.isUnderWater(),
+      memoryCount:experiences.length,memories:experiences.slice(-5),discoveries:discoveries.slice(-5),
       position:{x:Math.round(resident.x),y:Math.round(resident.y),z:Math.round(resident.z)}};
   }
-  (window as any).__gfcNpc={step,drive,status,visit};
+  function setGoal(goal:string,reason:string){
+    if(typeof goal!=='string')return;
+    const next=goal.slice(0,90);
+    if(next!==currentGoal)remember('goal','Novo objetivo escolhido: '+next);
+    currentGoal=next;
+    goalReason=typeof reason==='string'?reason.slice(0,160):'';
+  }
+  (window as any).__gfcNpc={step,drive,status,visit,lifeSnapshot,restoreLife,setGoal};
 }

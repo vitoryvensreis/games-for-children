@@ -173,7 +173,7 @@ patch('src/net/config.ts',
  "export const TIMEOUT_TICKS = 120 * 20;");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 6;",
- "export const CHUNKS_PER_TICK = 3;");
+ "export const CHUNKS_PER_TICK = 5;");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");
@@ -189,14 +189,14 @@ patch('src/net/transport/webSocket.ts',
 patch('src/game/game.ts',
  "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
  `    this.chunks.renderDistance = login && this.mode === 'client' && (window as any).__gfcFamilySession === true ?
-      Math.min(1,this.opts.renderDistance) : this.opts.renderDistance;
+      Math.min(2,this.opts.renderDistance) : this.opts.renderDistance;
     this.chunks.smoothLighting = this.opts.smoothLighting;`);
 patch('src/game/game.ts',
  "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
  `    client?.receive();
     if (this.mode === 'client' && this.inWorld && this.spawned &&
         (window as any).__gfcFamilySession === true && this.chunks &&
-        this.ticks % 80 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
+        this.ticks % 30 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
       this.chunks.renderDistance++;
       this.renderer.renderDistance = this.chunks.renderDistance;
       this.chunks.refreshRadius();
@@ -226,9 +226,6 @@ patch('src/render/renderer.ts',
 patch('src/render/renderer.ts',
  "    if (e.level && e.weather.rain > 0) {",
  "    if (e.level && e.weather.rain > 0 && !((window as any).__gfcFamilySession === true && (window as any).__game?.mode === 'client')) {");
-patch('src/net/config.ts',
- "export const CHUNKS_PER_TICK = 3;",
- "export const CHUNKS_PER_TICK = 3;");
 
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

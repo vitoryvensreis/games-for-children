@@ -108,9 +108,7 @@ patch('src/gui/screens/multiplayer.ts',
       const identity = await r.json() as { playerName:string; joinCode:string };
       if (!/^[A-Za-z0-9_]{3,16}$/.test(identity.playerName)) throw Error('Identidade invalida');
       this.closeLists();
-      const onPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-      this.game.opts.renderDistance = onPhone ? 3 : 5;
+      actions.prepare();
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
     } catch (error) {
       this.game.setScreen(this);

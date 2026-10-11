@@ -124,7 +124,13 @@ server.on('upgrade',(req,socket,head)=>{
   const status=await page.evaluate(()=>({
    mode:window.__game?.mode,inWorld:window.__game?.inWorld,spawned:window.__game?.spawned,
    name:window.__game?.client?.me?.name||'',
+   renderDistance:window.__game?.opts?.renderDistance,
+   hostViewDistance:window.__game?.client?.info?.viewDistance,
   }));
+  if(status.renderDistance!==5||status.hostViewDistance!==5)
+   throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
+  console.log('OPUSCRAFT_FAMILY_DESKTOP_CHUNK_RADIUS_OK',JSON.stringify({
+   client:status.renderDistance,server:status.hostViewDistance}));
   const stats=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json());
   if(!stats.ready||stats.guests<1)throw Error('The server did not record the guest connection: '+JSON.stringify(stats));
   const roster=await fetch('http://127.0.0.1:4173/__players').then(r=>r.json());
@@ -194,6 +200,12 @@ server.on('upgrade',(req,socket,head)=>{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:kid.name})
   });
   if(badVisit.status!==400)throw Error('Child identity was accepted as an administrator by the NPC host');
+  const invalidAttraction=await fetch('http://127.0.0.1:4173/__npc/visit',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:adm.name,attraction:'nonexistent-world-coordinate'})
+  });
+  if(invalidAttraction.status!==400)
+   throw Error('Arbitrary administrator coordinates were accepted by landmark teleport');
   console.log('OPUSCRAFT_NPC_ADMIN_VISIT_OK');
 
 

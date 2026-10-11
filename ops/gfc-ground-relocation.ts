@@ -195,6 +195,6 @@ export function installGroundRelocation(
  function status(){return {relocating:state.relocation?{
   kind:state.relocation.kind,phase:state.relocation.phase,cursor:state.relocation.cursor,
   from:state.relocation.from,to:state.relocation.to}:null,
-  grounded:(state.movedKinds||[]).length,searches,reason};}
+  grounded:state.completed.filter(s=>s.elevated===false).length,blocked:state.blockedKinds?.length||0,searches,reason};}
  return {tick,status};
 }

@@ -141,7 +141,7 @@ export function installGfcNpc(game: Game): void {
     return {ok:true,action:lastAction};
   }
   function status(){
-    return {ok:true,ready:!!plot,name:'Andarilha',action:lastAction,
+    return {ok:true,ready:game.spawned && game.mode==='host',hasPlot:!!plot,name:'Andarilha',action:lastAction,
       built,planned:blueprint.length,steps:stepCount,visitors:guests().length,
       position:{x:Math.round(resident.x),y:Math.round(resident.y),z:Math.round(resident.z)}};
   }

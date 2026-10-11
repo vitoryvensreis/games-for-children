@@ -137,10 +137,9 @@ test('Admin can choose only recorded landmarks, including the current build',()=
 });
 test('Family chunk radius improves desktop horizon without changing solo worlds',()=>{
  const patch=read('ops/patch-opuscraft.mjs');
- const part=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
-   patch.indexOf("} else if (params.has('seed')"));
- assert.match(part,/renderDistance = familyOnPhone \? 3 : 5/);
- assert.match(patch,/renderDistance = onPhone \? 3 : 5/);
+ const family=read('ops/gfc-family-client.ts');
+ assert.match(family,/game\.opts\.renderDistance = mobile \? 3 : 4/);
+ assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
  assert.match(patch,/CHUNKS_PER_TICK = 3/);
  assert.match(patch,/this\.chunks\.renderDistance\+\+/);
@@ -166,7 +165,7 @@ test('Frame budget and rotor animations avoid block-by-block updates during play
  const patch=read('ops/patch-opuscraft.mjs'),rotors=read('ops/gfc-rotors.ts'),
   host=read('ops/gfc-world-attractions.ts'),server=read('server.cjs');
  assert.match(patch,/const ratio = family \? \(mobile \? 0\.82 : 0\.70\) : 1/);
- assert.match(patch,/Math\.min\(3,this\.opts\.renderDistance\)/);
+ assert.match(patch,/Math\.min\(1,this\.opts\.renderDistance\)/);
  assert.match(patch,/export const CHUNKS_PER_TICK = 3/);
  assert.match(patch,/__gfcRotorRender\?\.\(this,cam\)/);
  assert.match(rotors,/performance\.now\(\)/);

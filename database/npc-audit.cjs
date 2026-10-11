@@ -13,12 +13,17 @@ function sanitizeNpcAudit(raw){
  if(raw.type==='question')details={
   number:number(d.number),model:text(d.model,100),system:text(d.system,1200),
   input:{playersNearby:number(d.input?.playersNearby,8),blocksBuilt:number(d.input?.blocksBuilt,120),
-   hasVisitors:Boolean(d.input?.hasVisitors)}
+   hasVisitors:Boolean(d.input?.hasVisitors),
+   underwater:Boolean(d.input?.underwater),
+   currentGoal:text(d.input?.currentGoal,90),
+   needs:Object.fromEntries(['hunger','thirst','energy','oxygen','temperature','health'].map(k=>
+    [k,number(d.input?.needs?.[k],100)]))}
  };
- if(raw.type==='decision')details={number:number(d.number),configured:Boolean(d.configured),error:text(d.error,150)||null};
+ if(raw.type==='decision')details={number:number(d.number),configured:Boolean(d.configured),error:text(d.error,150)||null,goal:text(d.goal,90),reason:text(d.reason,160)};
  if(raw.type==='step')details={
   step:number(d.step),built:number(d.built,10000),cursor:number(d.cursor,10000),
-  reason:text(d.reason,50),visitors:number(d.visitors,30)
+  reason:text(d.reason,50),visitors:number(d.visitors,30),
+  health:number(d.health,20),oxygen:number(d.oxygen),thirst:number(d.thirst),hunger:number(d.hunger),goal:text(d.goal,90)
  };
  if(raw.type==='error')details={reason:text(d.reason,150)};
  return {type:raw.type,action,source,details};

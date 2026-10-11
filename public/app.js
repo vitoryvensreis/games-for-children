@@ -132,12 +132,12 @@ async function openOpusCraft(){
   }
   $('#opuscraftJoinRetry').onclick=()=>{
    joinAlert.hidden=true;
-   gameFrame.src='/opuscraft/index.html?gfcJoin=1&v='+
+   clearTimeout(joinTimeout);clearInterval(joinCheckTimer);joinTracked=false;
+   // Reopen the title: joining a family server must remain an explicit choice.
+   gameFrame.src='/opuscraft/index.html?v='+
     encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now();
-   scheduleFamilyJoinCheck();
   };
   $('#opuscraftJoinBack').onclick=()=>$('#opuscraftBack')?.click();
-  scheduleFamilyJoinCheck();
   const playersDock=$('#opusPlayersDock'),playersPanel=$('#opusPlayersPanel'),playersList=$('#opusPlayersList');
   let rosterBusy=false;
   async function showFamilyPlayers(){

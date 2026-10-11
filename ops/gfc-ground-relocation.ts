@@ -68,7 +68,7 @@ export function installGroundRelocation(
  let choice=0;
  function tryStart(){
   if(!canWork())return;
-  const existing=state.completed.find(s=>s.elevated&&!state.movedKinds?.includes(s.kind));
+  const existing=state.completed.find(s=>!state.movedKinds?.includes(s.kind));
   if(!existing){reason='Todas as estruturas estão apoiadas no terreno';return}
   if(existing.kind==='names'&&!marqueeReady()){reason='Aguardando correção segura do letreiro';return}
   const [dx,dz]=offsets[choice%offsets.length];
@@ -88,6 +88,24 @@ export function installGroundRelocation(
   searches++;
   const answer=assess(candidate);
   if(!answer){choice++;reason='Terreno irregular ou construído: procurando outro';return}
+  // Confirm most of the source is still our automated structure before
+  // starting the copy. Never relocate an unrelated hand-built landmark.
+  const source=planFor(existing.kind);
+  const rotor=existing.kind==='windmill'||existing.kind==='pinwheels';
+  let recognized=0,unknown=0;
+  for(const block of source){
+   if(!game.level.world.isLoaded(existing.x+block.x,existing.z+block.z)){
+    reason='Carregando estrutura original';return;
+   }
+   const here=nameAt(existing.x+block.x,existing.y+block.y,existing.z+block.z);
+   if(here===block.name||(rotor&&/^(?:white|red)_wool$/.test(block.name)&&here==='air'))recognized++;
+   else if(!removable(here))unknown++;
+  }
+  if(recognized<Math.floor(source.length*0.90)||unknown>0){
+   reason='Construção original modificada por jogador; protegida';
+   state.movedKinds=[...(state.movedKinds||[]),existing.kind];
+   persist();return;
+  }
   const target={...candidate,y:answer.base};
   state.relocation={kind:existing.kind,from:{...existing},to:target,
    phase:'fill',cursor:0,foundation:answer.foundation};

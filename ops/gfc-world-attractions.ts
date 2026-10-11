@@ -241,33 +241,6 @@ export function installGfcWorldAttractions(game:Game){
   }
   return maxY;
  }
- function skySiteAllowed(kind:Kind,x:number,z:number):number|null{
-  // Last-resort forest lookout built ABOVE the canopy, never by cutting
-  // down trees or modifying old buildings. Creative players can fly up.
-  // The ordinary grounded clearing always takes priority.
-  if(Math.hypot(x-anchor.x,z-anchor.z)<36)return null;
-  if(state.completed.some(p=>Math.hypot(p.x-x,p.z-z)<42))return null;
-  if(visitors().some(v=>Math.hypot(v.player!.x-x,v.player!.z-z)<35))return null;
-  const {w,d,h}=dims[kind];
-  let tallest=-1000,shortest=1000;
-  for(let xx=x-w-1;xx<=x+w+1;xx++)for(let zz=z-d-1;zz<=z+d+1;zz++){
-   if(!game.level.world.isLoaded(xx,zz))return null;
-   const high=game.level.world.heightAt(xx,zz);
-   if(high<40||high>164)return null;
-   tallest=Math.max(tallest,high);shortest=Math.min(shortest,high);
-   // Do not treat visibly constructed rooftops as natural terrain.
-   const top=nameAt(xx,high-1,zz);
-   if(!/^(?:air|grass_block|dirt|stone|sand|gravel|snow_block|oak_leaves|spruce_leaves|birch_leaves|jungle_leaves|acacia_leaves|dark_oak_leaves|cherry_leaves|mangrove_leaves|pale_oak_leaves|short_grass|tall_grass|grass|fern|large_fern)$/.test(top))return null;
-  }
-  if(tallest-shortest>64)return null;
-  const platform=tallest+4;
-  if(platform+h>=245)return null;
-  // Test the exact new blocks, not a large arbitrary rectangle. If anything
-  // unexpected exists in the build volume, reject the site before building.
-  for(const block of planFor(kind))
-   if(!OPEN.has(nameAt(x+block.x,platform+block.y,z+block.z)))return null;
-  return platform;
- }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
   if(!kind||state.work||!parked())return;
@@ -299,13 +272,12 @@ export function installGfcWorldAttractions(game:Game){
   surveyed++;
   const y=surface(x,z);
   const normal=y!==null?siteAllowed(kind,x,y,z):null;
-  // After repeated failed ground surveys in dense forest, use a safe
-  // tree-top lookout. It adds blocks in OPEN space; no natural blocks removed.
-  const elevated=normal===null&&state.attempts>=15?skySiteAllowed(kind,x,z):null;
-  const platformY=normal!==null?normal:elevated;
+  // Never create another floating platform as a fallback. Survey more
+  // natural ground instead; existing elevated builds are migrated separately.
+  const platformY=normal;
   pending=null;state.attempts++;
   if(platformY!==null){
-   state.work={site:{kind,x,y:platformY,z,elevated:normal===null},cursor:0};
+   state.work={site:{kind,x,y:platformY,z,elevated:false},cursor:0};
    blocked='';persist();
   }else{
    rejected++;

@@ -87,7 +87,7 @@ test('Only family multiplayer receives lower graphics defaults on weak devices',
  assert.match(p,/game\.opts\.graphics = 0/);
  assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
  assert.match(patch,/location\.search\.includes\('gfcJoin'\)/);
- assert.match(p,/export const CHUNKS_PER_TICK = 5/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 5/);
  assert.match(p,/game\.opts\.particles = 2/);
  assert.match(p,/game\.opts\.entityShadows = false/);
  assert.doesNotMatch(p,/game\.saveOptions\(\)/);

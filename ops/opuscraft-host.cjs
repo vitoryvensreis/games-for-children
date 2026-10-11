@@ -18,7 +18,7 @@ const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1');
- if(req.method!=='GET'&&!(req.method==='POST'&&url.pathname==='/__teleport')){res.writeHead(405).end();return}
+ if(req.method!=='GET'&&!(req.method==='POST'&&['/__teleport','/__npc/visit'].includes(url.pathname))){res.writeHead(405).end();return}
  if(url.pathname==='/__players'&&req.method==='GET'){
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
    const g=window.__game,srv=g?.server;

@@ -72,6 +72,14 @@ export function installGroundRelocation(
   const existing=state.completed.find(s=>!state.movedKinds?.includes(s.kind));
   if(!existing){reason='Todas as estruturas estão apoiadas no terreno';return}
   if(existing.kind==='names'&&!marqueeReady()){reason='Aguardando correção segura do letreiro';return}
+  // Original floating structures are outside the VPS host's two-chunk view.
+  // Load their footprint first, or the source validation never progresses.
+  game.chunks.setTicket('gfc-old-attraction',[existing.x>>4,existing.z>>4,2]);
+  for(const block of planFor(existing.kind)){
+   if(!game.level.world.isLoaded(existing.x+block.x,existing.z+block.z)){
+    reason='Carregando construção original';return;
+   }
+  }
   const [dx,dz]=offsets[choice%offsets.length];
   const i=Math.floor(choice/offsets.length)%6;
   const offX=dx+(i*18*Math.sign(dx||1)),offZ=dz+(i*18*Math.sign(dz||1));

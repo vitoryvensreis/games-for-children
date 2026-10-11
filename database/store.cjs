@@ -71,7 +71,38 @@ async function pruneNpcEvents(){
 // File mirror works even if the MySQL migration isn't permitted or its connection fails.
 const npcLifeFile=()=>path.join(process.env.DATA_DIR||path.join(__dirname,'..','data'),'opuscraft','andarilha-life.json');
 const limitedLife=(data)=>{
- if(!data||typeof data!=='object'||data.version!==1)return null;
+ if(!data||typeof data!=='object')return null;
+ // Keep the old survival snapshots readable during migration. New construction
+ // snapshots use version 2 and store only validated coordinates and project type.
+ if(data.version===2&&data.role==='world_architect'){
+  const kinds=new Set(['village','castle','windmill','bridge','cave','town','portal','tower','garden']);
+  const styles=new Set(['medieval','rustic','fantasy','stone','woodland']);
+  const safeNum=(n,limit=30000000)=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<limit;
+  const safeText=(t,len)=>typeof t==='string'?t.slice(0,len):'';
+  const plan=p=>p&&kinds.has(p.kind)&&styles.has(p.style)&&
+   [p.x,p.y,p.z].every(n=>safeNum(n))?{
+    kind:p.kind,style:p.style,title:safeText(p.title,70),reason:safeText(p.reason,160),
+    x:p.x,y:p.y,z:p.z,cursor:Math.max(0,Math.min(20000,Math.floor(Number(p.cursor)||0))),
+    placed:Math.max(0,Math.min(20000,Math.floor(Number(p.placed)||0))),
+    skipped:Math.max(0,Math.min(20000,Math.floor(Number(p.skipped)||0))),
+    startedAt:safeNum(p.startedAt,1e15)?p.startedAt:Date.now(),
+    state:p.state==='blocked'?'blocked':'building',
+    blockedReason:safeText(p.blockedReason,100)
+   }:null;
+  const completed=(Array.isArray(data.completed)?data.completed:[]).slice(-200)
+   .filter(p=>kinds.has(p?.kind)&&[p.x,p.y,p.z].every(n=>safeNum(n)))
+   .map(p=>({kind:p.kind,title:safeText(p.title,70),x:p.x,y:p.y,z:p.z,
+    placed:Math.max(0,Math.min(20000,Math.floor(Number(p.placed)||0)))}));
+  const q=data.queue;
+  const queue=q&&kinds.has(q.kind)&&styles.has(q.style)?{
+   kind:q.kind,style:q.style,title:safeText(q.title,70),reason:safeText(q.reason,160)}:null;
+  return {version:2,role:'world_architect',project:plan(data.project),queue,completed,
+   placedTotal:Math.max(0,Math.min(1e8,Math.floor(Number(data.placedTotal)||0))),
+   searchCursor:Math.max(0,Math.min(100000,Math.floor(Number(data.searchCursor)||0))),
+   blockedSites:(Array.isArray(data.blockedSites)?data.blockedSites:[]).slice(-80)
+    .filter(p=>safeNum(p?.x)&&safeNum(p?.z)).map(p=>({x:p.x,z:p.z}))};
+ }
+ if(data.version!==1)return null;
  const v=data.vitals;
  if(!v||!['hunger','thirst','energy','temperature','oxygen','health'].every(k=>Number.isFinite(v[k])))return null;
  const bound=(n,min,max)=>Math.min(max,Math.max(min,n));
@@ -87,10 +118,12 @@ const limitedLife=(data)=>{
   experiences:(Array.isArray(data.experiences)?data.experiences:[]).slice(-25).map(e=>({
    kind:cleanText(e?.kind,32),detail:cleanText(e?.detail,160),at:bound(Number(e?.at)||0,0,1e9)
   })),
-  discoveries:(Array.isArray(data.discoveries)?data.discoveries:[]).slice(-12).filter(d=>Number.isFinite(d?.x)&&Number.isFinite(d?.z)).map(d=>({
-   x:bound(Math.round(d.x),-30000000,30000000),z:bound(Math.round(d.z),-30000000,30000000),kind:cleanText(d.kind,30)
-  })),
-  safe:{x:Number.isFinite(safe.x)?safe.x:0,y:Number.isFinite(safe.y)?safe.y:70,z:Number.isFinite(safe.z)?safe.z:0}
+  discoveries:(Array.isArray(data.discoveries)?data.discoveries:[]).slice(-12)
+   .filter(d=>Number.isFinite(d?.x)&&Number.isFinite(d?.z)).map(d=>({
+    x:bound(Math.round(d.x),-30000000,30000000),
+    z:bound(Math.round(d.z),-30000000,30000000),kind:cleanText(d.kind,30)})),
+  safe:{x:Number.isFinite(safe.x)?safe.x:0,y:Number.isFinite(safe.y)?safe.y:70,
+   z:Number.isFinite(safe.z)?safe.z:0}
  };
 };
 async function saveNpcLife(data){

@@ -73,3 +73,52 @@ test('NPC memory is bounded, sanitized and independent from game_state and world
  assert.match(store,/gfc_npc_life_state/);
  assert.match(store,/renameSync\(tmp,file\)/);
 });
+
+test('Groq recovers from json_validate_failed caused by the 384-token budget',async()=>{
+ const calls=[];
+ const got=await decide({needs:{oxygen:100,hunger:33,thirst:18},currentGoal:'Buscar água'},5,{
+  key:'fixture',fetcher:async(url,options)=>{
+   const payload=JSON.parse(options.body);
+   calls.push(payload);
+   assert.equal(payload.reasoning_effort,'low');
+   assert.equal(payload.reasoning_format,'hidden');
+   assert.equal(payload.max_completion_tokens,1200);
+   if(calls.length===1){
+    assert.equal(payload.response_format.type,'json_schema');
+    assert.equal(payload.response_format.json_schema.strict,true);
+    return {ok:false,status:400,json:async()=>({error:{code:'json_validate_failed',
+      failed_generation:'NEVER_EXPOSE_THIS_PROVIDER_OUTPUT'}})};
+   }
+   assert.equal(payload.response_format.type,'json_object');
+   return {ok:true,json:async()=>({choices:[{message:{content:
+    '{"action":"seek_water","goal":"Encontrar água","reason":"Estou com sede"}'
+   }}]})};
+  }});
+ assert.equal(calls.length,2);
+ assert.equal(got.source,'groq');
+ assert.equal(got.action,'seek_water');
+ assert.equal(got.goal,'Encontrar água');
+ assert.ok(!JSON.stringify(got).includes('NEVER_EXPOSE_THIS_PROVIDER_OUTPUT'));
+});
+test('Groq must not retry authentication or quota errors',async()=>{
+ let calls=0;
+ const got=await decide({needs:{oxygen:99,hunger:90,thirst:12}},2,{key:'fixture',
+  fetcher:async()=>{calls++;return {ok:false,status:401,json:async()=>({error:{code:'invalid_api_key'}})}}});
+ assert.equal(calls,1);
+ assert.equal(got.source,'local');
+ assert.match(got.error,/401/);
+ assert.ok(!got.error.includes('fixture'));
+});
+test('Audit preserves survival actions and explains why they did or did not work',()=>{
+ const {sanitizeNpcAudit}=require('../database/npc-audit.cjs');
+ const store=read('database/store.cjs'),app=read('public/app.js');
+ for(const action of ['seek_water','seek_food','rest','warm_up','cool_down','surface']){
+  assert.equal(sanitizeNpcAudit({type:'step',action,details:{reason:'no_food_in_inventory'}}).action,action);
+  assert.ok(store.includes("'"+action+"'"));
+  assert.ok(app.includes(action+':'));
+ }
+ const npc=read('ops/gfc-npc.ts'),host=read('ops/opuscraft-host.cjs');
+ assert.match(npc,/actionReason:lastActionReason/);
+ assert.match(host,/reason:result\.actionReason\|\|result\.buildReason/);
+ assert.match(app,/no_food_in_inventory:'Sem comida no inventário'/);
+});

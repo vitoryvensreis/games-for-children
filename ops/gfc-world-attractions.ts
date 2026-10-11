@@ -367,10 +367,10 @@ export function installGfcWorldAttractions(game:Game){
   }
   spinnerFrame=1-spinnerFrame;
  }
- let signRepairCursor=0,signRepairStatus='Aguardando';
+ let signRepairCursor=0,signRepairStatus='Aguardando',signRepairSaving=false;
  function repairOriginalMarquee(){
   const sign=state.completed.find(site=>site.kind==='names');
-  if(!sign||!parked())return;
+  if(!sign||!parked()||signRepairSaving)return;
   const fixedKey=key+':marquee-direction-v2:'+sign.x+':'+sign.z;
   if(localStorage.getItem(fixedKey)==='1'){signRepairStatus='Corrigido';return;}
   game.chunks.setTicket('gfc-sign-maintenance',[sign.x>>4,sign.z>>4,1]);
@@ -413,11 +413,13 @@ export function installGfcWorldAttractions(game:Game){
   // original world/seed remain unchanged, save failure allows retry.
   signRepairStatus='Salvando correção';
   signRepairCursor=0;
+  signRepairSaving=true;
   void game.saveWorld().then(()=>{
+    signRepairSaving=false;
     localStorage.setItem(fixedKey,'1');
     signRepairStatus='Corrigido';
     game.chunks.setTicket('gfc-sign-maintenance',null);
-  }).catch(()=>{signRepairStatus='Falha ao salvar letras';});
+  }).catch(()=>{signRepairSaving=false;signRepairStatus='Falha ao salvar letras';});
  }
  function animatePinwheels(){
   const site=state.completed.find(s=>s.kind==='pinwheels');

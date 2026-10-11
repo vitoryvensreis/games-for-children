@@ -492,14 +492,24 @@ export function installGfcWorldAttractions(game:Game){
   return {role:'landmark_builder',hiddenHost:true,aiEnabled:false,
    placedAttractions:state.completed.length,totalAttractions:KINDS.length,
    attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z})),
-   building:w?{name:w.site.kind,done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
+   building:w?{name:w.site.kind,x:w.site.x,y:w.site.y,z:w.site.z,
+    done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
    blocked,searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
    signRepair:signRepairStatus,
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }
- function destination(){return state.completed.find(s=>s.kind==='names')||
-   state.completed.at(-1)||state.work?.site||null;}
+ function destination(requested?:string){
+  // Only actual, completed or active landmarks: never trust client
+  // coordinates or arbitrary positions supplied through an API.
+  if(requested){
+   if(!KINDS.includes(requested as Kind))return null;
+   return state.completed.find(s=>s.kind===requested)||
+    (state.work?.site.kind===requested?state.work.site:null);
+  }
+  return state.completed.find(s=>s.kind==='names')||
+   state.completed.at(-1)||state.work?.site||null;
+ }
  return {tick,status,destination};
 }

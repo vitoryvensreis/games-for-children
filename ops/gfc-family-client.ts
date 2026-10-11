@@ -4,6 +4,7 @@ import type { Game } from './game/game';
 
 export function prepareFamilyClient(game: Game): void {
   (window as any).__gfcFamilySession = true;
+  (window as any).__gfcFamilyJoining = true;
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
   game.opts.renderDistance = mobile ? 3 : 4;

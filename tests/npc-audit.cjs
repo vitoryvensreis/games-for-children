@@ -48,7 +48,7 @@ test('NPC logs flow on existing IPC+admin WebSocket and API stays admin-only',()
  assert.match(server,/pathname==='\/api\/admin\/opuscraft\/npc\/events'/);
  assert.match(server,/if\(u\.role!=='admin'\)return json\(res,403/);
  assert.match(host,/publishNpc\('question',question\)/);
- assert.match(host,/publishNpc\('decision',decision\)/);
+ assert.match(host,/publishNpc\('decision',\{number:npcStep/);
  assert.match(host,/publishNpc\('step',snapshot\)/);
  assert.match(host,/npcLastAuditAt>120000/);
  assert.match(app,/m\.type==='npcAudit'&&me\?\.role==='admin'/);

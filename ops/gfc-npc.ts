@@ -162,7 +162,7 @@ export function installGfcNpc(game:Game):void{
   const r=Math.ceil(siteSizes[kind]/2);
   const directions=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
   for(let tries=0;tries<3;tries++){
-   const i=searchCursor++,ring=Math.floor(i/directions.length),[dx,dz]=directions[i%directions.length];
+   const i=searchCursor++,ring=Math.floor(i/directions.length)%24,[dx,dz]=directions[i%directions.length];
    const radius=56+ring*24;
    const x=start.x+dx*radius,z=start.z+dz*radius;
    const y=surface(x,z);

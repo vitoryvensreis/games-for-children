@@ -4,31 +4,40 @@ const fs=require('node:fs'),path=require('node:path');
 const {normalizeAction,fallbackAction,parseAction,decide}=require('../ops/opuscraft-npc-brain.cjs');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
 
-test('GroqCloud is constrained to four non-destructive actions',async()=>{
- assert.equal(normalizeAction('build'),'build');
+test('Groq plans survival goals with bounded safe actions and no private player data',async()=>{
+ assert.equal(normalizeAction('seek_water'),'seek_water');
+ assert.equal(normalizeAction('surface'),'surface');
  assert.equal(normalizeAction('remove_blocks'),null);
- assert.equal(parseAction('{"action":"hide"}'),'hide');
+ assert.equal(parseAction('{"action":"hide","goal":"stay alive","reason":"avoid danger"}'),'hide');
  assert.equal(parseAction('{"action":"delete_everything"}'),null);
- const local=await decide({playersNearby:2},0,{key:''});
- assert.deepEqual(local,{action:'build',source:'local',configured:false});
+ const local=await decide({needs:{oxygen:18}},0,{key:''});
+ assert.equal(local.action,'surface');
+ assert.equal(local.source,'local');
+ assert.equal(local.configured,false);
  assert.equal(fallbackAction(2),'explore');
- const groq=await decide({playersNearby:1},12,{key:'test',fetcher:async(url,opt)=>{
-  assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
-  assert.equal(opt.headers.Authorization,'Bearer test');
-  assert.ok(!opt.body.includes('KID_'));
-  const payload=JSON.parse(opt.body);
-  assert.equal(payload.model,'openai/gpt-oss-20b');
-  assert.equal(payload.response_format.json_schema.strict,true);
-  assert.deepEqual(payload.response_format.json_schema.schema.properties.action.enum,['build','explore','hide','observe']);
-  return {ok:true,json:async()=>({choices:[{message:{content:'{"action":"observe"}'}}]})};
- }});
- assert.equal(groq.action,'observe');
+ const groq=await decide({playersNearby:1,needs:{oxygen:90,thirst:55},
+  currentGoal:'continuar viva',memories:[{kind:'water',detail:'encontrei um rio'}]},12,
+  {key:'test',fetcher:async(url,opt)=>{
+   assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
+   assert.equal(opt.headers.Authorization,'Bearer test');
+   assert.ok(!opt.body.includes('KID_'));
+   const payload=JSON.parse(opt.body);
+   assert.equal(payload.model,'openai/gpt-oss-20b');
+   assert.equal(payload.response_format.json_schema.strict,true);
+   assert.ok(payload.response_format.json_schema.schema.properties.action.enum.includes('surface'));
+   assert.ok(payload.messages[1].content.includes('oxygen'));
+   return {ok:true,json:async()=>({choices:[{message:{content:'{"action":"seek_water","goal":"Encontrar água","reason":"Tenho sede"}'}}]})};
+  }});
+ assert.equal(groq.action,'seek_water');
+ assert.equal(groq.goal,'Encontrar água');
+ assert.equal(groq.reason,'Tenho sede');
  assert.equal(groq.source,'groq');
  const rejected=await decide({},3,{key:'test',fetcher:async()=>({
   ok:true,json:async()=>({choices:[{message:{content:'{"action":"destroy"}'}}]})
  })});
  assert.equal(rejected.source,'local');
 });
+
 test('Agent changes only empty blocks at a fixed small blueprint and builds in existing family world',()=>{
  const agent=read('ops/gfc-npc.ts'),patch=read('ops/patch-opuscraft.mjs'),build=read('ops/build-opuscraft.sh');
  assert.match(agent,/game\.level\.getState\(x,y,z\)!==0/);
@@ -47,7 +56,7 @@ test('Agent keeps roaming safely if no buildable plot exists',()=>{
  // The plot finder must include nearby and cardinal candidates, without overwriting blocks.
  assert.match(agent,/for\(const radius of \[12,16,20,24,32,40\]\)/);
  assert.match(agent,/function roam\(\):boolean/);
- assert.match(agent,/if\(!plot && action!=='observe'\)\{\s*\/\/[^\n]*\n\s*roam\(\)/);
+ assert.match(agent,/\['explore','hide','seek_food','seek_shelter'\]\.includes\(action\)/);
  assert.match(agent,/distance\(x,z,anchor\.x,anchor\.z\)>16\)continue/);
  assert.match(agent,/kids\.some\(p=>distance\(p\.x,p\.z,x,z\)<18\)\)continue/);
  assert.match(agent,/if\(move\(x,z\)\)\{roamMoves\+\+;return true;/);
@@ -89,7 +98,7 @@ test('NPC uses the native player movement/physics tick instead of teleporting',(
  assert.match(agent,/walkingTicks,walkedBlocks:/);
  assert.match(agent,/walkingTo:waypoint/);
  assert.match(agent,/resident\.swing\(\)/);
- assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&driveTicks%120===0\)roam\(\)/);
+ assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&lastAction!=='rest'&&driveTicks%120===0\)roam\(\)/);
  assert.doesNotMatch(agent,/resident\.moveTo\(/);
  assert.ok(patch.includes("(window as any).__gfcNpc?.drive?.()"));
  assert.ok(patch.includes("this.server?.receive();"));
@@ -117,7 +126,7 @@ test('Groq decisions and every execution have private audit entries without toke
 
 test('Building plans must not force purposeless roaming between building actions',()=>{
  const agent=read('ops/gfc-npc.ts');
- assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&driveTicks%120===0\)roam\(\)/);
+ assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&lastAction!=='rest'&&driveTicks%120===0\)roam\(\)/);
  assert.match(agent,/if\(paused\)waypoint=null/);
  assert.match(agent,/if\(lastAction!=='build'&&driveTicks%20===0\)roam\(\)/);
 });

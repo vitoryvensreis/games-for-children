@@ -8,7 +8,7 @@ test('Safe clearing is restricted to natural terrain and avoids existing structu
  assert.match(agent,/const NATURAL=/);
  assert.match(agent,/const DIGGABLE=/);
  assert.match(agent,/safeSite\(x,y,z,r\)/);
- assert.match(agent,/if\(!NATURAL\.test\(n\)\)return false/);
+ assert.match(agent,/if\(!\/\^\(\?:air\|short_grass/);
  assert.match(agent,/if\(!allowed\)/);
  assert.match(agent,/p\.state='blocked'/);
  assert.match(agent,/blockedReason='protected_or_unknown_block:'/);

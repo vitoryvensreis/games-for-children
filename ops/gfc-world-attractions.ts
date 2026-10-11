@@ -2,12 +2,13 @@
 // This file never uses networking, AI, privileged commands or a second Minecraft world.
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
+import { installGroundRelocation } from './gfc-ground-relocation';
 
 type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number;elevated?:boolean};
 type Work={site:Site;cursor:number};
-type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[]};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SEARCH_REVISION=3;
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
@@ -161,7 +162,10 @@ export function installGfcWorldAttractions(game:Game){
     // Migration: previous search exhaustively scanned and pushed the cursor
     // many kilometres away. Restart its *search*, not the family world.
     attempts:data.searchRevision===SEARCH_REVISION&&Number.isFinite(data.attempts)?Math.max(0,Math.floor(data.attempts)):0,
-    phase:Number.isFinite(data.phase)?data.phase:0};
+    phase:Number.isFinite(data.phase)?data.phase:0,
+    relocation:data.relocation?.kind&&KINDS.includes(data.relocation.kind)&&
+      ['fill','copy','saveNew','erase','saveOld'].includes(data.relocation.phase)?data.relocation:null,
+    movedKinds:Array.isArray(data.movedKinds)?data.movedKinds.filter((k:any)=>KINDS.includes(k)):[]};
   }
  }catch{}
  const state=saved;
@@ -172,6 +176,8 @@ export function installGfcWorldAttractions(game:Game){
  const visitors=()=>game.server?[...game.server.sessions.values()].filter(
    session=>session.state==='play'&&session.player&&!session.player.removed):[];
  const parked=()=>visitors().length===0;
+ const grounding=installGroundRelocation(game,state,planFor,persist,parked,
+   ()=>signRepairStatus==='Corrigido');
  const siteFor=(kind:Kind,tries:number)=>{
   // Rotate ALL compass directions instead of searching a single narrow ray.
   // Forest at the spawn can otherwise reject every candidate indefinitely.
@@ -485,6 +491,7 @@ export function installGfcWorldAttractions(game:Game){
    if(pinClose)animatePinwheels();
   }
   if(ticks%40===0&&parked())repairOriginalMarquee();
+  grounding.tick();
   if(ticks%200===0)persist();
  }
  function status(){
@@ -496,7 +503,7 @@ export function installGfcWorldAttractions(game:Game){
     done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
    blocked,searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
-   signRepair:signRepairStatus,
+   signRepair:signRepairStatus,grounding:grounding.status(),
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }

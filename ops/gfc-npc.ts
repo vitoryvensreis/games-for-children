@@ -134,13 +134,16 @@ export function installGfcNpc(game:Game):void{
   if(!reserve(x,z,r))return false;
   // Survey all columns of the full project + a buffer, not just a center point.
   // Any evidence of placed materials or an unknown block aborts the location.
-  for(let dx=-r-3;dx<=r+3;dx+=2)for(let dz=-r-3;dz<=r+3;dz+=2){
+  for(let dx=-r-3;dx<=r+3;dx++)for(let dz=-r-3;dz<=r+3;dz++){
    const bx=x+dx,bz=z+dz;
    const fy=surface(bx,bz);
    if(fy===null||Math.abs(fy-y)>3)return false;
-   for(let yy=fy;yy<=fy+14;yy++){
+   for(let yy=fy;yy<=fy+18;yy++){
     const n=blockName(bx,yy,bz);
-    if(!NATURAL.test(n))return false;
+    // Survey only previously undeveloped clearings; even natural-looking logs,
+    // stone or soil ABOVE the ground could be part of a family construction.
+    if(!/^(?:air|short_grass|tall_grass|grass|fern|large_fern|dead_bush|dandelion|poppy|oxeye_daisy|cornflower|snow)$/.test(n))
+     return false;
    }
   }
   return true;

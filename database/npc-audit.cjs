@@ -6,7 +6,7 @@ function sanitizeNpcAudit(raw){
  if(!types.includes(raw.type))return null;
  const text=(v,max=220)=>typeof v==='string'?v.slice(0,max):'';
  const number=(v,max=100000)=>Number.isFinite(v)?Math.max(0,Math.min(max,Math.round(v))):0;
- const source=['groq','local'].includes(raw.source)?raw.source:null;
+ const source=['gemini','groq','local'].includes(raw.source)?raw.source:null;
  const action=['build','explore','hide','observe','seek_water','seek_food','rest','warm_up','cool_down','surface'].includes(raw.action)?raw.action:null;
  const d=raw.details&&typeof raw.details==='object'&&!Array.isArray(raw.details)?raw.details:{};
  let details={};
@@ -19,11 +19,11 @@ function sanitizeNpcAudit(raw){
    needs:Object.fromEntries(['hunger','thirst','energy','oxygen','temperature','health'].map(k=>
     [k,number(d.input?.needs?.[k],100)]))}
  };
- if(raw.type==='decision')details={number:number(d.number),configured:Boolean(d.configured),error:text(d.error,150)||null,goal:text(d.goal,90),reason:text(d.reason,160)};
+ if(raw.type==='decision')details={number:number(d.number),configured:Boolean(d.configured),error:text(d.error,150)||null,goal:text(d.goal,90),reason:text(d.reason,160),project:text(d.project,30),accepted:Boolean(d.accepted)};
  if(raw.type==='step')details={
   step:number(d.step),built:number(d.built,10000),cursor:number(d.cursor,10000),
   reason:text(d.reason,50),visitors:number(d.visitors,30),
-  health:number(d.health,20),oxygen:number(d.oxygen),thirst:number(d.thirst),hunger:number(d.hunger),goal:text(d.goal,90)
+  health:number(d.health,20),oxygen:number(d.oxygen),thirst:number(d.thirst),hunger:number(d.hunger),goal:text(d.goal,90),kind:text(d.kind,30),completed:number(d.completed,100000),placed:number(d.placed,100000),total:number(d.total,100000)
  };
  if(raw.type==='error')details={reason:text(d.reason,150)};
  return {type:raw.type,action,source,details};

@@ -22,7 +22,7 @@ export function installGfcNpc(game: Game): void {
   let stepCount = 0, built = 0, lastMeet = Date.now(), visibleUntil = 0, lastVisit = 0;
   let lastAction: Intent = 'observe';
   let nextBlock = 0;
-  let lastPlotSearch = 0, roamMoves = 0, lastMoveOk = false;
+  let lastPlotSearch = 0, nextPlotCandidate = 0, roamMoves = 0, lastMoveOk = false;
   const blueprint: {x:number;y:number;z:number;block:string}[] = [];
   for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)
     blueprint.push({x,y:0,z,block:'oak_planks'});
@@ -57,22 +57,26 @@ export function installGfcNpc(game: Game): void {
     return null;
   }
   function choosePlot():Plot|null{
-    // Look outside the starting clearing. Never clear land or overwrite a build.
-    // Include cardinal and nearby sites: diagonal-only, distant candidates can all be unloaded.
+    // Scan a few locations per tick, never thousands of world queries at once.
+    // This avoids stalling the multiplayer host when terrain is uneven/unloaded.
+    const candidates: {x:number;z:number}[] = [];
     for(const radius of [12,16,20,24,32,40]){
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){
-        const x=start.x+dx*radius,z=start.z+dz*radius;
-        const y=feet(x,z);
-        if(y===null)continue;
-        let usable=true;
-        for(let ox=-2;ox<=2&&usable;ox++)for(let oz=-2;oz<=2;oz++){
-          const fy=feet(x+ox,z+oz);
-          if(fy===null||Math.abs(fy-y)>1||game.level.getState(x+ox,y+1,z+oz)!==0){
-            usable=false;break;
-          }
-        }
-        if(usable)return {x,y,z};
+        candidates.push({x:start.x+dx*radius,z:start.z+dz*radius});
       }
+    }
+    for(let checked=0;checked<4;checked++){
+      const {x,z}=candidates[nextPlotCandidate++%candidates.length];
+      const y=feet(x,z);
+      if(y===null)continue;
+      let usable=true;
+      for(let ox=-2;ox<=2&&usable;ox++)for(let oz=-2;oz<=2;oz++){
+        const fy=feet(x+ox,z+oz);
+        if(fy===null||Math.abs(fy-y)>1||game.level.getState(x+ox,y+1,z+oz)!==0){
+          usable=false;break;
+        }
+      }
+      if(usable)return {x,y,z};
     }
     return null;
   }
@@ -125,7 +129,7 @@ export function installGfcNpc(game: Game): void {
     if(!game.inWorld||game.mode!=='host'||!game.spawned)
       return {ok:false,error:'Servidor ainda carregando'};
     const now=Date.now();
-    if(!plot && (!lastPlotSearch || now-lastPlotSearch>60000)){
+    if(!plot && (!lastPlotSearch || now-lastPlotSearch>=18000)){
       lastPlotSearch=now;
       plot=choosePlot();
     }
@@ -170,7 +174,7 @@ export function installGfcNpc(game: Game): void {
   function status(){
     return {ok:true,ready:game.spawned && game.mode==='host',hasPlot:!!plot,name:'Andarilha',action:lastAction,
       built,planned:blueprint.length,steps:stepCount,visitors:guests().length,
-      roamMoves,lastMoveOk,
+      roamMoves,lastMoveOk,plotSearchChecked:nextPlotCandidate,
       position:{x:Math.round(resident.x),y:Math.round(resident.y),z:Math.round(resident.z)}};
   }
   (window as any).__gfcNpc={step,status,visit};

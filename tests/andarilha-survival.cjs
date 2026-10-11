@@ -18,7 +18,7 @@ test('Existing world is protected even if a player visits during construction',(
  assert.match(a,/if\(!OPEN\.has\(current\)\)/);
  assert.match(a,/if\(state\.completed\.some\(s=>Math\.hypot/);
  assert.match(a,/game\.chunks\.setTicket\('gfc-landmarks',null\)/);
- assert.match(a,/A player may have edited the rotor/);
+ assert.match(a,/Hélice modificada manualmente; não apagar blocos/);
  assert.match(a,/game\.saveWorld\(\)\.then/);
  assert.match(a,/const SAVE_KEY='gfc-family-exploration-landmarks-v1'/);
 });

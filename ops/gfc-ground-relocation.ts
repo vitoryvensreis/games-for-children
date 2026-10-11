@@ -19,6 +19,7 @@ export function installGroundRelocation(
  canWork:()=>boolean,marqueeReady:()=>boolean
 ){
  let tickNumber=0,searches=0,reason='Aguardando terreno seguro',saving=false;
+ let pendingLocationSince=0;
  const nameAt=(x:number,y:number,z:number)=>blockOf(game.level.getState(x,y,z)).name;
  const dims=(kind:FamilyKind)=>{
   const list=planFor(kind);return {
@@ -78,13 +79,20 @@ export function installGroundRelocation(
   if(state.completed.some(s=>s!==existing&&Math.hypot(s.x-candidate.x,s.z-candidate.z)<42)){
    choice++;reason='Evitando construções próximas';return;
   }
+  if(!pendingLocationSince)pendingLocationSince=Date.now();
   game.chunks.setTicket('gfc-ground-relocation',[candidate.x>>4,candidate.z>>4,2]);
   const d=dims(candidate.kind);
   for(let cx=(candidate.x+d.xmin)>>4;cx<=((candidate.x+d.xmax)>>4);cx++)
    for(let cz=(candidate.z+d.zmin)>>4;cz<=((candidate.z+d.zmax)>>4);cz++)
     if(!game.level.world.isLoaded(cx*16,cz*16)){
-     reason='Carregando terreno firme';return;
+     if(Date.now()-pendingLocationSince>45000){
+      choice++;pendingLocationSince=0;
+      game.chunks.setTicket('gfc-ground-relocation',null);
+      reason='Região lenta, procurando outro terreno';
+     }else reason='Carregando terreno firme';
+     return;
     }
+  pendingLocationSince=0;
   searches++;
   const answer=assess(candidate);
   if(!answer){choice++;reason='Terreno irregular ou construído: procurando outro';return}
@@ -164,7 +172,13 @@ export function installGroundRelocation(
  }
  function tick(){
   tickNumber++;
-  if(!canWork())return;
+  if(!canWork()){
+   // Ground work is strictly lower priority than children's chunk loading.
+   // Drop both distant generation tickets immediately on player join.
+   game.chunks.setTicket('gfc-ground-relocation',null);
+   game.chunks.setTicket('gfc-old-attraction',null);
+   return;
+  }
   if(state.relocation){
    if(tickNumber%4===0)nextStep();
   }else if(tickNumber%80===0)tryStart();

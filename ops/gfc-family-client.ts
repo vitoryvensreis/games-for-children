@@ -7,7 +7,7 @@ export function prepareFamilyClient(game: Game): void {
   (window as any).__gfcFamilyJoining = true;
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-  game.opts.renderDistance = mobile ? 3 : 4;
+  game.opts.renderDistance = mobile ? 4 : 5;
   game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 2);
   game.opts.graphics = 0;
   game.opts.fancy = false;

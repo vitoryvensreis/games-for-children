@@ -8,7 +8,7 @@ export type FamilyKind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden
 export type FamilyBlock={x:number;y:number;z:number;name:string};
 export type FamilySite={kind:FamilyKind;x:number;y:number;z:number;elevated?:boolean};
 type Relocation={kind:FamilyKind;from:FamilySite;to:FamilySite;phase:'fill'|'copy'|'saveNew'|'erase'|'saveOld';cursor:number;foundation:{x:number;y:number;z:number;name:string}[]};
-type State={completed:FamilySite[];relocation?:Relocation|null;movedKinds?:FamilyKind[]};
+type State={completed:FamilySite[];relocation?:Relocation|null;movedKinds?:FamilyKind[];blockedKinds?:FamilyKind[]};
 const SOIL=new Set(['grass_block','dirt','coarse_dirt','podzol','stone','sand','gravel','snow_block','moss_block','mycelium']);
 const TREE=/^(?:[a-z_]+_leaves|[a-z_]+_log|[a-z_]+_wood|vine|hanging_roots|mangrove_roots|azalea|flowering_azalea|oak_sapling|birch_sapling|spruce_sapling|jungle_sapling|acacia_sapling|dark_oak_sapling)$/;
 const FLORA=new Set(['air','short_grass','tall_grass','grass','fern','large_fern','dead_bush','dandelion','poppy','cornflower','oxeye_daisy','snow','moss_carpet','blue_orchid','allium','pink_tulip','red_tulip','white_tulip','orange_tulip','sunflower','peony','rose_bush','lilac']);
@@ -69,11 +69,20 @@ export function installGroundRelocation(
  let choice=0;
  function tryStart(){
   if(!canWork())return;
-  const existing=state.completed.find(s=>!state.movedKinds?.includes(s.kind));
-  if(!existing){reason='Todas as estruturas estão apoiadas no terreno';return}
-  if(existing.kind==='names'&&!marqueeReady()){reason='Aguardando correção segura do letreiro';return}
+  // Source elevation, not a legacy completed flag, determines whether it is still floating.
+  const existing=state.completed.find(s=>s.elevated===true&&!state.blockedKinds?.includes(s.kind)&&(s.kind!=='names'||marqueeReady()));
+  if(!existing){game.chunks.setTicket('gfc-old-attraction',null);reason=(state.blockedKinds?.length||0)?'Estruturas alteradas manualmente aguardam revisão':'Estruturas flutuantes verificadas já foram tratadas';return}
+  // An uncorrected sign must not block moving the castle or other attractions.
+  // Original floating structures are outside the VPS host's two-chunk view.
+  // Load their footprint first, or the source validation never progresses.
+  game.chunks.setTicket('gfc-old-attraction',[existing.x>>4,existing.z>>4,2]);
+  for(const block of planFor(existing.kind)){
+   if(!game.level.world.isLoaded(existing.x+block.x,existing.z+block.z)){
+    reason='Carregando construção original';return;
+   }
+  }
   const [dx,dz]=offsets[choice%offsets.length];
-  const i=Math.floor(choice/offsets.length)%6;
+  const i=Math.floor(choice/offsets.length);
   const offX=dx+(i*18*Math.sign(dx||1)),offZ=dz+(i*18*Math.sign(dz||1));
   const candidate={kind:existing.kind,x:existing.x+offX,z:existing.z+offZ,y:0,elevated:false};
   if(state.completed.some(s=>s!==existing&&Math.hypot(s.x-candidate.x,s.z-candidate.z)<42)){
@@ -111,7 +120,7 @@ export function installGroundRelocation(
   }
   if(recognized<Math.floor(source.length*0.90)||unknown>0){
    reason='Construção original modificada por jogador; protegida';
-   state.movedKinds=[...(state.movedKinds||[]),existing.kind];
+   state.blockedKinds=[...(state.blockedKinds||[]),existing.kind];
    persist();return;
   }
   const target={...candidate,y:answer.base};
@@ -128,7 +137,7 @@ export function installGroundRelocation(
   if(!game.level.world.isLoaded(to.x,to.z)||!game.level.world.isLoaded(from.x,from.z))return;
   const list=job.phase==='fill'?job.foundation:planFor(job.kind);
   if(job.phase==='fill'||job.phase==='copy'||job.phase==='erase'){
-   for(let n=0;n<12&&job.cursor<list.length;n++,job.cursor++){
+   for(let n=0;n<24&&job.cursor<list.length;n++,job.cursor++){
     const b=list[job.cursor],dest=job.phase==='erase'?from:to;
     const x=job.phase==='fill'?b.x:dest.x+b.x;
     const y=job.phase==='fill'?b.y:dest.y+b.y;
@@ -181,11 +190,11 @@ export function installGroundRelocation(
   }
   if(state.relocation){
    if(tickNumber%4===0)nextStep();
-  }else if(tickNumber%80===0)tryStart();
+  }else if(tickNumber%40===0)tryStart();
  }
  function status(){return {relocating:state.relocation?{
   kind:state.relocation.kind,phase:state.relocation.phase,cursor:state.relocation.cursor,
   from:state.relocation.from,to:state.relocation.to}:null,
-  grounded:(state.movedKinds||[]).length,searches,reason};}
+  grounded:state.completed.filter(s=>s.elevated===false).length,blocked:state.blockedKinds?.length||0,searches,reason};}
  return {tick,status};
 }

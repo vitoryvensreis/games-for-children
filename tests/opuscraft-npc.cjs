@@ -24,7 +24,7 @@ test('The family world attractions are additive, idempotent and preserve existin
  assert.match(a,/const OPEN=new Set/);
  assert.match(a,/if\(!OPEN\.has\(current\)\)/);
  assert.match(a,/if\(!OPEN\.has\(nameAt\(xx,yy,zz\)\)\)return null/);
- assert.match(a,/state\.work=\{site:\{kind,x,y:platformY,z,elevated:normal===null\},cursor:0\}/);
+ assert.match(a,/state\.work=\{site:\{kind,x,y:platformY,z,elevated:false\},cursor:0\}/);
  assert.match(a,/game\.level\.setBlock\(x,y,z,S\(b\.name\)\)/);
  assert.match(a,/await|\.then\(\(\)=>/);
  assert.match(a,/game\.saveWorld\(\)/);
@@ -88,7 +88,7 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.match(patch,/await actions\.preflight\(\)/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/prepareFamilyClient\(game\)/);
- assert.match(family,/game\.opts\.renderDistance = mobile \? 3 : 4/);
+ assert.match(family,/game\.opts\.renderDistance = mobile \? 4 : 5/);
  assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 2\)/);
  assert.match(family,/game\.opts\.graphics = 0/);
  assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
@@ -97,15 +97,12 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.doesNotMatch(family,/game\.saveOptions\(\)/);
 });
 
-test('Dense forest fallback adds buildings above treetops without removing trees or overwriting existing blocks',()=>{
+test('Never create new floating structures after a failed terrain survey',()=>{
  const a=read('ops/gfc-world-attractions.ts');
  assert.match(a,/const SEARCH_REVISION=3/);
- assert.match(a,/const dir:\[number,number\]\[\]=\[\[1,0\],\[0,1\],\[-1,0\],\[0,-1\]/);
- assert.match(a,/function skySiteAllowed\(kind:Kind,x:number,z:number\):number\|null/);
- assert.match(a,/normal===null&&state\.attempts>=15\?skySiteAllowed/);
- assert.match(a,/for\(const block of planFor\(kind\)\)/);
- assert.match(a,/if\(!OPEN\.has\(nameAt\(x\+block\.x,platform\+block\.y,z\+block\.z\)\)\)return null/);
- assert.match(a,/elevated:normal===null/);
+ assert.match(a,/const platformY=normal;/);
+ assert.match(a,/elevated:false/);
+ assert.doesNotMatch(a,/skySiteAllowed/);
  assert.match(a,/if\(!OPEN\.has\(current\)\)\{/);
  assert.doesNotMatch(a,/deleteWorld|removeChunk|resetWorld/);
 });
@@ -138,12 +135,12 @@ test('Admin can choose only recorded landmarks, including the current build',()=
 test('Family chunk radius improves desktop horizon without changing solo worlds',()=>{
  const patch=read('ops/patch-opuscraft.mjs');
  const family=read('ops/gfc-family-client.ts');
- assert.match(family,/game\.opts\.renderDistance = mobile \? 3 : 4/);
+ assert.match(family,/game\.opts\.renderDistance = mobile \? 4 : 5/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
- assert.match(patch,/CHUNKS_PER_TICK = 3/);
+ assert.match(patch,/CHUNKS_PER_TICK = 5/);
  assert.match(patch,/this\.chunks\.renderDistance\+\+/);
- assert.match(patch,/this\.ticks % 80 === 0/);
+ assert.match(patch,/this\.ticks % 30 === 0/);
 });
 
 test('Floating structures are migrated with two durable save checkpoints and natural-tree-only clearance',()=>{
@@ -159,14 +156,19 @@ test('Floating structures are migrated with two durable save checkpoints and nat
  assert.match(s,/if\(!removable\(now\)\)/);
  assert.match(s,/state\.completed\[index\]=\{\.\.\.to\}/);
  assert.match(host,/grounding\.tick\(\)/);
+ assert.match(s,/setTicket\('gfc-old-attraction'/);
+ assert.match(s,/Carregando construção original/);
+ assert.match(s,/s\.elevated===true/);
+ assert.match(s,/state\.blockedKinds=/);
+ assert.match(host,/blockedKinds:Array\.isArray\(data\.blockedKinds\)/);
  assert.doesNotMatch(s,/indexedDB\.deleteDatabase|deleteWorld|resetWorld/);
 });
 test('Frame budget and rotor animations avoid block-by-block updates during player visits',()=>{
  const patch=read('ops/patch-opuscraft.mjs'),rotors=read('ops/gfc-rotors.ts'),
   host=read('ops/gfc-world-attractions.ts'),server=read('server.cjs');
  assert.match(patch,/const ratio = family \? \(mobile \? 0\.82 : 0\.70\) : 1/);
- assert.match(patch,/Math\.min\(1,this\.opts\.renderDistance\)/);
- assert.match(patch,/export const CHUNKS_PER_TICK = 3/);
+ assert.match(patch,/Math\.min\(2,this\.opts\.renderDistance\)/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 5/);
  assert.match(patch,/__gfcRotorRender\?\.\(this,cam\)/);
  assert.match(rotors,/performance\.now\(\)/);
  assert.match(rotors,/pose\.rotZ\(time\+arm\*90\)/);

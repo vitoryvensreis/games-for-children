@@ -62,3 +62,30 @@ test('Headless VPS persists exactly the same original IndexedDB family world',()
  assert.doesNotMatch(host,/rmSync\(PROFILE/);
  assert.match(host,/attachRelay/);
 });
+
+test('World attractions search holds one chunk ticket, caches plans and pauses for player joins',()=>{
+ const a=read('ops/gfc-world-attractions.ts');
+ assert.match(a,/const plans=new Map<Kind,Block\[\]>/);
+ assert.match(a,/const planFor=\(kind:Kind\)=>plans\.get\(kind\)!/);
+ assert.match(a,/game\.level\.world\.heightAt\(x,z\)/);
+ assert.doesNotMatch(a,/motionBlockingHeight\(x,z\);/);
+ assert.match(a,/pending=\{kind,\.\.\.site\}/);
+ assert.match(a,/firstCandidateAt=Date\.now\(\)/);
+ assert.match(a,/Date\.now\(\)-firstCandidateAt>45000/);
+ assert.match(a,/if\(!parked\(\)\)\{/);
+ assert.match(a,/if\(ticks%4===0&&state\.work&&parked\(\)\)buildBatch\(\)/);
+ assert.match(a,/for\(let yy=Math\.max\(fy,maxY\);yy<=maxY\+h;yy\+\+\)/);
+ assert.match(a,/if\(!OPEN\.has\(current\)\)/);
+ assert.match(a,/surveyed,rejected,waiting/);
+});
+test('Only family multiplayer receives lower graphics defaults on weak devices',()=>{
+ const patch=read('ops/patch-opuscraft.mjs');
+ const p=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
+  patch.indexOf("} else if (params.has('seed')"));
+ assert.match(p,/game\.opts\.renderDistance = Math\.min\(game\.opts\.renderDistance, 2\)/);
+ assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
+ assert.match(p,/if \(lightweight\) \{/);
+ assert.match(p,/game\.opts\.particles = 2/);
+ assert.match(p,/game\.opts\.entityShadows = false/);
+ assert.doesNotMatch(p,/game\.saveOptions\(\)/);
+});

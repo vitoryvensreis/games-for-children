@@ -31,7 +31,7 @@ export function installGfcNpc(game: Game): void {
   // NPC-only survival simulation. Guests keep their original creative rules.
   type Vitals={hunger:number;thirst:number;energy:number;temperature:number;oxygen:number;health:number};
   let vitals:Vitals={hunger:100,thirst:100,energy:100,temperature:23,oxygen:100,health:20};
-  let livedSeconds=0,deaths=0,underwaterSeconds=0;
+  let livedSeconds=0,deaths=0,underwaterSeconds=0,lifeRestored=false;
   let currentGoal='survive',goalReason='Ainda não conheço este mundo.';
   const experiences:{kind:string;detail:string;at:number}[]=[];
   const discoveries:{x:number;z:number;kind:string}[]=[];
@@ -92,7 +92,7 @@ export function installGfcNpc(game: Game): void {
       safe,position:{x:resident.x,y:resident.y,z:resident.z}};
   }
   function restoreLife(data:any){
-    if(!data||data.version!==1||livedSeconds!==0)return false;
+    if(!data||data.version!==1||lifeRestored)return false;
     const n=data.vitals;
     if(!n||typeof n!=='object')return false;
     const valid=(x:unknown)=>typeof x==='number'&&Number.isFinite(x);
@@ -111,6 +111,7 @@ export function installGfcNpc(game: Game): void {
         discoveries.push({x:Math.round(d.x),z:Math.round(d.z),kind:d.kind.slice(0,30)});
     if(data.safe&&[data.safe.x,data.safe.y,data.safe.z].every(valid))
       safe={x:data.safe.x,y:data.safe.y,z:data.safe.z};
+    lifeRestored=true;
     return true;
   }
   const blueprint: {x:number;y:number;z:number;block:string}[] = [];

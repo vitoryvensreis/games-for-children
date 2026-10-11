@@ -339,6 +339,19 @@ if(opusDownload&&req.method==='GET'){
  });
 }
 if(pathname==='/api/opuscraft/identity'&&req.method==='GET')return json(res,200,{playerName:opusName(u),joinCode:'GFC2026X'});
+if(pathname==='/api/opuscraft/landmarks'&&req.method==='GET'){
+ try{
+  const live=await fetch('http://127.0.0.1:4173/__npc/status',{signal:AbortSignal.timeout(2500)});
+  if(!live.ok)return json(res,503,{error:'Mundo temporariamente indisponível'});
+  const info=await live.json();
+  const names=new Set(['windmill','pinwheels']);
+  const attractions=(info.worldAttractions?.attractions||[]).filter(v=>
+   names.has(v.name)&&v.ready===true&&
+   [v.x,v.y,v.z].every(Number.isFinite)).map(v=>({
+    name:v.name,x:v.x,y:v.y,z:v.z,ready:true}));
+  return json(res,200,{attractions});
+ }catch{return json(res,503,{error:'Mundo temporariamente indisponível'})}
+}
 if(pathname==='/api/opuscraft/status'&&req.method==='GET')return json(res,200,await opusStatus());
 if(pathname==='/api/admin/opuscraft/status'&&req.method==='GET'){
  if(u.role!=='admin')return json(res,403,{error:'Somente responsavel'});

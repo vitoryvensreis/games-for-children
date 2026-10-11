@@ -2,12 +2,13 @@
 // This file never uses networking, AI, privileged commands or a second Minecraft world.
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
+import { installGroundRelocation } from './gfc-ground-relocation';
 
 type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number;elevated?:boolean};
 type Work={site:Site;cursor:number};
-type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[]};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SEARCH_REVISION=3;
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
@@ -161,17 +162,22 @@ export function installGfcWorldAttractions(game:Game){
     // Migration: previous search exhaustively scanned and pushed the cursor
     // many kilometres away. Restart its *search*, not the family world.
     attempts:data.searchRevision===SEARCH_REVISION&&Number.isFinite(data.attempts)?Math.max(0,Math.floor(data.attempts)):0,
-    phase:Number.isFinite(data.phase)?data.phase:0};
+    phase:Number.isFinite(data.phase)?data.phase:0,
+    relocation:data.relocation?.kind&&KINDS.includes(data.relocation.kind)&&
+      ['fill','copy','saveNew','erase','saveOld'].includes(data.relocation.phase)?data.relocation:null,
+    movedKinds:Array.isArray(data.movedKinds)?data.movedKinds.filter((k:any)=>KINDS.includes(k)):[]};
   }
  }catch{}
  const state=saved;
  const persist=()=>{try{localStorage.setItem(key,JSON.stringify(state))}catch{}};
- let ticks=0,blocked='',finishedPending=false,spinnerFrame=0,pinwheelFrame=0;
+ let ticks=0,blocked='',finishedPending=false;
  let surveyed=0,rejected=0,waiting=0,firstCandidateAt=0;
  let pending:{kind:Kind;x:number;z:number}|null=null;
  const visitors=()=>game.server?[...game.server.sessions.values()].filter(
    session=>session.state==='play'&&session.player&&!session.player.removed):[];
  const parked=()=>visitors().length===0;
+ const grounding=installGroundRelocation(game,state,planFor,persist,parked,
+   ()=>signRepairStatus==='Corrigido');
  const siteFor=(kind:Kind,tries:number)=>{
   // Rotate ALL compass directions instead of searching a single narrow ray.
   // Forest at the spawn can otherwise reject every candidate indefinitely.
@@ -333,40 +339,6 @@ export function installGfcWorldAttractions(game:Game){
    }).catch(()=>{finishedPending=false;blocked='Falha ao salvar estrutura';});
   }
  }
- const arms=(frame:number)=>{
-  const out=new Set<string>();
-  for(let t=1;t<=4;t++)for(const [dx,dy] of (frame===0?
-   [[1,0],[-1,0],[0,1],[0,-1]]:[[1,1],[-1,1],[1,-1],[-1,-1]])){
-   if(t>3&&frame===1)continue;
-   out.add((dx*t)+','+(dy*t));
-  }
-  return out;
- };
- function animate(){
-  const mill=state.completed.find(s=>s.kind==='windmill');
-  if(!mill||!game.level.world.isLoaded(mill.x,mill.z))return;
-  const front=mill.z-6,cy=mill.y+10;
-  const matches=(frame:number)=>{
-   const expected=arms(frame),other=arms(1-frame);
-   for(const p of new Set([...expected,...other])){
-    const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
-    if(!game.level.world.isLoaded(x,front))return false;
-    if(nameAt(x,y,front)!==(expected.has(p)?'white_wool':'air'))return false;
-   }
-   return true;
-  };
-  if(!matches(spinnerFrame)){
-   if(matches(1-spinnerFrame))spinnerFrame=1-spinnerFrame;
-   else return; // A player may have edited the rotor: never overwrite it.
-  }
-  const before=arms(spinnerFrame),after=arms(1-spinnerFrame);
-  for(const p of new Set([...before,...after])){
-   const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
-   const expected=after.has(p)?'white_wool':'air';
-   if(nameAt(x,y,front)!==expected)game.level.setBlock(x,y,front,S(expected));
-  }
-  spinnerFrame=1-spinnerFrame;
- }
  let signRepairCursor=0,signRepairStatus='Aguardando',signRepairSaving=false;
  function repairOriginalMarquee(){
   const sign=state.completed.find(site=>site.kind==='names');
@@ -421,38 +393,39 @@ export function installGfcWorldAttractions(game:Game){
     game.chunks.setTicket('gfc-sign-maintenance',null);
   }).catch(()=>{signRepairSaving=false;signRepairStatus='Falha ao salvar letras';});
  }
- function animatePinwheels(){
-  const site=state.completed.find(s=>s.kind==='pinwheels');
-  if(!site||!game.level.world.isLoaded(site.x,site.z))return;
-  const front=site.z-3,cy=site.y+7;
-  const positions=(f:number)=>{
-   const result=new Set<string>();
-   for(const ox of [-5,0,5])
-    for(let t=1;t<=2;t++)for(const [dx,dy] of (f===0?
-      [[1,0],[-1,0],[0,1],[0,-1]]:[[1,1],[-1,1],[1,-1],[-1,-1]]))
-     result.add((site.x+ox+dx*t)+','+(cy+dy*t));
-   return result;
-  };
-  const matches=(frame:number)=>{
-   const on=positions(frame),off=positions(1-frame);
-   for(const point of new Set([...on,...off])){
-    const [x,y]=point.split(',').map(Number);
-    if(!game.level.world.isLoaded(x,front))return false;
-    if(nameAt(x,y,front)!==(on.has(point)?'red_wool':'air'))return false;
+ let rotorSaving=false;
+ const rotorReady=(site:Site)=>localStorage.getItem(key+':3d-rotor:'+site.kind+':'+site.x+':'+site.z)==='1';
+ function retireVoxelBlades(){
+  if(!parked()||rotorSaving||state.relocation)return;
+  const site=state.completed.find(s=>
+   (s.kind==='windmill'||s.kind==='pinwheels')&&!rotorReady(s));
+  if(!site)return;
+  game.chunks.setTicket('gfc-rotor-cleanup',[site.x>>4,site.z>>4,1]);
+  if(!game.level.world.isLoaded(site.x,site.z))return;
+  const isMill=site.kind==='windmill';
+  const offsets=isMill?[0]:[-5,0,5];
+  const y=site.y+(isMill?10:7),front=site.z+(isMill?-6:-3);
+  const wool=isMill?'white_wool':'red_wool';
+  const touched:{x:number;y:number;z:number}[]=[];
+  for(const off of offsets)for(let dx=-4;dx<=4;dx++)
+   for(let dy=-4;dy<=4;dy++){
+    if(!isMill&&(Math.abs(dx)>3||Math.abs(dy)>3))continue;
+    const x=site.x+off+dx,z=front,py=y+dy;
+    if(!game.level.world.isLoaded(x,z))return;
+    const name=nameAt(x,py,z);
+    if(name===wool)touched.push({x,y:py,z});
+    else if(name!=='air'){ // A changed rotor belongs to the player now.
+     blocked='Hélice modificada manualmente; não apagar blocos';
+     game.chunks.setTicket('gfc-rotor-cleanup',null);return;
+    }
    }
-   return true;
-  };
-  if(!matches(pinwheelFrame)){
-   if(matches(1-pinwheelFrame))pinwheelFrame=1-pinwheelFrame;
-   else return;
-  }
-  const old=positions(pinwheelFrame),next=positions(1-pinwheelFrame);
-  for(const point of new Set([...old,...next])){
-   const [x,y]=point.split(',').map(Number);
-   const name=next.has(point)?'red_wool':'air';
-   if(nameAt(x,y,front)!==name)game.level.setBlock(x,y,front,S(name));
-  }
-  pinwheelFrame=1-pinwheelFrame;
+  for(const b of touched)game.level.setBlock(b.x,b.y,b.z,S('air'));
+  rotorSaving=true;
+  void game.saveWorld().then(()=>{
+   rotorSaving=false;
+   localStorage.setItem(key+':3d-rotor:'+site.kind+':'+site.x+':'+site.z,'1');
+   game.chunks.setTicket('gfc-rotor-cleanup',null);
+  }).catch(()=>{rotorSaving=false;blocked='Falha ao salvar substituição da hélice'});
  }
  function tick(){
   if(!game.inWorld||game.mode!=='host'||!game.spawned)return;
@@ -472,31 +445,24 @@ export function installGfcWorldAttractions(game:Game){
   }
   if(ticks%4===0&&state.work&&parked())buildBatch();
   if(ticks%60===0&&!state.work&&state.completed.length<KINDS.length&&parked())trySelect();
-  if(ticks%40===0){
-   const mill=state.completed.find(s=>s.kind==='windmill');
-   const close=mill&&game.server&&[...game.server.sessions.values()].some(v=>
-     v.state==='play'&&v.player&&Math.hypot(v.player.x-mill.x,v.player.z-mill.z)<65);
-   game.chunks.setTicket('gfc-windmill',mill&&close?[mill.x>>4,mill.z>>4,1]:null);
-   if(close)animate();
-   const pins=state.completed.find(s=>s.kind==='pinwheels');
-   const pinClose=pins&&game.server&&[...game.server.sessions.values()].some(v=>
-    v.state==='play'&&v.player&&Math.hypot(v.player.x-pins.x,v.player.z-pins.z)<65);
-   game.chunks.setTicket('gfc-pinwheels',pins&&pinClose?[pins.x>>4,pins.z>>4,1]:null);
-   if(pinClose)animatePinwheels();
-  }
+  // No more world-block swapping during gameplay: rotor motion is now
+  // client-side 3D animation. Only retire old blades while the host is idle.
+  if(ticks%80===0)retireVoxelBlades();
   if(ticks%40===0&&parked())repairOriginalMarquee();
+  grounding.tick();
   if(ticks%200===0)persist();
  }
  function status(){
   const w=state.work;
   return {role:'landmark_builder',hiddenHost:true,aiEnabled:false,
    placedAttractions:state.completed.length,totalAttractions:KINDS.length,
-   attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z})),
+   attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z,
+    ready:(s.kind==='windmill'||s.kind==='pinwheels')?rotorReady(s):true})),
    building:w?{name:w.site.kind,x:w.site.x,y:w.site.y,z:w.site.z,
     done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
    blocked,searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
-   signRepair:signRepairStatus,
+   signRepair:signRepairStatus,grounding:grounding.status(),
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }

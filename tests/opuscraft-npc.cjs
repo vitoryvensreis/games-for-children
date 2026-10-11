@@ -38,11 +38,12 @@ test('Exploration landmarks include Cauã tilde, Caique, real villages, castle a
  assert.match(a,/write\('CAIQUE',10/);
  assert.match(a,/write\('CAUA',3/);
  assert.match(a,/put\(tildeX\*4,9,-1,'lime_concrete'\)/);
- assert.match(a,/const arms=\(frame:number\)=>/);
- assert.match(a,/spinnerFrame=1-spinnerFrame/);
- assert.match(a,/if\(!matches\(spinnerFrame\)\)/);
+ const rotors=read('ops/gfc-rotors.ts');
+ assert.match(rotors,/pose\.rotZ\(time\+arm\*90\)/);
+ assert.match(rotors,/r\.items\.renderBlockState\(b,pose,material\)/);
+ assert.match(a,/function retireVoxelBlades\(\)/);
  assert.match(a,/game\.chunks\.setTicket\('gfc-landmarks'/);
- assert.match(a,/game\.chunks\.setTicket\('gfc-windmill'/);
+ assert.match(a,/game\.chunks\.setTicket\('gfc-rotor-cleanup'/);
 });
 test('Only a signed-in administrator can teleport to the landmark',()=>{
  const server=read('server.cjs'),npc=read('ops/gfc-npc.ts'),ui=read('public/app.js');
@@ -86,12 +87,12 @@ test('Only family multiplayer receives lower graphics defaults on weak devices',
  const patch=read('ops/patch-opuscraft.mjs');
  const p=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
   patch.indexOf("} else if (params.has('seed')"));
- assert.match(p,/game\.opts\.renderDistance = familyOnPhone \? 3 : 4/);
+ assert.match(p,/game\.opts\.renderDistance = familyOnPhone \? 3 : 5/);
  assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
  assert.match(p,/game\.opts\.graphics = 0/);
  assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
  assert.match(patch,/location\.search\.includes\('gfcJoin'\)/);
- assert.match(patch,/export const CHUNKS_PER_TICK = 2/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 3/);
  assert.match(p,/game\.opts\.particles = 2/);
  assert.match(p,/game\.opts\.entityShadows = false/);
  assert.doesNotMatch(p,/game\.saveOptions\(\)/);
@@ -139,10 +140,41 @@ test('Family chunk radius improves desktop horizon without changing solo worlds'
  const patch=read('ops/patch-opuscraft.mjs');
  const part=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
    patch.indexOf("} else if (params.has('seed')"));
- assert.match(part,/renderDistance = familyOnPhone \? 3 : 4/);
- assert.match(patch,/renderDistance = onPhone \? 3 : 4/);
+ assert.match(part,/renderDistance = familyOnPhone \? 3 : 5/);
+ assert.match(patch,/renderDistance = onPhone \? 3 : 5/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
- assert.match(patch,/CHUNKS_PER_TICK = 2/);
+ assert.match(patch,/CHUNKS_PER_TICK = 3/);
  assert.match(patch,/this\.chunks\.renderDistance\+\+/);
- assert.match(patch,/this\.ticks % 120 === 0/);
+ assert.match(patch,/this\.ticks % 80 === 0/);
+});
+
+test('Floating structures are migrated with two durable save checkpoints and natural-tree-only clearance',()=>{
+ const s=read('ops/gfc-ground-relocation.ts'),host=read('ops/gfc-world-attractions.ts');
+ const build=read('ops/build-opuscraft.sh');
+ assert.match(build,/gfc-ground-relocation\.ts/);
+ assert.match(s,/phase:'fill'\|'copy'\|'saveNew'\|'erase'\|'saveOld'/);
+ assert.match(s,/const TREE=/);
+ assert.match(s,/if\(!removable\(n\)\)return null/);
+ assert.match(s,/job\.phase==='saveNew'\|\|job\.phase==='saveOld'/);
+ assert.match(s,/void game\.saveWorld\(\)\.then/);
+ assert.match(s,/if\(now===b\.name\)game\.level\.setBlock\(x,y,z,S\('air'\)\)/);
+ assert.match(s,/if\(!removable\(now\)\)/);
+ assert.match(s,/state\.completed\[index\]=\{\.\.\.to\}/);
+ assert.match(host,/grounding\.tick\(\)/);
+ assert.doesNotMatch(s,/indexedDB\.deleteDatabase|deleteWorld|resetWorld/);
+});
+test('Frame budget and rotor animations avoid block-by-block updates during player visits',()=>{
+ const patch=read('ops/patch-opuscraft.mjs'),rotors=read('ops/gfc-rotors.ts'),
+  host=read('ops/gfc-world-attractions.ts'),server=read('server.cjs');
+ assert.match(patch,/const ratio = family \? \(mobile \? 0\.82 : 0\.70\) : 1/);
+ assert.match(patch,/Math\.min\(3,this\.opts\.renderDistance\)/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 3/);
+ assert.match(patch,/__gfcRotorRender\?\.\(this,cam\)/);
+ assert.match(rotors,/performance\.now\(\)/);
+ assert.match(rotors,/pose\.rotZ\(time\+arm\*90\)/);
+ assert.match(rotors,/r\.items\.renderBlockState\(b,pose,material\)/);
+ assert.doesNotMatch(host,/if\(close\)animate\(\)|if\(pinClose\)animatePinwheels\(\)/);
+ assert.match(host,/rotorSaving=true/);
+ assert.match(host,/game\.saveWorld\(\)\.then/);
+ assert.match(server,/pathname==='\/api\/opuscraft\/landmarks'/);
 });

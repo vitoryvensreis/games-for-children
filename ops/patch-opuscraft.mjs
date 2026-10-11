@@ -34,6 +34,7 @@ patch('src/main.ts',
 patch('src/main.ts',
  "  installScreens(game);",
  `  installScreens(game);
+  if (params.has('gfcJoin')) installGfcRotors(game);
   if (!params.has('gfcHost')) {
     let accessLost=false;
     setInterval(async () => {
@@ -57,7 +58,7 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
@@ -91,7 +92,7 @@ patch('src/main.ts',
     // practical horizon, while keeping the phone radius inexpensive.
     const familyOnPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-    game.opts.renderDistance = familyOnPhone ? 3 : 4;
+    game.opts.renderDistance = familyOnPhone ? 3 : 5;
     game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
     // Use economical multiplayer defaults on every device, including desktop.
     // The browser's own GPU still renders the world, but without heavy weather
@@ -123,7 +124,7 @@ patch('src/gui/screens/multiplayer.ts',
       this.closeLists();
       const onPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-      this.game.opts.renderDistance = onPhone ? 3 : 4;
+      this.game.opts.renderDistance = onPhone ? 3 : 5;
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
     } catch (error) {
       this.game.setScreen(this);
@@ -197,24 +198,42 @@ patch('src/net/transport/webSocket.ts',
   const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
-// Defer far-field terrain meshing until guests have spawned and can play.
-// The host advertises four chunks for the desktop, but rendering starts at two
-// and adds one ring at a time. This avoids a startup burst of WebGL mesh jobs.
+// Prioritize the nearby 3-chunk terrain while the world joins, then stream
+// outward (5 desktop / 3 mobile) without a huge synchronous mesh burst.
 patch('src/game/game.ts',
  "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
- `    this.chunks.renderDistance = login && location.search.includes('gfcJoin') ? 2 : this.opts.renderDistance;
+ `    this.chunks.renderDistance = login && location.search.includes('gfcJoin') ?
+      Math.min(3,this.opts.renderDistance) : this.opts.renderDistance;
     this.chunks.smoothLighting = this.opts.smoothLighting;`);
 patch('src/game/game.ts',
  "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
  `    client?.receive();
     if (this.mode === 'client' && this.inWorld && this.spawned &&
         location.search.includes('gfcJoin') && this.chunks &&
-        this.ticks % 120 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
+        this.ticks % 80 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
       this.chunks.renderDistance++;
       this.renderer.renderDistance = this.chunks.renderDistance;
       this.chunks.refreshRadius();
     }
     if (!this.inWorld) return client?.sendTick();`);
+// Reduce framebuffer pixel count in the family multiplayer: the GPU
+// draws the same voxel geometry but at 70% of desktop resolution (85%
+// mobile) and CSS upscales it. Does not change anyone's solo settings.
+patch('src/game/game.ts',
+ "    const dpr = window.devicePixelRatio || 1;",
+ `    const native = window.devicePixelRatio || 1;
+    const family = location.search.includes('gfcJoin');
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const ratio = family ? (mobile ? 0.82 : 0.70) : 1;
+    const maxW = family ? (mobile ? 1200 : 1440) : 8192;
+    const dpr = Math.min(native * ratio, maxW / Math.max(1,window.innerWidth));`);
+
+// Draw rotating 3D sails in the native entity pass, after opaque terrain.
+// This hook is inert in the VPS host and in private single-player worlds.
+patch('src/render/renderer.ts',
+ "    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });",
+ "    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });\n    (window as any).__gfcRotorRender?.(this,cam);");
+
 // The family multiplayer can rain in the simulation (weather and crops
 // still behave normally), without drawing thousands of fullscreen streaks
 // above dense jungle foliage. Solo worlds retain vanilla precipitation.
@@ -223,7 +242,7 @@ patch('src/render/renderer.ts',
  "    if (e.level && e.weather.rain > 0 && !location.search.includes('gfcJoin')) {");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 3;",
- "export const CHUNKS_PER_TICK = 2;");
+ "export const CHUNKS_PER_TICK = 3;");
 
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

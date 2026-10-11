@@ -59,7 +59,7 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';\nimport { checkFamilyRelay, prepareFamilyClient } from './gfc-family-client';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
@@ -87,25 +87,7 @@ patch('src/main.ts',
     // One server-owned family world, never a LAN search or manual join-code form.
     // The upstream LAN list is intended for ad-hoc browser hosts and may be blocked
     // by production reverse proxies. Always connect directly to our private relay.
-    // Family multiplayer uses a short initial radius so guests never try to
-    // mesh an entire world on entry. Keep individual single-player settings intact.
-    // Two chunks caused visible map cliffs on desktop. Give the player a
-    // practical horizon, while keeping the phone radius inexpensive.
-    const familyOnPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-    game.opts.renderDistance = familyOnPhone ? 3 : 5;
-    game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
-    // Use economical multiplayer defaults on every device, including desktop.
-    // The browser's own GPU still renders the world, but without heavy weather
-    // sprites, clouds, leaf transparency, shadows or decorative particles.
-    // These are not saved to the player's personal single-player settings.
-    game.opts.graphics = 0;
-    game.opts.fancy = false;
-    game.opts.clouds = 0;
-    game.opts.particles = 2;
-    game.opts.entityShadows = false;
-    game.opts.smoothLighting = false;
-    game.opts.maxFps = Math.min(game.opts.maxFps, 60);
+    prepareFamilyClient(game);
     await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
 

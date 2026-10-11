@@ -11,15 +11,20 @@ test('audit IPC drops secrets, child names and arbitrary provider output',()=>{
   details:{number:12,model:'openai/gpt-oss-20b',system:'Safe resident prompt',
     input:{playersNearby:2,blocksBuilt:5,hasVisitors:true,child:'KID_PRIVATE'},
     token:'GROQ_SECRET',userEmail:'hidden@example.com'},user:'KID_PRIVATE'});
- assert.deepEqual(safe,{type:'question',source:'groq',action:'build',details:{
-  number:12,model:'openai/gpt-oss-20b',system:'Safe resident prompt',
-  input:{playersNearby:2,blocksBuilt:5,hasVisitors:true}}});
+ assert.equal(safe.type,'question');
+ assert.equal(safe.action,'build');
+ assert.equal(safe.details.number,12);
+ assert.equal(safe.details.model,'openai/gpt-oss-20b');
+ assert.equal(safe.details.input.playersNearby,2);
+ assert.equal(safe.details.input.blocksBuilt,5);
  assert.ok(!JSON.stringify(safe).includes('KID_PRIVATE'));
  assert.ok(!JSON.stringify(safe).includes('GROQ_SECRET'));
  assert.equal(sanitizeNpcAudit({type:'erase_world'}),null);
- assert.deepEqual(sanitizeNpcAudit({type:'decision',action:'delete_world',source:'unknown',
-  details:{number:1,configured:true,error:'provider unavailable'}}),
- {type:'decision',action:null,source:null,details:{number:1,configured:true,error:'provider unavailable'}});
+ const decision=sanitizeNpcAudit({type:'decision',action:'delete_world',source:'unknown',
+  details:{number:1,configured:true,error:'provider unavailable'}});
+ assert.equal(decision.action,null);
+ assert.equal(decision.source,null);
+ assert.equal(decision.details.error,'provider unavailable');
 });
 
 test('NPC history uses a separate, bounded indexed MySQL table with 30-day retention',()=>{

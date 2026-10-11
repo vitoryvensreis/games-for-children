@@ -3,6 +3,19 @@
 import type { Game } from './game/game';
 
 export function prepareFamilyClient(game: Game): void {
+  // Per-session overrides. Revert without changing a child's saved solo options.
+  const previous={
+    renderDistance:game.opts.renderDistance,simulationDistance:game.opts.simulationDistance,
+    graphics:game.opts.graphics,fancy:game.opts.fancy,clouds:game.opts.clouds,
+    particles:game.opts.particles,entityShadows:game.opts.entityShadows,
+    smoothLighting:game.opts.smoothLighting,maxFps:game.opts.maxFps
+  };
+  (window as any).__gfcRestoreVideo=()=>{
+    Object.assign(game.opts,previous);
+    (window as any).__gfcFamilySession=false;
+    (window as any).__gfcFamilyJoining=false;
+    game.resize();
+  };
   (window as any).__gfcFamilySession = true;
   (window as any).__gfcFamilyJoining = true;
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||

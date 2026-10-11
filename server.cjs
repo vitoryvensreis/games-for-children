@@ -7,6 +7,7 @@ const {spawn}=require('node:child_process');
 const {WebSocketServer,WebSocket}=require('ws');
 const webpush=require('web-push');
 const sqlStore=require('./database/store.cjs');
+const {sanitizeNpcAudit}=require('./database/npc-audit.cjs');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
 const opusConnections=new Set();
@@ -128,30 +129,6 @@ async function opusStatus(){
  try{const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});const info=await response.json();
   return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),ready:!!info.ready,guests:Number(info.guests)||0,lastSave:info.lastSave||null,error:info.error||'',mode:'vps-persistent',gateway:{...opusGateway},players:[...opusConnections].filter(p=>p.role==='guest'&&p.ws.readyState===1).map(p=>({name:p.user.name,role:p.user.role}))};
  }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),ready:false,guests:0,players:[],gateway:{...opusGateway},error:'Servidor do mundo ainda iniciando',mode:'vps-persistent'}}
-}
-// Strict internal allowlist: no children identifiers, credentials or full provider responses.
-function sanitizeNpcAudit(raw){
- if(!raw||typeof raw!=='object')return null;
- const types=['question','decision','step','error'];
- if(!types.includes(raw.type))return null;
- const text=(v,max=220)=>typeof v==='string'?v.slice(0,max):'';
- const number=(v,max=100000)=>Number.isFinite(v)?Math.max(0,Math.min(max,Math.round(v))):0;
- const src=['groq','local'].includes(raw.source)?raw.source:null;
- const action=['build','explore','hide','observe'].includes(raw.action)?raw.action:null;
- const d=raw.details&&typeof raw.details==='object'&&!Array.isArray(raw.details)?raw.details:{};
- let details={};
- if(raw.type==='question')details={
-  number:number(d.number),model:text(d.model,100),system:text(d.system,1200),
-  input:{playersNearby:number(d.input?.playersNearby,8),blocksBuilt:number(d.input?.blocksBuilt,120),
-   hasVisitors:Boolean(d.input?.hasVisitors)}
- };
- if(raw.type==='decision')details={number:number(d.number),configured:Boolean(d.configured),error:text(d.error,150)||null};
- if(raw.type==='step')details={
-  step:number(d.step),built:number(d.built,10000),cursor:number(d.cursor,10000),
-  reason:text(d.reason,50),visitors:number(d.visitors,30)
- };
- if(raw.type==='error')details={reason:text(d.reason,150)};
- return {type:raw.type,action,source:src,details};
 }
 function launchOpusHost(){
  if(opusHostProcess||!OPUSCRAFT_READY()||!fs.existsSync(path.join(ROOT,'ops','opuscraft-relay.mjs')))return;

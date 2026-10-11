@@ -26,7 +26,7 @@ const dims:Record<Kind,{w:number;d:number;h:number}> = {
  names:{w:14,d:2,h:19},windmill:{w:4,d:6,h:19},pinwheels:{w:8,d:4,h:12},castle:{w:11,d:11,h:18},
  village:{w:11,d:11,h:10},garden:{w:7,d:7,h:4},watchtower:{w:6,d:6,h:19}
 };
-function shape(kind:Kind):Block[]{
+function shape(kind:Kind,legacyMirrored=false):Block[]{
  const out=new Map<string,Block>();
  const put=(x:number,y:number,z:number,name:string)=>out.set(x+','+y+','+z,{x,y,z,name});
  const rect=(x0:number,x1:number,z0:number,z1:number,y:number,name:string)=>{
@@ -55,14 +55,17 @@ function shape(kind:Kind):Block[]{
    let col=-Math.floor(width/2);
    for(const char of letters){
     for(let y=0;y<5;y++)for(let x=0;x<3;x++)
-     if(GLYPHS[char]?.[y]?.[x]==='1')put(col+x,baseY+4-y,-1,color);
+     if(GLYPHS[char]?.[y]?.[x]==='1')put(legacyMirrored?col+x:-(col+x),baseY+4-y,-1,color);
     col+=4;
    }
   };
   write('CAIQUE',10,'light_blue_concrete');
   write('CAUA',3,'lime_concrete');
   // Tilde over the last A of CAUÃ, aligned to the top-right name glyph.
-  put(4,9,-1,'lime_concrete');put(5,10,-1,'lime_concrete');put(6,9,-1,'lime_concrete');
+  const tildeX=legacyMirrored?1:-1;
+  put(tildeX*4,9,-1,'lime_concrete');
+  put(tildeX*5,10,-1,'lime_concrete');
+  put(tildeX*6,9,-1,'lime_concrete');
   for(let x=-13;x<=13;x+=2){put(x,18,0,'glowstone');}
  }else if(kind==='windmill'){
   rect(-3,3,-3,3,0,'stone_bricks');
@@ -139,6 +142,10 @@ export function installGfcWorldAttractions(game:Game){
  // of blocks five times a second and on every admin status request.
  const plans=new Map<Kind,Block[]>(KINDS.map(kind=>[kind,shape(kind)]));
  const planFor=(kind:Kind)=>plans.get(kind)!;
+ // Version 1 wrote the letters on the north side of the sign in the wrong
+ // world-X order. Keep the exact previous foreground as a repair whitelist.
+ const oldSign=shape('names',true).filter(b=>b.z===-1);
+ const newSign=planFor('names').filter(b=>b.z===-1);
  const anchor={x:Math.floor(game.player.x),z:Math.floor(game.player.z)};
  const key=SAVE_KEY+':'+String(game.meta?.id||'family');
  const fresh=():State=>({version:1,searchRevision:SEARCH_REVISION,anchor,completed:[],work:null,attempts:0,phase:0});
@@ -360,6 +367,58 @@ export function installGfcWorldAttractions(game:Game){
   }
   spinnerFrame=1-spinnerFrame;
  }
+ let signRepairCursor=0,signRepairStatus='Aguardando';
+ function repairOriginalMarquee(){
+  const sign=state.completed.find(site=>site.kind==='names');
+  if(!sign||!parked())return;
+  const fixedKey=key+':marquee-direction-v2:'+sign.x+':'+sign.z;
+  if(localStorage.getItem(fixedKey)==='1'){signRepairStatus='Corrigido';return;}
+  game.chunks.setTicket('gfc-sign-maintenance',[sign.x>>4,sign.z>>4,1]);
+  if(!game.level.world.isLoaded(sign.x-14,sign.z-1)||
+     !game.level.world.isLoaded(sign.x+14,sign.z)) {
+   signRepairStatus='Carregando área do letreiro';return;
+  }
+  // Verify this is our existing billboard, not someone's construction.
+  if(nameAt(sign.x-14,sign.y+1,sign.z)!=='gold_block'||
+     nameAt(sign.x,sign.y+12,sign.z)!=='black_concrete'){
+   signRepairStatus='Letreiro alterado: não modificar';
+   game.chunks.setTicket('gfc-sign-maintenance',null);
+   return;
+  }
+  const pos=(b:Block)=>b.x+','+b.y+','+b.z;
+  const old=new Map(oldSign.map(b=>[pos(b),b.name]));
+  const next=new Map(newSign.map(b=>[pos(b),b.name]));
+  const changes=[...new Set([...old.keys(),...next.keys()])]
+   .map(code=>{
+    const [x,y,z]=code.split(',').map(Number);
+    return {x,y,z,was:old.get(code)||'air',now:next.get(code)||'air'};
+   }).filter(b=>b.was!==b.now);
+  // Never repair a hand-modified letter or any unrelated placed block.
+  // A partial update after a crash is fine: accept only old/new pixels.
+  if(changes.some(b=>{
+   const actual=nameAt(sign.x+b.x,sign.y+b.y,sign.z+b.z);
+   return actual!==b.was&&actual!==b.now;
+  })){
+   signRepairStatus='Letreiro alterado manualmente: protegido';
+   game.chunks.setTicket('gfc-sign-maintenance',null);
+   return;
+  }
+  for(let n=0;n<16&&signRepairCursor<changes.length;n++,signRepairCursor++){
+   const b=changes[signRepairCursor];
+   if(nameAt(sign.x+b.x,sign.y+b.y,sign.z+b.z)!==b.now)
+    game.level.setBlock(sign.x+b.x,sign.y+b.y,sign.z+b.z,S(b.now));
+  }
+  if(signRepairCursor<changes.length){signRepairStatus='Corrigindo letras';return;}
+  // Persist blocks first, then mark maintenance complete. The old
+  // original world/seed remain unchanged, save failure allows retry.
+  signRepairStatus='Salvando correção';
+  signRepairCursor=0;
+  void game.saveWorld().then(()=>{
+    localStorage.setItem(fixedKey,'1');
+    signRepairStatus='Corrigido';
+    game.chunks.setTicket('gfc-sign-maintenance',null);
+  }).catch(()=>{signRepairStatus='Falha ao salvar letras';});
+ }
  function animatePinwheels(){
   const site=state.completed.find(s=>s.kind==='pinwheels');
   if(!site||!game.level.world.isLoaded(site.x,site.z))return;
@@ -423,6 +482,7 @@ export function installGfcWorldAttractions(game:Game){
    game.chunks.setTicket('gfc-pinwheels',pins&&pinClose?[pins.x>>4,pins.z>>4,1]:null);
    if(pinClose)animatePinwheels();
   }
+  if(ticks%40===0&&parked())repairOriginalMarquee();
   if(ticks%200===0)persist();
  }
  function status(){
@@ -433,6 +493,7 @@ export function installGfcWorldAttractions(game:Game){
    building:w?{name:w.site.kind,done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
    blocked,searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
+   signRepair:signRepairStatus,
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }

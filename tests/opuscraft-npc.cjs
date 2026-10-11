@@ -163,6 +163,32 @@ test('Floating structures are migrated with two durable save checkpoints and nat
  assert.match(host,/blockedKinds:Array\.isArray\(data\.blockedKinds\)/);
  assert.doesNotMatch(s,/indexedDB\.deleteDatabase|deleteWorld|resetWorld/);
 });
+test('Automated attractions are flattened and de-forested at their original X/Z with durable checkpoints',()=>{
+ const s=read('ops/gfc-site-care.ts'),host=read('ops/gfc-world-attractions.ts'),
+  build=read('ops/build-opuscraft.sh'),ui=read('public/app.js');
+ assert.match(build,/gfc-site-care\.ts/);
+ assert.match(host,/installGfcSiteCare/);
+ assert.match(host,/if\(state\.relocation\)grounding\.tick\(\)/);
+ assert.match(host,/else siteCare\.tick\(\)/);
+ assert.match(host,/terrainCare:siteCare\.status\(\)/);
+ assert.match(host,/caredSites:Array\.isArray\(data\.caredSites\)/);
+ assert.match(host,/careBlocked:Array\.isArray\(data\.careBlocked\)/);
+ assert.match(s,/const PAD=3/);
+ assert.match(s,/const TREE=/);
+ assert.match(s,/const targetY=moving\?top:s\.y/);
+ assert.match(s,/x:s\.x\+b\.x,y:j\.targetY\+b\.y,z:s\.z\+b\.z|x:j\.site\.x\+b\.x,y:j\.targetY\+b\.y,z:j\.site\.z\+b\.z/);
+ assert.match(s,/if\(p===n\)continue/);
+ assert.match(s,/if\(!natural\(now\)\)/);
+ assert.match(s,/if\(!parked\(\)\|\|!canStart\(\)\)/);
+ assert.match(s,/game\.saveWorld\(\)\.then/);
+ assert.match(s,/j\.phase==='saveNew'&&j\.moving/);
+ assert.match(s,/j\.phase='eraseOld'/);
+ assert.match(s,/entry\.y=j\.targetY/);
+ assert.match(s,/state\.siteCare=null;persist\(\)/);
+ assert.match(ui,/npc\.worldAttractions\.terrainCare/);
+ assert.doesNotMatch(s,/deleteWorld|resetWorld|rmSync|unlinkSync/);
+});
+
 test('Frame budget and rotor animations avoid block-by-block updates during player visits',()=>{
  const patch=read('ops/patch-opuscraft.mjs'),rotors=read('ops/gfc-rotors.ts'),
   host=read('ops/gfc-world-attractions.ts'),server=read('server.cjs');

@@ -72,6 +72,16 @@ node --test tests/integration.cjs
 - O mundo do servidor continua hospedado 24h na VPS, sem precisar manter um celular ligado. Mundos individuais ficam no aparelho e podem ser copiados manualmente para a VPS.
 - Limites parentais continuam verificados periodicamente no cliente de mundo individual; para o multiplayer a conexão é autenticada e pode ser encerrada pelo ADM. Jogar localmente não fornece segurança antiviolação absoluta contra clientes modificados.
 
+
+
+## Andarilha: moradora autônoma do servidor da família
+- O avatar do próprio host OpusCraft assume a identidade **Andarilha**. Ele anda por uma área isolada, constrói uma pequena casinha com blocos novos (sem quebrar estruturas existentes) e pode cumprimentar raramente as crianças com frases previamente aprovadas.
+- O cérebro opcional usa a **API do Grok (xAI)** exclusivamente no processo Node da VPS: decisões limitadas a `build`, `explore`, `hide` e `observe`, atualizadas no máximo a cada quatro minutos. Nenhuma chave, histórico de conversa ou nome de criança é enviado à API. Se a chave estiver ausente ou o serviço falhar, uma rotina local segura mantém a personagem em atividade.
+- Para ativar Grok, configure `XAI_API_KEY` no arquivo de ambiente protegido usado pelo serviço (`/etc/gamesforchildren.env`), nunca no Git ou navegador. Opcional: `XAI_MODEL=grok-4.7`. Reinicie apenas `games-for-children.service` após atualizar a configuração.
+- Somente **Administrador**, estando dentro do mundo multiplayer da família, recebe o botão **Ir até ela** em Jogadores / Teleporte. A API `/api/admin/opuscraft/npc/visit` repete a verificação de perfil e da sessão ativa. Crianças não têm acesso ao destino exato por API.
+- O mundo existente continua sendo o mesmo. **Não há reset, regeneração nem exclusão automática do perfil IndexedDB**. Antes de eventual recriação manual, preserve uma cópia do diretório `data/opuscraft/profile` com o serviço parado; esta integração não precisa recriar o mapa.
+- A área de construção é deliberadamente pequena. É um primeiro marco de IA com ações seguras, não um bot com acesso irrestrito aos comandos do jogo. O menu administrativo mostra a personagem quando a sessão multiplayer está ativa.
+
 ## Versões anteriores (arquivadas)
 As integrações MCGalaxy e ClassiCube foram removidas do código de produção. O OpusCraft permanece como único jogo de blocos ativo.
 Dados históricos e construções do servidor antigo não são apagados: caso existam na VPS, os arquivos `.lvl` e a configuração antiga são preservados em `backup/classicube-legacy.tar.gz` antes de qualquer limpeza. Esse backup é independente do mundo e perfil persistentes do OpusCraft em `data/opuscraft/profile`.

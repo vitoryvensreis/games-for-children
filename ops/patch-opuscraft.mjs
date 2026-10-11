@@ -154,8 +154,8 @@ patch('src/gui/screens/menus.ts',
 // Only the VPS host has an NPC driver. Run it after keyboard input is read,
 // immediately before native player physics, so guests see real walking frames.
 patch('src/game/game.ts',
- "      this.server?.receive();\\n      this.level.tick();",
- "      this.server?.receive();\\n      (window as any).__gfcNpc?.drive?.();\\n      this.level.tick();");
+ "      this.server?.receive();\n      this.level.tick();",
+ "      this.server?.receive();\n      (window as any).__gfcNpc?.drive?.();\n      this.level.tick();");
 patch('src/game/game.ts',
  "this.chunks.isReady(this.player.x, this.player.z, LOADING_RADIUS, vd ?",
  "this.chunks.isReady(this.player.x, this.player.z, this.mode === 'client' ? 1 : LOADING_RADIUS, vd ?");

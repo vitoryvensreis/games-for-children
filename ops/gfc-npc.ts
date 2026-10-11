@@ -201,8 +201,13 @@ export function installGfcNpc(game:Game):void{
   }
   // No arbitrary excavation. Only a natural, isolated site surveyed before
   // beginning, and only allow-listed natural blocks may ever be removed.
-  const natural=(name==='air'||REPLACEABLE.test(name)||DIGGABLE.test(name));
-  const allowed=task.name==='air'?DIGGABLE.test(name)||name==='air':natural;
+  // For ordinary surface buildings, never replace natural-looking solid
+  // blocks: they could be intentionally placed by a player.
+  // The isolated underground cave is the only project authorized to cut
+  // surveyed, solid, natural underground material.
+  const natural=(name==='air'||REPLACEABLE.test(name));
+  const caveUnderground=p.kind==='cave'&&y<p.y&&DIGGABLE.test(name);
+  const allowed=task.name==='air'?(caveUnderground||name==='air'):(natural||caveUnderground);
   if(!allowed){
    p.state='blocked';p.blockedReason='protected_or_unknown_block:'+name;
    lastReason='protected_structure_detected';return;

@@ -75,11 +75,13 @@ const server=http.createServer((req,res)=>{
   req.on('data',part=>{bytes+=part.length;if(bytes>256){req.destroy();return}chunks.push(part)});
   req.on('end',async()=>{
    try{
-    const {from}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const {from,attraction}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||''))throw Error('Identidade invalida');
+    const allowed=['names','windmill','pinwheels','castle','village','garden','watchtower'];
+    if(attraction!==undefined&&!allowed.includes(attraction))throw Error('Atração invalida');
     if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponivel');
-    const result=await hostPage.evaluate(name=>window.__gfcNpc?.visit?.(name)
-     ||{ok:false,error:'NPC ainda nao iniciou'},from);
+    const result=await hostPage.evaluate(({name,kind})=>window.__gfcNpc?.visit?.(name,kind)
+     ||{ok:false,error:'Mundo ainda nao iniciou'},{name:from,kind:attraction});
     res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify(result));
    }catch(err){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(err.message).slice(0,100)}))}

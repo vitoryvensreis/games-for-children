@@ -32,22 +32,25 @@ export function installGfcNpc(game:Game):void{
    hidden,visitors:guests().length,
    worldAttractions:attractions?.status()||null};
  }
- function visit(name:string){
+ function visit(name:string,attraction?:string){
   // Existing authenticated admin-only API remains usable to visit the sign.
   if(!/^ADM_[a-zA-Z0-9_]{6,16}$/.test(name)||!game.server||!game.spawned)
    return {ok:false,error:'Administrador indisponível'};
   const s=guests().find(p=>p.name===name);
   if(!s?.player||s.player.level!==resident.level)
    return {ok:false,error:'Entre primeiro no mundo da família'};
-  const p=attractions?.destination();
+  const p=attractions?.destination(attraction);
   if(!p){
-   // Keep the existing administrator visit RPC functional while landmarks load.
-   // Spectator host stays invisible; only the administrator moves.
+   if(attraction)return {ok:false,error:'Essa construção ainda não está disponível'};
+   // Keep the previous admin visit functional before the first attraction.
    s.teleportTo(resident.x+2,resident.y+1,resident.z+2,s.player.yaw,s.player.pitch);
    return {ok:true,action:'waiting_for_landmark'};
   }
-  s.teleportTo(p.x,p.y+1.2,p.z-2,s.player.yaw,s.player.pitch);
-  return {ok:true,action:'visit_landmark'};
+  // Creative flight prevents falling through tree canopy or off raised
+  // landmarks while the surrounding chunks stream into the browser.
+  s.player.flying=true;
+  s.teleportTo(p.x,p.y+7,p.z-12,0,0);
+  return {ok:true,action:'visit_landmark',attraction:p.kind};
  }
  (window as any).__gfcNpc={drive,status,visit};
 }

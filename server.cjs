@@ -280,15 +280,20 @@ if(pathname==='/api/admin/opuscraft/npc/visit'&&req.method==='POST'){
  if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
   return json(res,409,{error:'Entre primeiro no servidor da familia'});
  try{
+  const body=await readBody(req,400);
+  const allowed=new Set(['names','windmill','pinwheels','castle','village','garden','watchtower']);
+  const attraction=body.attraction;
+  if(attraction!==undefined&&!allowed.has(attraction))
+   return json(res,400,{error:'Selecione uma construção válida'});
   const r=await fetch('http://127.0.0.1:4173/__npc/visit',{
    method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({from:opusName(u)}),signal:AbortSignal.timeout(5500)
+   body:JSON.stringify({from:opusName(u),attraction}),signal:AbortSignal.timeout(5500)
   });
   const result=await r.json();
-  if(!result.ok)return json(res,409,{error:result.error||'Personagem indisponivel'});
+  if(!result.ok)return json(res,409,{error:result.error||'Construção indisponível'});
   lastOpusTeleport.set(u.id,current);
-  return json(res,200,{ok:true});
- }catch{return json(res,503,{error:'Nao foi possivel visitar a personagem agora'})}
+  return json(res,200,{ok:true,action:result.action||'visit_landmark',attraction:result.attraction||null});
+ }catch{return json(res,503,{error:'Não foi possível visitar a construção agora'})}
 }
 if(pathname==='/api/opuscraft/world-backups'&&req.method==='GET'){
  return json(res,200,{backups:opusBackupIndex(u).sort((a,b)=>b.created.localeCompare(a.created))});

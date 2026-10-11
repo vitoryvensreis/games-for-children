@@ -87,7 +87,7 @@ async function openOpusCraft(){
   '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<div class="opus-player"><div><strong>🏰 Aventura da família</strong><small>Visite o letreiro de Caique e Cauã</small></div><button id="opusNpcVisit" type="button">Ir ao letreiro</button></div>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -118,20 +118,21 @@ async function openOpusCraft(){
       finally{btn.disabled=false}
      };
     }
+    const landmarkList=$('#opusLandmarksList');
+    if(landmarkList){
+     try{
+      const npc=await api('admin/opuscraft/npc');
+      if(landmarkList.isConnected)landmarkList.innerHTML=familyLandmarkButtons(npc.worldAttractions);
+     }catch(e){if(landmarkList.isConnected)landmarkList.textContent='Atrações indisponíveis: '+e.message}
+    }
    }catch(e){if(playersList.isConnected)playersList.textContent='Jogadores indisponíveis: '+e.message}
    finally{rosterBusy=false}
   }
-  const npcVisit=$('#opusNpcVisit');
-  if(npcVisit)npcVisit.onclick=async()=>{
-   npcVisit.disabled=true;
-   try{
-    const status=await api('admin/opuscraft/npc');
-    if(!status.ready)throw Error('O mundo ainda está iniciando.');
-    const visit=await api('admin/opuscraft/npc/visit','POST',{});
-    notify(visit.action==='waiting_for_landmark'?'Ponto de encontro alcançado. O letreiro ainda está sendo preparado.':'Você chegou à área das aventuras!');
-   }catch(e){notify(e.message)}
-   finally{npcVisit.disabled=false}
-  };
+  const landmarksDock=$('#opusLandmarksList');
+  if(landmarksDock)landmarksDock.addEventListener('click',e=>{
+   const btn=e.target.closest('button[data-landmark]');
+   if(btn)void visitFamilyLandmark(btn.dataset.landmark,btn);
+  });
   $('#opusPlayersToggle').onclick=()=>{
    playersPanel.hidden=!playersPanel.hidden;
    if(!playersPanel.hidden)void showFamilyPlayers();
@@ -292,6 +293,29 @@ $('#adminRooms').innerHTML=data.rooms.filter(r=>r.game==='pong').map(r=>'<div cl
 $('#events').innerHTML=data.events.slice(0,12).map(e=>'<p>• '+esc(e.name)+' — '+esc(e.type)+' <small>'+new Date(e.at).toLocaleString('pt-BR')+'</small></p>').join('')||'Sem atividade recente';
 $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const u=data.users.find(x=>x.id===b.dataset.id);try{if(b.dataset.action==='photo'){await chooseChildPhoto(u);return}if(b.dataset.action==='edit'){const name=prompt('Novo nome:',u.name);if(name===null)return;const password=prompt('Novo PIN (deixe vazio para manter):','');if(password===null)return;await api('admin/users/'+u.id,'POST',{name,...(password?{password}:{})});refreshAdmin();return}if(b.dataset.action==='kick')await api('admin/users/'+u.id+'/kick','POST');if(b.dataset.action==='enable')await api('admin/users/'+u.id,'POST',{enabled:!u.enabled});if(b.dataset.action==='login')await api('admin/users/'+u.id,'POST',{loginEnabled:!u.loginEnabled});if(b.dataset.action==='voice')await api('admin/users/'+u.id,'POST',{voiceEnabled:!u.voiceEnabled});if(b.dataset.action==='limit'){const v=prompt('Limite em minutos por dia (0 a 1440)',String(u.dailyLimit));if(v!==null)await api('admin/users/'+u.id,'POST',{dailyLimit:Number(v)})}refreshAdmin()}catch(e){notify(e.message)}});$('#adminRooms').querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room,mode:b.dataset.mode}));}catch(e){notify(e.message)}}
 
+const FAMILY_LANDMARK_NAMES={names:'Letreiro Caique e Cauã',windmill:'Moinho giratório',
+ pinwheels:'Cataventos giratórios',castle:'Castelo',village:'Vila',garden:'Jardim',watchtower:'Torre'};
+function familyLandmarkButtons(state){
+ if(!state)return '<p>O mundo ainda está iniciando.</p>';
+ const done=Array.isArray(state.attractions)?state.attractions:[];
+ const all=[...done];
+ if(state.building&&!done.some(p=>p.name===state.building.name))
+  all.push({name:state.building.name,x:state.building.x,z:state.building.z,underConstruction:true});
+ if(!all.length)return '<p>As primeiras atrações estão sendo preparadas.</p>';
+ return all.map(x=>'<div class="opus-player"><div><strong>📍 '+
+  esc(FAMILY_LANDMARK_NAMES[x.name]||x.name)+'</strong><small>X '+Math.round(x.x)+
+  ' • Z '+Math.round(x.z)+(x.underConstruction?' • Em construção':' • Pronta')+
+  '</small></div><button type="button" data-landmark="'+esc(x.name)+'">Ir até</button></div>').join('');
+}
+async function visitFamilyLandmark(name,button){
+ if(me?.role!=='admin')return;
+ if(button)button.disabled=true;
+ try{
+  const result=await api('admin/opuscraft/npc/visit','POST',{attraction:name});
+  notify(result.action==='waiting_for_landmark'?'Ponto de encontro alcançado.':'Teleporte para '+(FAMILY_LANDMARK_NAMES[name]||'a construção')+' realizado!');
+ }catch(e){notify(e.message)}
+ finally{if(button)button.disabled=false}
+}
 async function refreshMinecraftDashboard(){
  const el=$('#adminMinecraftDashboard');if(!el||me?.role!=='admin')return;
  try{
@@ -316,15 +340,17 @@ async function refreshMinecraftDashboard(){
       (npc.worldAttractions.terrainSearch?'<p class="sub">Próxima região: X '+
        Math.round(npc.worldAttractions.terrainSearch.x)+' • Z '+
        Math.round(npc.worldAttractions.terrainSearch.z)+'</p>':'')+
-      (npc.worldAttractions.attractions?.length?'<div class="npc-landmarks">'+
-       npc.worldAttractions.attractions.map(x=>'<p>📍 '+esc(({names:'Letreiro Caique e Cauã',windmill:'Moinho giratório',pinwheels:'Cataventos giratórios',castle:'Castelo',village:'Vila',garden:'Jardim',watchtower:'Torre'}[x.name]||x.name))+
-       ' • X '+Math.round(x.x)+' | Z '+Math.round(x.z)+'</p>').join('')+'</div>':''):
+      '<div class="npc-landmarks">'+familyLandmarkButtons(npc.worldAttractions)+'</div>'+
+      (npc.worldAttractions.signRepair?'<p class="sub">Letreiro: '+esc(npc.worldAttractions.signRepair)+'</p>':''):
      '<p class="sub">Aguardando o carregamento do mundo</p>')+
     '</div>':'')+
    '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+
    '<div class="panel"><h3>Proteção parental</h3><p>Os botões em cada perfil acima controlam limite diário, bloqueio imediato, desconexão e microfone. O chat escrito fica restrito às contas autenticadas.</p></div>';
+  el.querySelectorAll('button[data-landmark]').forEach(btn=>{
+   btn.onclick=()=>void visitFamilyLandmark(btn.dataset.landmark,btn);
+  });
  }catch(e){el.textContent='Não foi possível consultar o mundo OpusCraft: '+e.message}
 }
 const GAME_COVER_NAMES={pong:'Pong Neon',snake:'Cobrinha Colorida',minecraft:'OpusCraft'};

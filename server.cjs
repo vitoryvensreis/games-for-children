@@ -7,6 +7,7 @@ const {spawn}=require('node:child_process');
 const {WebSocketServer,WebSocket}=require('ws');
 const webpush=require('web-push');
 const sqlStore=require('./database/store.cjs');
+const {sanitizeNpcAudit}=require('./database/npc-audit.cjs');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
 const opusConnections=new Set();
@@ -131,8 +132,19 @@ async function opusStatus(){
 }
 function launchOpusHost(){
  if(opusHostProcess||!OPUSCRAFT_READY()||!fs.existsSync(path.join(ROOT,'ops','opuscraft-relay.mjs')))return;
- const child=spawn(process.execPath,[path.join(ROOT,'ops','opuscraft-host.cjs')],{cwd:ROOT,env:process.env,stdio:'inherit'});
+ const child=spawn(process.execPath,[path.join(ROOT,'ops','opuscraft-host.cjs')],{cwd:ROOT,env:process.env,stdio:['ignore','inherit','inherit','ipc']});
  opusHostProcess=child;
+ child.on('message',message=>{
+  if(message?.type!=='npcAudit')return;
+  const event=sanitizeNpcAudit(message.event);
+  if(!event)return;
+  void sqlStore.appendNpcEvent(event).then(saved=>{
+   if(!saved)return;
+   for(const peer of peers.values())
+    if(peer.user.role==='admin'&&peer.user.enabled&&peer.ws.readyState===1)
+     emit(peer.ws,{type:'npcAudit',event:saved});
+  }).catch(err=>console.warn('Monitor NPC: falha ao gravar evento:',String(err.message).slice(0,150)));
+ });
  child.on('error',e=>console.error('[OpusCraft] Processo:',e.message));
  child.on('exit',()=>{if(opusHostProcess===child)opusHostProcess=null;setTimeout(()=>launchOpusHost(),6000).unref()});
 }
@@ -193,6 +205,19 @@ if(pathname==='/api/admin/opuscraft/npc'&&req.method==='GET'){
   if(!r.ok)return json(res,503,{error:'A personagem ainda nao esta disponivel'});
   return json(res,200,await r.json());
  }catch{return json(res,503,{error:'Servidor da familia indisponivel'})}
+}
+if(pathname==='/api/admin/opuscraft/npc/events'&&req.method==='GET'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
+ try{
+  const query=new URL(req.url,'http://local').searchParams;
+  const after=Number(query.get('after')||0);
+  if(!Number.isSafeInteger(after)||after<0)return json(res,400,{error:'Cursor inválido'});
+  const data=await sqlStore.listNpcEvents(after,60);
+  return json(res,200,data);
+ }catch(err){
+  console.warn('Monitor NPC: erro ao consultar histórico:',String(err.message).slice(0,130));
+  return json(res,503,{error:'Histórico temporariamente indisponível'});
+ }
 }
 if(pathname==='/api/admin/opuscraft/npc/visit'&&req.method==='POST'){
  if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
@@ -396,5 +421,10 @@ if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&[
 ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
 setInterval(()=>{for(const p of opusConnections){const {user:u,session:s}=p;if(s&&!s.revoked)touch(s);if(!s||s.revoked||!u.enabled||u.version!==s.version||timeLimitReached(u)){p.ws.close(4001,'Tempo encerrado pelo responsavel');p.remote?.close()}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||timeLimitReached(u)){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});
- ensureAdmin();server.listen(PORT,HOST,()=>{console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local'));launchOpusHost()})}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
+ ensureAdmin();
+ if(result.enabled){
+  void sqlStore.pruneNpcEvents().catch(e=>console.warn('Monitor NPC: retenção:',String(e.message).slice(0,120)));
+  setInterval(()=>void sqlStore.pruneNpcEvents().catch(e=>console.warn('Monitor NPC: retenção:',String(e.message).slice(0,120))),6*60*60*1000).unref();
+ }
+ server.listen(PORT,HOST,()=>{console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local'));launchOpusHost()})}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

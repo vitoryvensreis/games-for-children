@@ -7,7 +7,7 @@ type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number};
 type Work={site:Site;cursor:number};
-type State={version:1;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
 const LAND=['grass_block','dirt','coarse_dirt','podzol','stone','sand','gravel','snow_block'];
@@ -22,8 +22,8 @@ const GLYPHS:Record<string,string[]>={
  E:['111','100','110','100','111']
 };
 const dims:Record<Kind,{w:number;d:number;h:number}> = {
- names:{w:15,d:4,h:19},windmill:{w:8,d:9,h:22},pinwheels:{w:8,d:6,h:14},castle:{w:14,d:14,h:20},
- village:{w:13,d:13,h:13},garden:{w:9,d:9,h:7},watchtower:{w:6,d:6,h:19}
+ names:{w:14,d:2,h:19},windmill:{w:4,d:6,h:19},pinwheels:{w:8,d:4,h:12},castle:{w:11,d:11,h:18},
+ village:{w:11,d:11,h:10},garden:{w:7,d:7,h:4},watchtower:{w:6,d:6,h:19}
 };
 function shape(kind:Kind):Block[]{
  const out=new Map<string,Block>();
@@ -134,58 +134,91 @@ function shape(kind:Kind):Block[]{
  return [...out.values()].sort((a,b)=>a.y-b.y||a.z-b.z||a.x-b.x);
 }
 export function installGfcWorldAttractions(game:Game){
+ // Generate each immutable blueprint once instead of reconstructing thousands
+ // of blocks five times a second and on every admin status request.
+ const plans=new Map<Kind,Block[]>(KINDS.map(kind=>[kind,shape(kind)]));
+ const planFor=(kind:Kind)=>plans.get(kind)!;
  const anchor={x:Math.floor(game.player.x),z:Math.floor(game.player.z)};
  const key=SAVE_KEY+':'+String(game.meta?.id||'family');
- const fresh=():State=>({version:1,anchor,completed:[],work:null,attempts:0,phase:0});
+ const fresh=():State=>({version:1,searchRevision:2,anchor,completed:[],work:null,attempts:0,phase:0});
  let saved:State=fresh();
  try{
   const data=JSON.parse(localStorage.getItem(key)||'null');
   if(data?.version===1&&Array.isArray(data.completed)&&data.anchor&&
     Math.abs(data.anchor.x-anchor.x)<5&&Math.abs(data.anchor.z-anchor.z)<5){
-   saved={version:1,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
+   saved={version:1,searchRevision:2,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
     Number.isFinite(x.x)&&Number.isFinite(x.y)&&Number.isFinite(x.z)).slice(0,10),
     work:data.work?.site&&KINDS.includes(data.work.site.kind)?
       {site:data.work.site,cursor:0}:null,
-    attempts:Number.isFinite(data.attempts)?data.attempts:0,phase:Number.isFinite(data.phase)?data.phase:0};
+    // Migration: previous search exhaustively scanned and pushed the cursor
+    // many kilometres away. Restart its *search*, not the family world.
+    attempts:data.searchRevision===2&&Number.isFinite(data.attempts)?Math.max(0,Math.floor(data.attempts)):0,
+    phase:Number.isFinite(data.phase)?data.phase:0};
   }
  }catch{}
  const state=saved;
  const persist=()=>{try{localStorage.setItem(key,JSON.stringify(state))}catch{}};
  let ticks=0,blocked='',finishedPending=false,spinnerFrame=0,pinwheelFrame=0;
+ let surveyed=0,rejected=0,waiting=0,firstCandidateAt=0;
+ let pending:{kind:Kind;x:number;z:number}|null=null;
+ const visitors=()=>game.server?[...game.server.sessions.values()].filter(
+   session=>session.state==='play'&&session.player&&!session.player.removed):[];
+ const parked=()=>visitors().length===0;
  const siteFor=(kind:Kind,tries:number)=>{
   const dir:[number,number][]=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,-1],[1,-1]];
   const i=KINDS.indexOf(kind),[dx,dz]=dir[Math.max(0,i)];
   const baseline=[45,78,110,142,170,200,230][Math.max(0,i)];
   const offsets=[[0,0],[12,0],[-12,0],[0,12],[0,-12],[16,16],[-16,-16],[-16,16],[16,-16]];
-  const [ox,oz]=offsets[tries%offsets.length],extra=Math.floor(tries/offsets.length)*22;
+  const probe=tries%270;
+  const [ox,oz]=offsets[probe%offsets.length],extra=Math.floor(probe/offsets.length)*22;
   return {x:anchor.x+Math.round(dx*(baseline+extra))+ox,
    z:anchor.z+Math.round(dz*(baseline+extra))+oz};
  };
  const nameAt=(x:number,y:number,z:number)=>blockOf(game.level.getState(x,y,z)).name;
  const surface=(x:number,z:number):number|null=>{
   if(!game.level.world.isLoaded(x,z))return null;
-  const y=game.level.motionBlockingHeight(x,z);
-  if(y<40||y>165)return null;
-  if(!LAND.includes(nameAt(x,y-1,z)))return null;
-  if(!OPEN.has(nameAt(x,y,z)))return null;
-  return y;
+  // Heightmap lookup is O(1); motionBlockingHeight() scanned hundreds of
+  // world blocks per column, thousands of times during a single survey.
+  const top=game.level.world.heightAt(x,z);
+  if(top<40||top>170)return null;
+  // Descend through low flowers/grass/snow. Trees, buildings, liquids and
+  // any unfamiliar material disqualify this column rather than get cleared.
+  for(let y=top;y>=top-5;y--){
+   const here=nameAt(x,y,z),floor=nameAt(x,y-1,z);
+   if(LAND.includes(floor)&&OPEN.has(here))return y;
+   if(!OPEN.has(here))return null;
+  }
+  return null;
  };
  function siteAllowed(kind:Kind,x:number,y:number,z:number):number|null{
   const {w,d,h}=dims[kind];
-  if(Math.hypot(x-anchor.x,z-anchor.z)<30)return null;
-  if(state.completed.some(s=>Math.hypot(s.x-x,s.z-z)<36))return null;
-  if(game.server && [...game.server.sessions.values()].some(s=>s.state==='play'&&s.player&&
-   Math.hypot(s.player.x-x,s.player.z-z)<22))return null;
-  let maxY=y,minY=y;
-  // Survey every footprint column + 2 block buffer for artificial walls or trees.
-  for(let xx=x-w-2;xx<=x+w+2;xx++)for(let zz=z-d-2;zz<=z+d+2;zz++){
+  if(Math.hypot(x-anchor.x,z-anchor.z)<32)return null;
+  if(state.completed.some(s=>Math.hypot(s.x-x,s.z-z)<39))return null;
+  if(visitors().some(v=>Math.hypot(v.player!.x-x,v.player!.z-z)<26))return null;
+  let minY=y,maxY=y;
+  const x0=x-w-1,x1=x+w+1,z0=z-d-1,z1=z+d+1;
+  // Coarse check: reject trees, buildings and cliffs without scanning
+  // every vertical block in every column.
+  for(let xx=x0;xx<=x1;xx+=3)for(let zz=z0;zz<=z1;zz+=3){
    const fy=surface(xx,zz);
    if(fy===null)return null;
    minY=Math.min(minY,fy);maxY=Math.max(maxY,fy);
-   if(maxY-minY>2)return null;
-   // Presence of structures, trees, unknown vegetation or artificial roofs
-   // disqualifies the site before any block is placed.
-   for(let yy=fy;yy<=fy+h;yy++){
+   if(maxY-minY>5)return null;
+  }
+  const ground:number[]=[];
+  for(let xx=x0;xx<=x1;xx++)for(let zz=z0;zz<=z1;zz++){
+   const fy=surface(xx,zz);
+   if(fy===null)return null;
+   ground.push(fy);
+   minY=Math.min(minY,fy);maxY=Math.max(maxY,fy);
+   if(maxY-minY>5)return null;
+  }
+  // Check the actual construction volume *after* maxY is known.
+  // Never overlook a raised roof just because that column was visited first.
+  let index=0;
+  for(let xx=x0;xx<=x1;xx++)for(let zz=z0;zz<=z1;zz++){
+   const fy=ground[index++];
+   for(let yy=Math.max(fy,maxY);yy<=maxY+h;yy++){
     if(!OPEN.has(nameAt(xx,yy,zz)))return null;
    }
   }
@@ -193,26 +226,48 @@ export function installGfcWorldAttractions(game:Game){
  }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
-  if(!kind||state.work)return;
-  const {x,z}=siteFor(kind,state.attempts);
-  // Only one temporary ticket loads the future exploration zone.
-  // The host never moves and the world's seed is unchanged.
-  game.chunks.setTicket('gfc-landmarks',[x>>4,z>>4,2]);
-  const {w,d}=dims[kind];
-  for(let xx=x-w-2;xx<=x+w+2;xx+=8)
-   for(let zz=z-d-2;zz<=z+d+2;zz+=8)
-    if(!game.level.world.isLoaded(xx,zz)){blocked='Carregando terreno para explorar';return;}
-  state.attempts++;
+  if(!kind||state.work||!parked())return;
+  if(!pending||pending.kind!==kind){
+   const site=siteFor(kind,state.attempts);
+   pending={kind,...site};
+   firstCandidateAt=Date.now();
+   // Keep the same candidate long enough for the worker to generate its
+   // chunks; changing tickets every two seconds starved the loading queue.
+   game.chunks.setTicket('gfc-landmarks',[site.x>>4,site.z>>4,2]);
+   blocked='Carregando região da próxima atração';
+   return;
+  }
+  const {x,z}=pending,{w,d}=dims[kind];
+  // Check every intersected chunk, including the far border.
+  // Sampling at eight-block intervals could miss an unloaded outer chunk.
+  let ready=true;
+  for(let cx=(x-w-1)>>4;cx<=((x+w+1)>>4);cx++)
+   for(let cz=(z-d-1)>>4;cz<=((z+d+1)>>4);cz++)
+    if(!game.level.world.isLoaded(cx*16,cz*16))ready=false;
+  if(!ready){
+     waiting++;
+     if(Date.now()-firstCandidateAt>45000){
+      pending=null;state.attempts++;game.chunks.setTicket('gfc-landmarks',null);
+      blocked='Região indisponível, tentando outra área';
+     }else blocked='Aguardando carregar terreno';
+     return;
+  }
+  surveyed++;
   const y=surface(x,z);
   const platformY=y!==null?siteAllowed(kind,x,y,z):null;
+  pending=null;state.attempts++;
   if(platformY!==null){
    state.work={site:{kind,x,y:platformY,z},cursor:0};
    blocked='';persist();
-  }else blocked='Procurando terreno livre e sem construções';
+  }else{
+   rejected++;
+   game.chunks.setTicket('gfc-landmarks',null);
+   blocked='Terreno não aprovado; avaliando outra região';
+  }
  }
  function buildBatch(){
   const w=state.work;if(!w||finishedPending)return;
-  const plan=shape(w.site.kind),s=w.site;
+  const plan=planFor(w.site.kind),s=w.site;
   const max=6;let steps=0;
   while(steps<max&&w.cursor<plan.length){
    const b=plan[w.cursor],x=s.x+b.x,y=s.y+b.y,z=s.z+b.z;
@@ -307,11 +362,21 @@ export function installGfcWorldAttractions(game:Game){
  function tick(){
   if(!game.inWorld||game.mode!=='host'||!game.spawned)return;
   ticks++;
-  if(ticks%40===0&&state.work){
+  // Chunk generation and block updates compete with kids joining the server.
+  // Suspend optional attractions whenever the multiplayer is occupied.
+  if(!parked()){
+   if(pending){
+    pending=null;
+    game.chunks.setTicket('gfc-landmarks',null);
+   }
+   if(state.work)game.chunks.setTicket('gfc-landmarks',null);
+   blocked='Atrações pausadas enquanto a família joga';
+  }
+  if(ticks%40===0&&state.work&&parked()){
    const s=state.work.site;game.chunks.setTicket('gfc-landmarks',[s.x>>4,s.z>>4,2]);
   }
-  if(ticks%4===0&&state.work)buildBatch();
-  if(ticks%40===0&&!state.work&&state.completed.length<KINDS.length)trySelect();
+  if(ticks%4===0&&state.work&&parked())buildBatch();
+  if(ticks%60===0&&!state.work&&state.completed.length<KINDS.length&&parked())trySelect();
   if(ticks%40===0){
    const mill=state.completed.find(s=>s.kind==='windmill');
    const close=mill&&game.server&&[...game.server.sessions.values()].some(v=>
@@ -331,8 +396,10 @@ export function installGfcWorldAttractions(game:Game){
   return {role:'landmark_builder',hiddenHost:true,aiEnabled:false,
    placedAttractions:state.completed.length,totalAttractions:KINDS.length,
    attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z})),
-   building:w?{name:w.site.kind,done:w.cursor,total:shape(w.site.kind).length}:null,
-   blocked,searches:state.attempts,windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
+   building:w?{name:w.site.kind,done:w.cursor,total:planFor(w.site.kind).length}:null,
+   blocked,searches:state.attempts,surveyed,rejected,waiting,
+   terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
+   windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }
  function destination(){return state.completed.find(s=>s.kind==='names')||

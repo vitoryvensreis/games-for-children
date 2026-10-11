@@ -1,5 +1,6 @@
 const http=require('node:http');
 const fs=require('node:fs');
+const zlib=require('node:zlib');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {stepPongBall,PONG}=require('./database/pong-physics.cjs');
@@ -158,6 +159,47 @@ function launchOpusHost(){
  });
  child.on('error',e=>console.error('[OpusCraft] Processo:',e.message));
  child.on('exit',()=>{if(opusHostProcess===child)opusHostProcess=null;setTimeout(()=>launchOpusHost(),6000).unref()});
+}
+
+// Browser-cacheable, authenticated client assets: privacy-safe code-only files.
+// Hashed Vite resources survive repeat visits; HTML/session responses never cache.
+// gzip output is reused in this process to avoid compressing the same bundle per child.
+const opusGzipCache=new Map();
+function opuscraftStaticHeaders(file,ext){
+ const opus=file.startsWith('opuscraft/');
+ const hashed=opus&&/^opuscraft\/assets\/[^/]+-[a-zA-Z0-9_-]{8,}\.(?:js|css|wasm|svg|png|jpg|webp|woff2)$/.test(file);
+ const noStore=!opus?['index.html','app.js','style.css','sw.js'].includes(file):
+  file==='opuscraft/index.html'||file==='opuscraft/GFC-BUILD-ID.txt';
+ return {
+  'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8',
+   '.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml',
+   '.wasm':'application/wasm','.zip':'application/zip',
+   '.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream',
+  'Cache-Control':noStore?'private, no-store, max-age=0':
+   hashed?'private, max-age=31536000, immutable':opus?'private, max-age=3600':'public, max-age=3600'
+ };
+}
+function sendStaticAsset(req,res,file,fp,body){
+ const ext=path.extname(fp),headers=opuscraftStaticHeaders(file,ext);
+ const wantsGzip=String(req.headers['accept-encoding']||'').includes('gzip');
+ const canGzip=file.startsWith('opuscraft/')&&/\.(js|css|wasm|json|svg)$/.test(file)&&
+  body.length>2048&&body.length<30*1024*1024&&wantsGzip;
+ if(!canGzip){res.writeHead(200,headers);res.end(body);return}
+ headers.Vary='Accept-Encoding';
+ const key=fp+':'+body.length;
+ const cached=opusGzipCache.get(key);
+ if(cached){res.writeHead(200,{...headers,'Content-Encoding':'gzip'});res.end(cached);return}
+ zlib.gzip(body,{level:5},(err,zipped)=>{
+  if(err||!zipped||zipped.length>=body.length){
+   res.writeHead(200,headers);res.end(body);return;
+  }
+  // Limit compressed cache to 12 assets / 24 MiB.
+  if(zipped.length<24*1024*1024){
+   while(opusGzipCache.size>=12)opusGzipCache.delete(opusGzipCache.keys().next().value);
+   opusGzipCache.set(key,zipped);
+  }
+  res.writeHead(200,{...headers,'Content-Encoding':'gzip'});res.end(zipped);
+ });
 }
 
 const server=http.createServer(async(req,res)=>{try{
@@ -352,7 +394,7 @@ return json(res,404,{error:'Rota não encontrada'});
 }
 const file=pathname==='/'?'index.html':decodeURIComponent(pathname.slice(1));if(file.includes('..')||file.startsWith('.')){res.writeHead(403);return res.end()}
 const fp=path.join(publicDir,file);if(!fp.startsWith(publicDir+path.sep)){res.writeHead(403);return res.end()}
-fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}const ext=path.extname(fp);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.wasm':'application/wasm','.zip':'application/zip','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':file==='sw.js'||file==='index.html'||file==='app.js'||file==='style.css'||pathname.startsWith('/opuscraft/')?'private, no-store, max-age=0':'public, max-age=3600'});res.end(b)});
+fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontrado')}return sendStaticAsset(req,res,file,fp,b)});
 }catch(e){console.error(e);if(!res.headersSent)json(res,500,{error:'Erro interno'})}});
 const opusWss=new WebSocketServer({noServer:true,maxPayload:20*1024*1024});
 opusWss.on('connection',(ws,ctx)=>{

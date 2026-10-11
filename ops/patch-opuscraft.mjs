@@ -85,7 +85,21 @@ patch('src/main.ts',
     // One server-owned family world, never a LAN search or manual join-code form.
     // The upstream LAN list is intended for ad-hoc browser hosts and may be blocked
     // by production reverse proxies. Always connect directly to our private relay.
-    game.opts.renderDistance = Math.min(game.opts.renderDistance, 2); // iPhone: reduce initial chunk backlog.
+    // Family multiplayer uses a short initial radius so guests never try to
+    // mesh an entire world on entry. Keep individual single-player settings intact.
+    game.opts.renderDistance = Math.min(game.opts.renderDistance, 2);
+    game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
+    const lightweight = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
+    if (lightweight) {
+      game.opts.graphics = 0;
+      game.opts.fancy = false;
+      game.opts.clouds = 0;
+      game.opts.particles = 2;
+      game.opts.entityShadows = false;
+      game.opts.smoothLighting = false;
+      game.opts.maxFps = Math.min(game.opts.maxFps, 45);
+    }
     await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
 

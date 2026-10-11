@@ -310,6 +310,12 @@ async function refreshMinecraftDashboard(){
       (npc.worldAttractions.building?'<p class="sub">Preparando: '+esc(npc.worldAttractions.building.name)+
        ' • '+Number(npc.worldAttractions.building.done||0)+'/'+Number(npc.worldAttractions.building.total||0)+' blocos</p>':
        '<p class="sub">'+esc(npc.worldAttractions.blocked||'Buscando terrenos para as próximas atrações')+'</p>')+
+      '<p class="sub">Áreas avaliadas: '+Number(npc.worldAttractions.surveyed||0)+
+      ' • Terrenos rejeitados: '+Number(npc.worldAttractions.rejected||0)+
+      ' • Tentativas: '+Number(npc.worldAttractions.searches||0)+'</p>'+
+      (npc.worldAttractions.terrainSearch?'<p class="sub">Próxima região: X '+
+       Math.round(npc.worldAttractions.terrainSearch.x)+' • Z '+
+       Math.round(npc.worldAttractions.terrainSearch.z)+'</p>':'')+
       (npc.worldAttractions.attractions?.length?'<div class="npc-landmarks">'+
        npc.worldAttractions.attractions.map(x=>'<p>📍 '+esc(({names:'Letreiro Caique e Cauã',windmill:'Moinho giratório',pinwheels:'Cataventos giratórios',castle:'Castelo',village:'Vila',garden:'Jardim',watchtower:'Torre'}[x.name]||x.name))+
        ' • X '+Math.round(x.x)+' | Z '+Math.round(x.z)+'</p>').join('')+'</div>':''):

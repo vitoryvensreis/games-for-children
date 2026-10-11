@@ -37,7 +37,7 @@ test('Exploration landmarks include Cauã tilde, Caique, real villages, castle a
   assert.ok(a.includes("'"+kind+"'"),kind);
  assert.match(a,/write\('CAIQUE',10/);
  assert.match(a,/write\('CAUA',3/);
- assert.match(a,/put\(4,9,-1,'lime_concrete'\)/);
+ assert.match(a,/put\(tildeX\*4,9,-1,'lime_concrete'\)/);
  assert.match(a,/const arms=\(frame:number\)=>/);
  assert.match(a,/spinnerFrame=1-spinnerFrame/);
  assert.match(a,/if\(!matches\(spinnerFrame\)\)/);
@@ -116,7 +116,7 @@ test('Existing mirrored marquee is repaired only from verified old glyph pixels'
  assert.match(a,/legacyMirrored\?col\+x:-\(col\+x\)/);
  assert.match(a,/const oldSign=shape\('names',true\)/);
  assert.match(a,/function repairOriginalMarquee\(\)/);
- assert.match(a,/if\(actual!==b\.was&&actual!==b\.now/);
+ assert.match(a,/return actual!==b\.was&&actual!==b\.now/);
  assert.match(a,/game\.saveWorld\(\)\.then\(\(\)=>\{/);
  assert.match(a,/marquee-direction-v2/);
  assert.match(a,/signRepairSaving=true/);

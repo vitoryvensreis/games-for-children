@@ -50,8 +50,10 @@ if test "$ready" -ne 1; then
 fi
 echo "OPUSCRAFT_PERMANENT_WORLD_READY"
 curl -fsS --max-time 3 http://127.0.0.1:4173/__health
-# The old ClassiCube is deleted only after new WebGL2 world is verified.
-# Its full world/bot/settings backup stays in backup/classicube-legacy.tar.gz.
+# Retire only obsolete runtime/files after the replacement world passes health checks.
+# Preserve all world/data directories, JSON state, IndexedDB profiles and backups.
+# MCGalaxy world/config files were archived earlier as backup/classicube-legacy.tar.gz.
 rm -rf public/classicube vendor/mcgalaxy
+rm -f database/family-village.cjs database/exploration-world.cjs database/mining-world.cjs database/family-play.cjs database/minecraft-control.cjs ops/CLASSICUBE.md
 trap - ERR
 echo "OPUSCRAFT_DEPLOY_HEALTH_OK"

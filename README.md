@@ -63,25 +63,7 @@ node --test tests/integration.cjs
 - O sistema salva pequenos volumes em JSON e não é voltado para usuários públicos.
 
 
-## Minecraft — exploração criativa com mineração
-- Removido o painel de corações/fome; o limite de tempo do responsável permanece ativo.
-- Inventário de recursos e picaretas continuam controlados pelo servidor.
-- Espadas de madeira/pedra/ferro e armaduras de ferro/ouro podem ser fabricadas e persistem como itens colecionáveis, ainda sem aparência 3D equipada e sem combate.
-- Portais físicos são montados em terreno livre e plano nos mapas Exploração/Mineração; exigem 8 pedras e 2 ferros (ADM isento). O plugin usa portais persistidos no banco do MCGalaxy: os backups também devem incluir esse banco, além dos arquivos .lvl.
-- Ovelhas, porcos e galinhas caminham pelo servidor; validar comportamento no Safari/PWA iOS.
-- Perfis infantis, controle parental e autenticação existentes foram preservados.
-
-
-## Minecraft — livre construção, inventário e controles mobile (10/10/2026)
-- Todos os blocos podem ser colocados e quebrados sem ferramentas obrigatórias, consumo de recursos ou limite artificial de mineração. A proteção das casas e o bloqueio parental global continuam ativos.
-- A coleta de minerais agora é apenas um contador opcional. Equipamentos e portais fabricáveis são gratuitos. Espadas e armaduras continuam itens decorativos, sem combate 3D.
-- O botão BLOCOS em /classicube/ abre o inventário nativo do ClassiCube 1.3.8 (tecla B), com grade de texturas e seleção de bloco para hotbar.
-- Controles touch usam os atalhos oficiais: Z alterna voo, Q sobe, E desce, Espaço pula, mouse esquerdo quebra e direito coloca. Toques contínuos repetem a ação e liberam no cancelamento.
-- Oito skins self-hosted de 64x32 com preview pixelado no menu FAMÍLIA, sem upload arbitrário nem URLs externas.
-- Validar em iPhone PWA: abrir inventário/selecionar bloco, quebrar/colocar, alternar voo, subir/descer e liberar botão. O painel parental, os mundos e o multiplayer não foram modificados.
-
-
-## OpusCraft: menu original, mundos individuais e teleporte (10/2026)
+## OpusCraft — único Minecraft ativo (mundo familiar criativo), mundos individuais e teleporte (10/2026)
 - Abrir OpusCraft pelo catálogo agora exibe o **menu inicial original**: Um jogador, Multiplayer e Configurações. Não conecta automaticamente à VPS até a família escolher Multiplayer.
 - Em **Um jogador**, o menu nativo permite criar/continuar/renomear/excluir mundos com modos Criativo, Sobrevivência, Aventura, Espectador e Hardcore, semente, dificuldade, geração de estruturas e regras. O mundo local salva automaticamente no IndexedDB do próprio aparelho/navegador.
 - Na seleção de mundos há **Backup na VPS** e **Restaurar da VPS**. São ações manuais e autenticadas, independentes por perfil; o backup não sincroniza automaticamente mundos entre dispositivos. Cada arquivo pode ter até 64 MB, com cota de 400 MB por conta e até três versões por mundo. A restauração cria outra cópia, sem sobrescrever o mundo atual.
@@ -89,3 +71,7 @@ node --test tests/integration.cjs
 - No mundo familiar, o overlay **Jogadores / Teleporte** mostra apenas perfis realmente conectados; tocar em Ir até executa teleporte autoritativo pelo host do OpusCraft. Só funciona quando ambos estão no mesmo mundo e dimensão; há intervalo de 6 segundos entre teletransportes.
 - O mundo do servidor continua hospedado 24h na VPS, sem precisar manter um celular ligado. Mundos individuais ficam no aparelho e podem ser copiados manualmente para a VPS.
 - Limites parentais continuam verificados periodicamente no cliente de mundo individual; para o multiplayer a conexão é autenticada e pode ser encerrada pelo ADM. Jogar localmente não fornece segurança antiviolação absoluta contra clientes modificados.
+
+## Versões anteriores (arquivadas)
+As integrações MCGalaxy e ClassiCube foram removidas do código de produção. O OpusCraft permanece como único jogo de blocos ativo.
+Dados históricos e construções do servidor antigo não são apagados: caso existam na VPS, os arquivos `.lvl` e a configuração antiga são preservados em `backup/classicube-legacy.tar.gz` antes de qualquer limpeza. Esse backup é independente do mundo e perfil persistentes do OpusCraft em `data/opuscraft/profile`.

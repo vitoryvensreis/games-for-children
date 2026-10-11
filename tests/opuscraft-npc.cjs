@@ -156,6 +156,11 @@ test('Floating structures are migrated with two durable save checkpoints and nat
  assert.match(s,/if\(!removable\(now\)\)/);
  assert.match(s,/state\.completed\[index\]=\{\.\.\.to\}/);
  assert.match(host,/grounding\.tick\(\)/);
+ assert.match(s,/setTicket\('gfc-old-attraction'/);
+ assert.match(s,/Carregando construção original/);
+ assert.match(s,/s\.elevated===true/);
+ assert.match(s,/state\.blockedKinds=/);
+ assert.match(host,/blockedKinds:Array\.isArray\(data\.blockedKinds\)/);
  assert.doesNotMatch(s,/indexedDB\.deleteDatabase|deleteWorld|resetWorld/);
 });
 test('Frame budget and rotor animations avoid block-by-block updates during player visits',()=>{

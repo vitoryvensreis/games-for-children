@@ -80,12 +80,16 @@ async function openOpusCraft(){
  try{
   const status=await api('opuscraft/status');
   if(!status.available){notify('Os arquivos do OpusCraft ainda não foram instalados.');return}
+  if(!status.ready){notify('O servidor da família está iniciando. Aguarde um pouco e tente novamente.');return}
   // O menu e os mundos individuais funcionam mesmo se o servidor familiar estiver reiniciando.
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
   app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft em tela horizontal">'+
-  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
+  // Enter the authenticated persistent family world directly. Without gfcJoin
+  // OpusCraft opens its ordinary title screen and NEVER joins the VPS relay.
+  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?gfcJoin=1&v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
+  '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
   '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
@@ -98,6 +102,42 @@ async function openOpusCraft(){
    }
   });
   const root=$('#cubeRoot'),overlay=$('#opuscraftRotate');
+  const joinAlert=$('#opuscraftJoinAlert');
+  let joinCheckTimer=null,joinTimeout=null,joinSucceeded=false;
+  function checkFamilyJoin(){
+   if(!gameFrame.isConnected){clearInterval(joinCheckTimer);return}
+   try{
+    const g=gameFrame.contentWindow?.__game;
+    if(g?.mode==='client'&&g.inWorld&&g.spawned){
+     joinSucceeded=true;clearTimeout(joinTimeout);clearInterval(joinCheckTimer);
+     joinAlert.hidden=true;
+    }
+   }catch{}
+  }
+  function scheduleFamilyJoinCheck(){
+   joinSucceeded=false;
+   clearInterval(joinCheckTimer);clearTimeout(joinTimeout);
+   joinCheckTimer=setInterval(checkFamilyJoin,1000);
+   joinTimeout=setTimeout(()=>{
+    if(joinSucceeded||!gameFrame.isConnected)return;
+    let reason='';
+    try{const g=gameFrame.contentWindow?.__game;
+     reason=String(g?.client?.endReason||g?.client?.disconnectReason||'').slice(0,140);
+    }catch{}
+    $('#opuscraftJoinMessage').textContent=reason?
+     'O servidor encerrou a conexão: '+reason:
+     'A conexão demorou mais de 45 segundos. O servidor pode estar ocupado; tente novamente.';
+    joinAlert.hidden=false;
+   },45000);
+  }
+  $('#opuscraftJoinRetry').onclick=()=>{
+   joinAlert.hidden=true;
+   gameFrame.src='/opuscraft/index.html?gfcJoin=1&v='+
+    encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now();
+   scheduleFamilyJoinCheck();
+  };
+  $('#opuscraftJoinBack').onclick=()=>$('#opuscraftBack')?.click();
+  scheduleFamilyJoinCheck();
   const playersDock=$('#opusPlayersDock'),playersPanel=$('#opusPlayersPanel'),playersList=$('#opusPlayersList');
   let rosterBusy=false;
   async function showFamilyPlayers(){
@@ -153,7 +193,7 @@ async function openOpusCraft(){
   $('#familyChatToggle').onclick=()=>{const panel=$('#familyChatPanel');panel.hidden=!panel.hidden;renderFamilyChat();if(!panel.hidden)$('#familyChatInput').focus()};
   $('#familyChatForm').onsubmit=e=>{e.preventDefault();const input=$('#familyChatInput'),message=input.value.trim();if(message&&send({type:'familyChat',text:message})){input.value='';input.blur()}};
   renderFamilyChat();
-  $('#opuscraftBack').onclick=async()=>{clearInterval(modeTimer);clearInterval(rosterTimer);window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
+  $('#opuscraftBack').onclick=async()=>{clearTimeout(joinTimeout);clearInterval(joinCheckTimer);clearInterval(modeTimer);clearInterval(rosterTimer);window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
  }catch(e){console.warn('OpusCraft:',e);notify('Não foi possível abrir o OpusCraft: '+e.message)}
 }
 function renderFamilyChat(){

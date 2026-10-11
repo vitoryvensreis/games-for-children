@@ -179,8 +179,17 @@ async function openOpusCraft(){
   };
   const modeTimer=setInterval(()=>{
    if(!gameFrame.isConnected){clearInterval(modeTimer);return}
-   let mode='';
-   try{mode=gameFrame.contentWindow?.__game?.mode||''}catch{}
+   let mode='',joining=false;
+   try{
+    const client=gameFrame.contentWindow;
+    mode=client?.__game?.mode||'';
+    joining=client?.__gfcFamilyJoining===true||mode==='client';
+   }catch{}
+   if(joining&&!joinTracked)scheduleFamilyJoinCheck();
+   if(!joining&&joinTracked){
+    joinTracked=false;clearTimeout(joinTimeout);clearInterval(joinCheckTimer);
+    joinAlert.hidden=true;
+   }
    const active=mode==='client';
    playersDock.hidden=!active;
    if(!active)playersPanel.hidden=true;

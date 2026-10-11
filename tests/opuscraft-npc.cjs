@@ -31,7 +31,7 @@ test('GroqCloud is constrained to four non-destructive actions',async()=>{
 });
 test('Agent changes only empty blocks at a fixed small blueprint and builds in existing family world',()=>{
  const agent=read('ops/gfc-npc.ts'),patch=read('ops/patch-opuscraft.mjs'),build=read('ops/build-opuscraft.sh');
- assert.match(agent,/if\(old!==0\)return/);
+ assert.match(agent,/game\.level\.getState\(x,y,z\)!==0/);
  assert.match(agent,/game\.level\.setBlock\(x,y,z,S\(block\.block\)\)/);
  assert.match(agent,/Math\.abs\(fy-y\)>1/);
  assert.match(agent,/Math\.random\(\)<0\.12/);
@@ -56,7 +56,7 @@ test('Agent keeps roaming safely if no buildable plot exists',()=>{
  assert.match(agent,/nextPlotCandidate\+\+%candidates\.length/);
  assert.match(agent,/plotSearchChecked:nextPlotCandidate/);
  assert.match(agent,/roamMoves,lastMoveOk/);
- assert.match(agent,/if\(old!==0\)return/);
+ assert.match(agent,/game\.level\.getState\(x,y,z\)!==0/);
 });
 
 test('NPC API and visit authorization are restricted to current administrator session',()=>{
@@ -89,10 +89,35 @@ test('NPC uses the native player movement/physics tick instead of teleporting',(
  assert.match(agent,/walkingTicks,walkedBlocks:/);
  assert.match(agent,/walkingTo:waypoint/);
  assert.match(agent,/resident\.swing\(\)/);
- assert.match(agent,/if\(!waypoint&&driveTicks%120===0\)roam\(\)/);
+ assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&driveTicks%120===0\)roam\(\)/);
  assert.doesNotMatch(agent,/resident\.moveTo\(/);
  assert.ok(patch.includes("(window as any).__gfcNpc?.drive?.()"));
  assert.ok(patch.includes("this.server?.receive();"));
  assert.ok(patch.includes("this.level.tick();"));
  assert.match(agent,/distance\(p\.x,p\.z,plot!\.x,plot!\.z\)<4/);
+});
+
+test('Groq decisions and every execution have private audit entries without tokens or names',()=>{
+ const host=read('ops/opuscraft-host.cjs');
+ const brain=read('ops/opuscraft-npc-brain.cjs');
+ const agent=read('ops/gfc-npc.ts');
+ assert.match(brain,/NPC_SYSTEM_PROMPT/);
+ assert.match(host,/NPC_QUESTION/);
+ assert.match(host,/NPC_DECISION/);
+ assert.match(host,/NPC_STEP/);
+ assert.match(host,/system:NPC_SYSTEM_PROMPT,input/);
+ assert.match(host,/reason:result\.buildReason/);
+ assert.match(agent,/buildCursor:nextBlock,buildReason:lastBuildReason/);
+ assert.match(agent,/lastBuildReason='visitor_in_build_area'/);
+ assert.match(agent,/lastBuildReason='blueprint_finished'/);
+ assert.match(agent,/lastBuildReason='existing_block_preserved'/);
+ assert.match(agent,/lastBuildReason='placed_block'/);
+ assert.doesNotMatch(host,/JSON\.stringify\(process\.env\)/);
+});
+
+test('Building plans must not force purposeless roaming between building actions',()=>{
+ const agent=read('ops/gfc-npc.ts');
+ assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&driveTicks%120===0\)roam\(\)/);
+ assert.match(agent,/if\(paused\)waypoint=null/);
+ assert.match(agent,/if\(lastAction!=='build'&&driveTicks%20===0\)roam\(\)/);
 });

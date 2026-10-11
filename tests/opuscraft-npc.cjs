@@ -80,3 +80,18 @@ test('Headless host refreshes OpusCraft code after deploy but retains family Ind
  assert.ok(host.includes('userDataDir:PROFILE'));
  assert.ok(!host.includes('rmSync(PROFILE'));
 });
+
+test('NPC uses the native player movement/physics tick instead of teleporting',()=>{
+ const agent=read('ops/gfc-npc.ts'),patch=read('ops/patch-opuscraft.mjs');
+ assert.match(agent,/function drive\(\):void/);
+ assert.match(agent,/inp\.forward=true/);
+ assert.match(agent,/resident\.yaw\+=/);
+ assert.match(agent,/walkingTicks,walkedBlocks:/);
+ assert.match(agent,/walkingTo:waypoint/);
+ assert.match(agent,/resident\.swing\(\)/);
+ assert.doesNotMatch(agent,/resident\.moveTo\(/);
+ assert.ok(patch.includes("(window as any).__gfcNpc?.drive?.()"));
+ assert.ok(patch.includes("this.server?.receive();"));
+ assert.ok(patch.includes("this.level.tick();"));
+ assert.match(agent,/distance\(p\.x,p\.z,plot!\.x,plot!\.z\)<4/);
+});

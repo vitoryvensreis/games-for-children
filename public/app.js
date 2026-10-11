@@ -357,11 +357,24 @@ async function refreshNpcAudit(){
 async function refreshMinecraftDashboard(){
  const el=$('#adminMinecraftDashboard');if(!el||me?.role!=='admin')return;
  try{
-  const data=await api('admin/opuscraft/status');if(!el.isConnected)return;
+  const data=await api('admin/opuscraft/status');
+  const npc=await api('admin/opuscraft/npc').catch(()=>null);
+  if(!el.isConnected)return;
   el.innerHTML='<div class="minecraft-admin-summary">'+
    '<div class="panel"><strong>Servidor OpusCraft</strong><p>'+(data.ready?'Mundo online':'Iniciando')+'</p></div>'+
    '<div class="panel"><strong>Jogadores</strong><p>'+Number(data.guests||0)+'</p></div>'+
    '<div class="panel"><strong>Último salvamento</strong><p>'+(data.lastSave?new Date(data.lastSave).toLocaleTimeString('pt-BR'):'Aguardando')+'</p></div></div>'+
+   (npc?.needs?'<div class="panel"><h3>Andarilha — Sobrevivência</h3>'+
+    '<p class="sub"><strong>Objetivo próprio:</strong> '+esc(npc.currentGoal||'continuar viva')+'</p>'+
+    '<p class="sub">'+esc(npc.goalReason||'Sem decisão registrada')+'</p>'+
+    '<div class="npc-vitals">'+[
+      ['Saúde',npc.needs.health,20],['Oxigênio',npc.needs.oxygen,100],
+      ['Fome',npc.needs.hunger,100],['Sede',npc.needs.thirst,100],
+      ['Energia',npc.needs.energy,100]
+    ].map(([name,val,max])=>'<div class="npc-vital"><span>'+name+'</span><strong>'+Math.round(Number(val)||0)+'/'+max+'</strong>'+
+      '<div class="npc-vital-track"><i style="width:'+Math.max(0,Math.min(100,100*(Number(val)||0)/Number(max)))+'%"></i></div></div>').join('')+'</div>'+
+    '<p class="sub">Temperatura: '+Number(npc.needs.temperature||0).toFixed(1)+' °C • Mortes: '+Number(npc.deaths||0)+
+    ' • Memórias recentes: '+Number(npc.memoryCount||0)+'</p></div>':'')+
    '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+

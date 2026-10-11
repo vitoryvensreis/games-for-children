@@ -1,7 +1,7 @@
 const mysql=require('mysql2/promise');
 const fs=require('node:fs');
 const path=require('node:path');
-let pool, queue=Promise.resolve(), npcAuditReady=false;
+let pool, queue=Promise.resolve(), npcAuditReady=false, npcLifeReady=false;
 const enabled=()=>Boolean(process.env.DB_HOST&&process.env.DB_NAME&&process.env.DB_USER&&process.env.DB_PASSWORD);
 async function start(dbFile,updateState){
  if(!enabled())return {enabled:false};
@@ -14,6 +14,11 @@ async function start(dbFile,updateState){
  }catch(e){
   console.warn('Monitor Andarilha sem histórico MySQL:',String(e.message).slice(0,180));
  }
+ try{
+  const migration=fs.readFileSync(path.join(__dirname,'migrations','003_npc_life_state.sql'),'utf8');
+  await pool.query(migration);
+  npcLifeReady=true;
+ }catch(e){console.warn('Memória da Andarilha: MySQL indisponível; usando arquivo isolado:',String(e.message).slice(0,130))}
  const [rows]=await pool.query('SELECT payload,updated_at FROM game_state WHERE id=1');
  let local=null;try{local=JSON.parse(fs.readFileSync(dbFile,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e}
  const localTime=local?fs.statSync(dbFile).mtimeMs:0;
@@ -63,5 +68,53 @@ async function pruneNpcEvents(){
  if(!npcAuditReady||!pool)return;
  await pool.query('DELETE FROM gfc_npc_audit WHERE created_at < UTC_TIMESTAMP(3) - INTERVAL 30 DAY LIMIT 2000');
 }
+// File mirror works even if the MySQL migration isn't permitted or its connection fails.
+const npcLifeFile=()=>path.join(process.env.DATA_DIR||path.join(__dirname,'..','data'),'opuscraft','andarilha-life.json');
+const limitedLife=(data)=>{
+ if(!data||typeof data!=='object'||data.version!==1)return null;
+ const v=data.vitals;
+ if(!v||!['hunger','thirst','energy','temperature','oxygen','health'].every(k=>Number.isFinite(v[k])))return null;
+ const bound=(n,min,max)=>Math.min(max,Math.max(min,n));
+ const cleanText=(x,m)=>typeof x==='string'?x.slice(0,m):'';
+ const safe=data.safe||{};
+ return {
+  version:1,vitals:{hunger:bound(v.hunger,0,100),thirst:bound(v.thirst,0,100),
+   energy:bound(v.energy,0,100),temperature:bound(v.temperature,-30,55),
+   oxygen:bound(v.oxygen,0,100),health:bound(v.health,0,20)},
+  livedSeconds:bound(Number(data.livedSeconds)||0,0,1e9),
+  deaths:bound(Number(data.deaths)||0,0,1e6),
+  currentGoal:cleanText(data.currentGoal,90),goalReason:cleanText(data.goalReason,160),
+  experiences:(Array.isArray(data.experiences)?data.experiences:[]).slice(-25).map(e=>({
+   kind:cleanText(e?.kind,32),detail:cleanText(e?.detail,160),at:bound(Number(e?.at)||0,0,1e9)
+  })),
+  discoveries:(Array.isArray(data.discoveries)?data.discoveries:[]).slice(-12).filter(d=>Number.isFinite(d?.x)&&Number.isFinite(d?.z)).map(d=>({
+   x:bound(Math.round(d.x),-30000000,30000000),z:bound(Math.round(d.z),-30000000,30000000),kind:cleanText(d.kind,30)
+  })),
+  safe:{x:Number.isFinite(safe.x)?safe.x:0,y:Number.isFinite(safe.y)?safe.y:70,z:Number.isFinite(safe.z)?safe.z:0}
+ };
+};
+async function saveNpcLife(data){
+ const life=limitedLife(data);if(!life)return false;
+ const text=JSON.stringify(life);
+ const file=npcLifeFile();fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});
+ const tmp=file+'.tmp';fs.writeFileSync(tmp,text,{mode:0o600});fs.renameSync(tmp,file);
+ if(npcLifeReady&&pool){
+  try{await pool.execute('INSERT INTO gfc_npc_life_state(id,payload_json) VALUES (1,?) ON DUPLICATE KEY UPDATE payload_json=VALUES(payload_json),updated_at=CURRENT_TIMESTAMP(3)',[text])}
+  catch(e){console.warn('Memória NPC: arquivo local preservado; MySQL:',String(e.message).slice(0,130))}
+ }
+ return true;
+}
+async function loadNpcLife(){
+ // File is written first; MySQL is a durable second copy.
+ const file=npcLifeFile();
+ try{const life=limitedLife(JSON.parse(fs.readFileSync(file,'utf8')));if(life)return life}catch(e){if(e.code!=='ENOENT')console.warn('Memória NPC: arquivo:',String(e.message).slice(0,130))}
+ if(npcLifeReady&&pool){
+  try{
+   const [rows]=await pool.query('SELECT payload_json FROM gfc_npc_life_state WHERE id=1');
+   if(rows.length)return limitedLife(JSON.parse(rows[0].payload_json));
+  }catch(e){console.warn('Memória NPC: restauração MySQL:',String(e.message).slice(0,130))}
+ }
+ return null;
+}
 async function close(){await queue.catch(()=>{});if(pool)await pool.end()}
-module.exports={start,persist,close,enabled,appendNpcEvent,listNpcEvents,pruneNpcEvents};
+module.exports={start,persist,close,enabled,appendNpcEvent,listNpcEvents,pruneNpcEvents,saveNpcLife,loadNpcLife,limitedLife};

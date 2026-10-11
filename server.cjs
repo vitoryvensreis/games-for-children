@@ -135,6 +135,17 @@ function launchOpusHost(){
  const child=spawn(process.execPath,[path.join(ROOT,'ops','opuscraft-host.cjs')],{cwd:ROOT,env:process.env,stdio:['ignore','inherit','inherit','ipc']});
  opusHostProcess=child;
  child.on('message',message=>{
+  if(message?.type==='npcLifeLoad'){
+   void sqlStore.loadNpcLife().then(data=>{
+    if(child.connected)child.send({type:'npcLifeRestore',data});
+   }).catch(err=>console.warn('Memória NPC: restauração:',String(err.message).slice(0,120)));
+   return;
+  }
+  if(message?.type==='npcLifeSnapshot'){
+   void sqlStore.saveNpcLife(message.data).catch(err=>
+    console.warn('Memória NPC: gravação:',String(err.message).slice(0,120)));
+   return;
+  }
   if(message?.type!=='npcAudit')return;
   const event=sanitizeNpcAudit(message.event);
   if(!event)return;

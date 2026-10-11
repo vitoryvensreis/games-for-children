@@ -182,7 +182,8 @@ server.on('upgrade',(req,socket,head)=>{
 
   // NPC is the existing host avatar; it must not take another family player slot.
   const npc=await fetch('http://127.0.0.1:4173/__npc/status').then(r=>r.json());
-  if(!npc.ok || npc.name!=='Andarilha')throw Error('NPC host bridge missing: '+JSON.stringify(npc));
+  if(!npc.ok||npc.name!=='Andarilha'||!npc.hidden||npc.role!=='invisible_host'||npc.brain!=='disabled')
+   throw Error('Invisible hosting spectator not ready: '+JSON.stringify(npc));
   const visit=await fetch('http://127.0.0.1:4173/__npc/visit',{
    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:adm.name})
   });

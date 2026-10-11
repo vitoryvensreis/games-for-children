@@ -57,7 +57,7 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
@@ -70,7 +70,9 @@ patch('src/main.ts',
     }
     game.opts.renderDistance = 2; // Dedicated host simulates chunks; it does not need far-field graphics.
     await game.startWorld(meta);
-    game.player.profileName = 'Servidor_VPS'; // NPC técnico, não um filho jogando.
+    game.opts.username = 'Andarilha'; // This real host avatar is the autonomous resident.
+    game.player.profileName = 'Andarilha';
+    installGfcNpc(game);
     openToLanOnceSpawned(game, 'creative');
   } else if (params.has('gfcJoin')) {
     // Never take a player identity or a join code from child-controlled query parameters.

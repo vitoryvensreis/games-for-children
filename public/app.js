@@ -389,10 +389,11 @@ async function refreshMinecraftDashboard(){
       (npc.worldAttractions.terrainSearch?'<p class="sub">Próxima região: X '+
        Math.round(npc.worldAttractions.terrainSearch.x)+' • Z '+
        Math.round(npc.worldAttractions.terrainSearch.z)+'</p>':'')+
-      (npc.worldAttractions.grounding?'<p class="sub"><strong>Aterramento:</strong> '+
-       Number(npc.worldAttractions.grounding.grounded||0)+' estruturas no chão'+
-       (npc.worldAttractions.grounding.blocked?' • '+Number(npc.worldAttractions.grounding.blocked)+' protegidas':'')+
-       ' • '+esc(npc.worldAttractions.grounding.reason||'Procurando terreno')+'</p>':'')+
+      (npc.worldAttractions.terrainCare?'<p class="sub"><strong>Terreno das construções:</strong> '+
+       Number(npc.worldAttractions.terrainCare.remaining||0)+' aguardando • '+
+       Number(npc.worldAttractions.terrainCare.protected||0)+' protegidas'+
+       (npc.worldAttractions.terrainCare.active?' • Etapa: '+esc(npc.worldAttractions.terrainCare.active.phase):'')+
+       ' • '+esc(npc.worldAttractions.terrainCare.reason||'Verificando solo')+'</p>':'')+
       '<div class="npc-landmarks">'+familyLandmarkButtons(npc.worldAttractions)+'</div>'+
       (npc.worldAttractions.signRepair?'<p class="sub">Letreiro: '+esc(npc.worldAttractions.signRepair)+'</p>':''):
      '<p class="sub">Aguardando o carregamento do mundo</p>')+

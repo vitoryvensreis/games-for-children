@@ -49,8 +49,12 @@ test('Only a signed-in administrator can teleport to the landmark',()=>{
  assert.match(server,/pathname==='\/api\/admin\/opuscraft\/npc\/visit'/);
  assert.match(server,/u\.role!=='admin'/);
  assert.match(npc,/\^ADM_/);
- assert.match(npc,/s\.teleportTo\(p\.x,p\.y\+1\.2,p\.z-2/);
- assert.match(ui,/Ir ao letreiro/);
+ assert.match(npc,/s\.teleportTo\(p\.x,p\.y\+7,p\.z-12,0,0\)/);
+ assert.match(npc,/attractions\?\.destination\(attraction\)/);
+ assert.match(server,/const attraction=body\.attraction/);
+ assert.match(ui,/opusLandmarksList/);
+ assert.match(ui,/function familyLandmarkButtons\(state\)/);
+ assert.match(ui,/visitFamilyLandmark\(name,button\)/);
  assert.match(ui,/api\('admin\/opuscraft\/npc\/visit','POST'/);
 });
 test('Headless VPS persists exactly the same original IndexedDB family world',()=>{
@@ -82,7 +86,7 @@ test('Only family multiplayer receives lower graphics defaults on weak devices',
  const patch=read('ops/patch-opuscraft.mjs');
  const p=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
   patch.indexOf("} else if (params.has('seed')"));
- assert.match(p,/game\.opts\.renderDistance = Math\.min\(game\.opts\.renderDistance, 2\)/);
+ assert.match(p,/game\.opts\.renderDistance = familyOnPhone \? 3 : 5/);
  assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
  assert.match(p,/game\.opts\.graphics = 0/);
  assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
@@ -104,4 +108,39 @@ test('Dense forest fallback adds buildings above treetops without removing trees
  assert.match(a,/elevated:normal===null/);
  assert.match(a,/if\(!OPEN\.has\(current\)\)\{/);
  assert.doesNotMatch(a,/deleteWorld|removeChunk|resetWorld/);
+});
+
+test('Existing mirrored marquee is repaired only from verified old glyph pixels',()=>{
+ const a=read('ops/gfc-world-attractions.ts');
+ assert.match(a,/function shape\(kind:Kind,legacyMirrored=false\)/);
+ assert.match(a,/legacyMirrored\?col\+x:-\(col\+x\)/);
+ assert.match(a,/const oldSign=shape\('names',true\)/);
+ assert.match(a,/function repairOriginalMarquee\(\)/);
+ assert.match(a,/if\(actual!==b\.was&&actual!==b\.now/);
+ assert.match(a,/game\.saveWorld\(\)\.then\(\(\)=>\{/);
+ assert.match(a,/marquee-direction-v2/);
+ assert.match(a,/signRepairSaving=true/);
+});
+test('Admin can choose only recorded landmarks, including the current build',()=>{
+ const npc=read('ops/gfc-npc.ts'),host=read('ops/opuscraft-host.cjs'),
+   server=read('server.cjs'),ui=read('public/app.js'),
+   attractions=read('ops/gfc-world-attractions.ts');
+ assert.match(attractions,/function destination\(requested\?:string\)/);
+ assert.match(attractions,/state\.completed\.find\(s=>s\.kind===requested\)/);
+ assert.match(attractions,/state\.work\?\.site\.kind===requested/);
+ assert.match(npc,/function visit\(name:string,attraction\?:string\)/);
+ assert.match(host,/allowed=\['names','windmill','pinwheels','castle','village','garden','watchtower'\]/);
+ assert.match(server,/u\.role!=='admin'/);
+ assert.match(server,/JSON\.stringify\(\{from:opusName\(u\),attraction\}\)/);
+ assert.match(ui,/data-landmark/);
+ assert.match(ui,/admin\/opuscraft\/npc\/visit','POST',\{attraction:name\}/);
+});
+test('Family chunk radius improves desktop horizon without changing solo worlds',()=>{
+ const patch=read('ops/patch-opuscraft.mjs');
+ const part=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
+   patch.indexOf("} else if (params.has('seed')"));
+ assert.match(part,/renderDistance = familyOnPhone \? 3 : 5/);
+ assert.match(patch,/renderDistance = onPhone \? 3 : 5/);
+ assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
+ assert.match(patch,/CHUNKS_PER_TICK = 5/);
 });

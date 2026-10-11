@@ -138,7 +138,10 @@ const server=http.createServer((req,res)=>{
  if(!filename.startsWith(SITE+path.sep)){res.writeHead(403).end();return}
  fs.readFile(filename,(err,buf)=>{
   if(err){res.writeHead(404).end();return}
-  res.writeHead(200,{'Content-Type':mime[path.extname(filename)]||'application/octet-stream','Cache-Control':'public, max-age=3600'});
+  res.writeHead(200,{'Content-Type':mime[path.extname(filename)]||'application/octet-stream',
+   // Headless Chromium shares a persistent profile: never cache the entry HTML.
+   // Hashed Vite assets remain cacheable without mixing app versions.
+   'Cache-Control':relative==='index.html'||relative==='GFC-BUILD-ID.txt'?'no-store, max-age=0':'public, max-age=3600'});
   res.end(buf);
  });
 });
@@ -167,7 +170,11 @@ async function start(){
   });
   page.on('pageerror',err=>{lastError=String(err.message).slice(0,250);log('Game page error:',lastError)});
   page.on('console',msg=>{if(msg.type()==='error')log('Browser console:',msg.text().slice(0,300))});
-  await page.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcHost=1',{waitUntil:'domcontentloaded',timeout:45000});
+  // Bust previously cached HTML after each deployment while keeping the same
+  // Chromium profile and origin (which preserve the family's IndexedDB world).
+  const buildId=(()=>{try{return fs.readFileSync(path.join(SITE,'GFC-BUILD-ID.txt'),'utf8').trim()}catch{return String(Date.now())}})();
+  const launchUrl='http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcHost=1&build='+encodeURIComponent(buildId);
+  await page.goto(launchUrl,{waitUntil:'domcontentloaded',timeout:45000});
   await page.waitForFunction(()=>{const g=window.__game;return !!(g&&g.mode==='host'&&g.inWorld)},{timeout:150000,polling:1000});
   if(!await save())throw Error('The family world did not save successfully to VPS IndexedDB');
   lastError='';

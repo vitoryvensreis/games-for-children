@@ -3,12 +3,12 @@
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
 
-type Kind='names'|'windmill'|'castle'|'village'|'garden'|'watchtower';
+type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number};
 type Work={site:Site;cursor:number};
 type State={version:1;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
-const KINDS:Kind[]=['names','windmill','castle','village','garden','watchtower'];
+const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
 const LAND=['grass_block','dirt','coarse_dirt','podzol','stone','sand','gravel','snow_block'];
 const OPEN=new Set(['air','short_grass','tall_grass','grass','fern','large_fern','dead_bush',
@@ -22,7 +22,7 @@ const GLYPHS:Record<string,string[]>={
  E:['111','100','110','100','111']
 };
 const dims:Record<Kind,{w:number;d:number;h:number}> = {
- names:{w:15,d:4,h:19},windmill:{w:8,d:9,h:22},castle:{w:14,d:14,h:20},
+ names:{w:15,d:4,h:19},windmill:{w:8,d:9,h:22},pinwheels:{w:8,d:6,h:14},castle:{w:14,d:14,h:20},
  village:{w:13,d:13,h:13},garden:{w:9,d:9,h:7},watchtower:{w:6,d:6,h:19}
 };
 function shape(kind:Kind):Block[]{
@@ -76,6 +76,15 @@ function shape(kind:Kind):Block[]{
   put(0,10,-5,'oak_log'); // Rotating arms are actual blocks replicated to visitors.
   for(let t=1;t<=4;t++)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])
    put(dx*t,10+dy*t,-6,'white_wool');
+ }else if(kind==='pinwheels'){
+  // Three small wind-driven toys, each with its own real moving block blades.
+  rect(-8,8,-4,4,0,'moss_block');
+  for(const x of [-5,0,5]){
+   for(let y=1;y<=9;y++)put(x,y,0,'oak_fence');
+   put(x,7,-2,'oak_log');
+   for(let t=1;t<=2;t++)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])
+    put(x+dx*t,7+dy*t,-3,'red_wool');
+  }
  }else if(kind==='castle'){
   rect(-9,9,-9,9,0,'stone_bricks');
   for(let y=1;y<=10;y++)for(let x=-9;x<=9;x++)for(let z=-9;z<=9;z++){
@@ -142,11 +151,11 @@ export function installGfcWorldAttractions(game:Game){
  }catch{}
  const state=saved;
  const persist=()=>{try{localStorage.setItem(key,JSON.stringify(state))}catch{}};
- let ticks=0,blocked='',finishedPending=false,spinnerFrame=0;
+ let ticks=0,blocked='',finishedPending=false,spinnerFrame=0,pinwheelFrame=0;
  const siteFor=(kind:Kind,tries:number)=>{
-  const dir:[number,number][]=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1]];
+  const dir:[number,number][]=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,-1],[1,-1]];
   const i=KINDS.indexOf(kind),[dx,dz]=dir[Math.max(0,i)];
-  const baseline=[45,78,110,142,170,200][Math.max(0,i)];
+  const baseline=[45,78,110,142,170,200,230][Math.max(0,i)];
   const offsets=[[0,0],[12,0],[-12,0],[0,12],[0,-12],[16,16],[-16,-16],[-16,16],[16,-16]];
   const [ox,oz]=offsets[tries%offsets.length],extra=Math.floor(tries/offsets.length)*22;
   return {x:anchor.x+Math.round(dx*(baseline+extra))+ox,
@@ -261,6 +270,39 @@ export function installGfcWorldAttractions(game:Game){
   }
   spinnerFrame=1-spinnerFrame;
  }
+ function animatePinwheels(){
+  const site=state.completed.find(s=>s.kind==='pinwheels');
+  if(!site||!game.level.world.isLoaded(site.x,site.z))return;
+  const front=site.z-3,cy=site.y+7;
+  const positions=(f:number)=>{
+   const result=new Set<string>();
+   for(const ox of [-5,0,5])
+    for(let t=1;t<=2;t++)for(const [dx,dy] of (f===0?
+      [[1,0],[-1,0],[0,1],[0,-1]]:[[1,1],[-1,1],[1,-1],[-1,-1]]))
+     result.add((site.x+ox+dx*t)+','+(cy+dy*t));
+   return result;
+  };
+  const matches=(frame:number)=>{
+   const on=positions(frame),off=positions(1-frame);
+   for(const point of new Set([...on,...off])){
+    const [x,y]=point.split(',').map(Number);
+    if(!game.level.world.isLoaded(x,front))return false;
+    if(nameAt(x,y,front)!==(on.has(point)?'red_wool':'air'))return false;
+   }
+   return true;
+  };
+  if(!matches(pinwheelFrame)){
+   if(matches(1-pinwheelFrame))pinwheelFrame=1-pinwheelFrame;
+   else return;
+  }
+  const old=positions(pinwheelFrame),next=positions(1-pinwheelFrame);
+  for(const point of new Set([...old,...next])){
+   const [x,y]=point.split(',').map(Number);
+   const name=next.has(point)?'red_wool':'air';
+   if(nameAt(x,y,front)!==name)game.level.setBlock(x,y,front,S(name));
+  }
+  pinwheelFrame=1-pinwheelFrame;
+ }
  function tick(){
   if(!game.inWorld||game.mode!=='host'||!game.spawned)return;
   ticks++;
@@ -275,6 +317,11 @@ export function installGfcWorldAttractions(game:Game){
      v.state==='play'&&v.player&&Math.hypot(v.player.x-mill.x,v.player.z-mill.z)<65);
    game.chunks.setTicket('gfc-windmill',mill&&close?[mill.x>>4,mill.z>>4,1]:null);
    if(close)animate();
+   const pins=state.completed.find(s=>s.kind==='pinwheels');
+   const pinClose=pins&&game.server&&[...game.server.sessions.values()].some(v=>
+    v.state==='play'&&v.player&&Math.hypot(v.player.x-pins.x,v.player.z-pins.z)<65);
+   game.chunks.setTicket('gfc-pinwheels',pins&&pinClose?[pins.x>>4,pins.z>>4,1]:null);
+   if(pinClose)animatePinwheels();
   }
   if(ticks%200===0)persist();
  }
@@ -284,7 +331,8 @@ export function installGfcWorldAttractions(game:Game){
    placedAttractions:state.completed.length,totalAttractions:KINDS.length,
    attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z})),
    building:w?{name:w.site.kind,done:w.cursor,total:shape(w.site.kind).length}:null,
-   blocked,searches:state.attempts,windmillAnimated:state.completed.some(s=>s.kind==='windmill')};
+   blocked,searches:state.attempts,windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
+   pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }
  function destination(){return state.completed.find(s=>s.kind==='names')||
    state.completed.at(-1)||state.work?.site||null;}

@@ -73,7 +73,9 @@ function shape(kind:Kind):Block[]{
   rect(-4,4,-4,4,15,'spruce_planks');
   rect(-3,3,-3,3,16,'spruce_planks');
   for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)put(x,17,z,'spruce_planks');
-  put(0,10,-5,'oak_log'); // Rotor arms animate separately on the host.
+  put(0,10,-5,'oak_log'); // Rotating arms are actual blocks replicated to visitors.
+  for(let t=1;t<=4;t++)for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])
+   put(dx*t,10+dy*t,-6,'white_wool');
  }else if(kind==='castle'){
   rect(-9,9,-9,9,0,'stone_bricks');
   for(let y=1;y<=10;y++)for(let x=-9;x<=9;x++)for(let z=-9;z<=9;z++){
@@ -142,13 +144,13 @@ export function installGfcWorldAttractions(game:Game){
  const persist=()=>{try{localStorage.setItem(key,JSON.stringify(state))}catch{}};
  let ticks=0,blocked='',finishedPending=false,spinnerFrame=0;
  const siteFor=(kind:Kind,tries:number)=>{
-  const dir:[[number,number],[number,number],[number,number],[number,number],
-   [number,number],[number,number],[number,number],[number,number]]=
-   [[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[-1,-1],[1,-1]];
-  const n=tries%dir.length,ring=Math.floor(tries/dir.length);
-  const rad=[36,48,60,74,88,105,122,140][ring%8];
-  const [dx,dz]=dir[n];
-  return {x:anchor.x+Math.round(dx*rad),z:anchor.z+Math.round(dz*rad)};
+  const dir:[number,number][]=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1]];
+  const i=KINDS.indexOf(kind),[dx,dz]=dir[Math.max(0,i)];
+  const baseline=[45,78,110,142,170,200][Math.max(0,i)];
+  const offsets=[[0,0],[12,0],[-12,0],[0,12],[0,-12],[16,16],[-16,-16],[-16,16],[16,-16]];
+  const [ox,oz]=offsets[tries%offsets.length],extra=Math.floor(tries/offsets.length)*22;
+  return {x:anchor.x+Math.round(dx*(baseline+extra))+ox,
+   z:anchor.z+Math.round(dz*(baseline+extra))+oz};
  };
  const nameAt=(x:number,y:number,z:number)=>blockOf(game.level.getState(x,y,z)).name;
  const surface=(x:number,z:number):number|null=>{
@@ -183,12 +185,20 @@ export function installGfcWorldAttractions(game:Game){
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
   if(!kind||state.work)return;
-  const {x,z}=siteFor(kind,state.attempts++);
+  const {x,z}=siteFor(kind,state.attempts);
+  // Only one temporary ticket loads the future exploration zone.
+  // The host never moves and the world's seed is unchanged.
+  game.chunks.setTicket('gfc-landmarks',[x>>4,z>>4,2]);
+  const {w,d}=dims[kind];
+  for(let xx=x-w-2;xx<=x+w+2;xx+=8)
+   for(let zz=z-d-2;zz<=z+d+2;zz+=8)
+    if(!game.level.world.isLoaded(xx,zz)){blocked='Carregando terreno para explorar';return;}
+  state.attempts++;
   const y=surface(x,z);
   if(y!==null&&siteAllowed(kind,x,y,z)){
    state.work={site:{kind,x,y,z},cursor:0};
    blocked='';persist();
-  }
+  }else blocked='Procurando terreno livre e sem construções';
  }
  function buildBatch(){
   const w=state.work;if(!w||finishedPending)return;
@@ -211,7 +221,8 @@ export function installGfcWorldAttractions(game:Game){
    finishedPending=true;
    // Save actual blocks before committing a completed-site marker.
    void game.saveWorld().then(()=>{
-    state.completed.push({...w.site});state.work=null;blocked='';finishedPending=false;
+    state.completed.push({...w.site});state.work=null;state.attempts=0;blocked='';finishedPending=false;
+    game.chunks.setTicket('gfc-landmarks',null);
     persist();
    }).catch(()=>{finishedPending=false;blocked='Falha ao salvar estrutura';});
   }
@@ -229,14 +240,20 @@ export function installGfcWorldAttractions(game:Game){
   const mill=state.completed.find(s=>s.kind==='windmill');
   if(!mill||!game.level.world.isLoaded(mill.x,mill.z))return;
   const front=mill.z-6,cy=mill.y+10;
-  const before=arms(spinnerFrame),after=arms(1-spinnerFrame);
-  // Only operate on our rotor frame, and stop permanently if any player alters it.
-  for(const p of new Set([...before,...after])){
-   const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
-   if(!game.level.world.isLoaded(x,front))return;
-   const n=nameAt(x,y,front),expected=before.has(p)?'white_wool':'air';
-   if(n!==expected)return;
+  const matches=(frame:number)=>{
+   const expected=arms(frame),other=arms(1-frame);
+   for(const p of new Set([...expected,...other])){
+    const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
+    if(!game.level.world.isLoaded(x,front))return false;
+    if(nameAt(x,y,front)!==(expected.has(p)?'white_wool':'air'))return false;
+   }
+   return true;
+  };
+  if(!matches(spinnerFrame)){
+   if(matches(1-spinnerFrame))spinnerFrame=1-spinnerFrame;
+   else return; // A player may have edited the rotor: never overwrite it.
   }
+  const before=arms(spinnerFrame),after=arms(1-spinnerFrame);
   for(const p of new Set([...before,...after])){
    const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
    const expected=after.has(p)?'white_wool':'air';
@@ -247,9 +264,18 @@ export function installGfcWorldAttractions(game:Game){
  function tick(){
   if(!game.inWorld||game.mode!=='host'||!game.spawned)return;
   ticks++;
+  if(ticks%40===0&&state.work){
+   const s=state.work.site;game.chunks.setTicket('gfc-landmarks',[s.x>>4,s.z>>4,2]);
+  }
   if(ticks%4===0&&state.work)buildBatch();
   if(ticks%40===0&&!state.work&&state.completed.length<KINDS.length)trySelect();
-  if(ticks%40===0)animate();
+  if(ticks%40===0){
+   const mill=state.completed.find(s=>s.kind==='windmill');
+   const close=mill&&game.server&&[...game.server.sessions.values()].some(v=>
+     v.state==='play'&&v.player&&Math.hypot(v.player.x-mill.x,v.player.z-mill.z)<65);
+   game.chunks.setTicket('gfc-windmill',mill&&close?[mill.x>>4,mill.z>>4,1]:null);
+   if(close)animate();
+  }
   if(ticks%200===0)persist();
  }
  function status(){

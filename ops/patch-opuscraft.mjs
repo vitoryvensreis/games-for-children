@@ -91,7 +91,7 @@ patch('src/main.ts',
     // practical horizon, while keeping the phone radius inexpensive.
     const familyOnPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
       (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-    game.opts.renderDistance = familyOnPhone ? 3 : 5;
+    game.opts.renderDistance = familyOnPhone ? 3 : 4;
     game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
     // Use economical multiplayer defaults on every device, including desktop.
     // The browser's own GPU still renders the world, but without heavy weather
@@ -123,7 +123,7 @@ patch('src/gui/screens/multiplayer.ts',
       this.closeLists();
       const onPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-      this.game.opts.renderDistance = onPhone ? 3 : 5;
+      this.game.opts.renderDistance = onPhone ? 3 : 4;
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
     } catch (error) {
       this.game.setScreen(this);
@@ -198,7 +198,7 @@ patch('src/net/transport/webSocket.ts',
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
 // Defer far-field terrain meshing until guests have spawned and can play.
-// The host advertises five chunks for the desktop, but rendering starts at two
+// The host advertises four chunks for the desktop, but rendering starts at two
 // and adds one ring at a time. This avoids a startup burst of WebGL mesh jobs.
 patch('src/game/game.ts',
  "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",

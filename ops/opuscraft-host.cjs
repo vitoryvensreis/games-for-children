@@ -260,12 +260,12 @@ async function tickNpc(){
   // Each 20-second execution is auditable even if nothing is placed.
   if(result?.ok){
    const snapshot={step:result.steps,built:result.built,cursor:result.buildCursor,
-    reason:result.buildReason,visitors:result.visitors,
+    reason:result.actionReason||result.buildReason,visitors:result.visitors,
     health:result.needs?.health,oxygen:result.needs?.oxygen,thirst:result.needs?.thirst,
     hunger:result.needs?.hunger,goal:result.currentGoal};
    log('NPC_STEP',JSON.stringify({...snapshot,action:safeAction,source:npcSource,walkingTo:result.walkingTo}));
    // Save meaningful changes, not the noisy repeated 20-second heartbeat.
-   const key=[safeAction,result.built,result.buildCursor,result.buildReason,result.currentGoal,Math.floor((result.needs?.health||20)/2)].join('|');
+   const key=[safeAction,result.built,result.buildCursor,result.actionReason,result.currentGoal,Math.floor((result.needs?.health||20)/2)].join('|');
    if(key!==npcLastAudit||Date.now()-npcLastAuditAt>120000){
     npcLastAudit=key;npcLastAuditAt=Date.now();
     publishNpc('step',snapshot);

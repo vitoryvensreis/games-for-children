@@ -127,8 +127,8 @@ async function openOpusCraft(){
    try{
     const status=await api('admin/opuscraft/npc');
     if(!status.ready)throw Error('O mundo ainda está iniciando.');
-    await api('admin/opuscraft/npc/visit','POST',{});
-    notify('Você chegou à área das aventuras!');
+    const visit=await api('admin/opuscraft/npc/visit','POST',{});
+    notify(visit.action==='waiting_for_landmark'?'Ponto de encontro alcançado. O letreiro ainda está sendo preparado.':'Você chegou à área das aventuras!');
    }catch(e){notify(e.message)}
    finally{npcVisit.disabled=false}
   };

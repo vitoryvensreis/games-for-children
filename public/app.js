@@ -86,7 +86,7 @@ async function openOpusCraft(){
   '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div></div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<div class="opus-player"><div><strong>🌿 Andarilha</strong><small>Personagem autônoma do servidor</small></div><button id="opusNpcVisit" type="button">Ir até ela</button></div>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -120,6 +120,17 @@ async function openOpusCraft(){
    }catch(e){if(playersList.isConnected)playersList.textContent='Jogadores indisponíveis: '+e.message}
    finally{rosterBusy=false}
   }
+  const npcVisit=$('#opusNpcVisit');
+  if(npcVisit)npcVisit.onclick=async()=>{
+   npcVisit.disabled=true;
+   try{
+    const status=await api('admin/opuscraft/npc');
+    if(!status.ready)throw Error('A personagem ainda está preparando o seu cantinho.');
+    await api('admin/opuscraft/npc/visit','POST',{});
+    notify('Você foi até a Andarilha!');
+   }catch(e){notify(e.message)}
+   finally{npcVisit.disabled=false}
+  };
   $('#opusPlayersToggle').onclick=()=>{
    playersPanel.hidden=!playersPanel.hidden;
    if(!playersPanel.hidden)void showFamilyPlayers();

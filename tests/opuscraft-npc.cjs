@@ -48,7 +48,7 @@ test('Agent keeps roaming safely if no buildable plot exists',()=>{
  assert.match(agent,/for\(const radius of \[12,16,20,24,32,40\]\)/);
  assert.match(agent,/function roam\(\):boolean/);
  assert.match(agent,/if\(!plot && action!=='observe'\)\{\s*\/\/[^\n]*\n\s*roam\(\)/);
- assert.match(agent,/distance\(x,z,start\.x,start\.z\)>16\)continue/);
+ assert.match(agent,/distance\(x,z,anchor\.x,anchor\.z\)>16\)continue/);
  assert.match(agent,/kids\.some\(p=>distance\(p\.x,p\.z,x,z\)<18\)\)continue/);
  assert.match(agent,/if\(move\(x,z\)\)\{roamMoves\+\+;return true;/);
  assert.match(agent,/now-lastPlotSearch>=18000/);
@@ -79,4 +79,20 @@ test('Headless host refreshes OpusCraft code after deploy but retains family Ind
  assert.ok(host.includes('gfcHost=1&build='));
  assert.ok(host.includes('userDataDir:PROFILE'));
  assert.ok(!host.includes('rmSync(PROFILE'));
+});
+
+test('NPC uses the native player movement/physics tick instead of teleporting',()=>{
+ const agent=read('ops/gfc-npc.ts'),patch=read('ops/patch-opuscraft.mjs');
+ assert.match(agent,/function drive\(\):void/);
+ assert.match(agent,/inp\.forward=true/);
+ assert.match(agent,/resident\.yaw\+=/);
+ assert.match(agent,/walkingTicks,walkedBlocks:/);
+ assert.match(agent,/walkingTo:waypoint/);
+ assert.match(agent,/resident\.swing\(\)/);
+ assert.match(agent,/if\(!waypoint&&driveTicks%120===0\)roam\(\)/);
+ assert.doesNotMatch(agent,/resident\.moveTo\(/);
+ assert.ok(patch.includes("(window as any).__gfcNpc?.drive?.()"));
+ assert.ok(patch.includes("this.server?.receive();"));
+ assert.ok(patch.includes("this.level.tick();"));
+ assert.match(agent,/distance\(p\.x,p\.z,plot!\.x,plot!\.z\)<4/);
 });

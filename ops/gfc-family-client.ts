@@ -7,15 +7,15 @@ export function prepareFamilyClient(game: Game): void {
   (window as any).__gfcFamilyJoining = true;
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-  game.opts.renderDistance = mobile ? 4 : 5;
-  game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 2);
+  game.opts.renderDistance = mobile ? 2 : 3;
+  game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 1);
   game.opts.graphics = 0;
   game.opts.fancy = false;
   game.opts.clouds = 0;
-  game.opts.particles = 2;
+  game.opts.particles = 0;
   game.opts.entityShadows = false;
   game.opts.smoothLighting = false;
-  game.opts.maxFps = Math.min(game.opts.maxFps, 60);
+  game.opts.maxFps = Math.min(game.opts.maxFps, mobile ? 30 : 40);
 }
 
 // Test exactly the authenticated public relay route, not the unrelated lobby WS.

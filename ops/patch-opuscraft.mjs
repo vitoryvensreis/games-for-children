@@ -34,6 +34,7 @@ patch('src/main.ts',
 patch('src/main.ts',
  "  installScreens(game);",
  `  installScreens(game);
+  if (params.has('gfcJoin')) installGfcRotors(game);
   if (!params.has('gfcHost')) {
     let accessLost=false;
     setInterval(async () => {
@@ -57,7 +58,7 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
@@ -226,6 +227,12 @@ patch('src/game/game.ts',
     const ratio = family ? (mobile ? 0.82 : 0.70) : 1;
     const maxW = family ? (mobile ? 1200 : 1440) : 8192;
     const dpr = Math.min(native * ratio, maxW / Math.max(1,window.innerWidth));`);
+
+// Draw rotating 3D sails in the native entity pass, after opaque terrain.
+// This hook is inert in the VPS host and in private single-player worlds.
+patch('src/render/renderer.ts',
+ "    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });",
+ "    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });\n    (window as any).__gfcRotorRender?.(this,cam);");
 
 // The family multiplayer can rain in the simulation (weather and crops
 // still behave normally), without drawing thousands of fullscreen streaks

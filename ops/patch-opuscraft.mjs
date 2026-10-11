@@ -225,7 +225,7 @@ patch('src/render/renderer.ts',
 // above dense jungle foliage. Solo worlds retain vanilla precipitation.
 patch('src/render/renderer.ts',
  "    if (e.level && e.weather.rain > 0) {",
- "    if (e.level && e.weather.rain > 0 && !((window as any).__gfcFamilySession === true && e.mode === 'client')) {");
+ "    if (e.level && e.weather.rain > 0 && !((window as any).__gfcFamilySession === true && (window as any).__game?.mode === 'client')) {");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 3;",
  "export const CHUNKS_PER_TICK = 3;");

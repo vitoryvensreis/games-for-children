@@ -81,7 +81,7 @@ node --test tests/integration.cjs
   construções próprias, diálogos ou qualquer conexão com Groq, Gemini e outras IAs.
   O mundo **permanece criativo para as crianças**.
 - A VPS recebe um pequeno mecanismo de atrações não-IA: letreiro de blocos com os
-  nomes **CAIQUE** e **CAUÃ** (com til), moinho com pás animadas quando há visitantes,
+  nomes **CAIQUE** e **CAUÃ** (com til), moinho com pás animadas quando há visitantes, três cataventos giratórios,
   castelo, vila, jardim e torre de observação.
 - As atrações são construídas **no mesmo mundo**, por lotes limitados, apenas em
   áreas livres e previamente inspecionadas. O sistema usa tickets temporários

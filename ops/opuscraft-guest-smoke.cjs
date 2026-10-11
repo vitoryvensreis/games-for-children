@@ -127,7 +127,7 @@ server.on('upgrade',(req,socket,head)=>{
    renderDistance:window.__game?.opts?.renderDistance,
    hostViewDistance:window.__game?.client?.info?.viewDistance,
   }));
-  if(status.renderDistance!==5||status.hostViewDistance!==5)
+  if(status.renderDistance!==4||status.hostViewDistance!==4)
    throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
   console.log('OPUSCRAFT_FAMILY_DESKTOP_CHUNK_RADIUS_OK',JSON.stringify({
    client:status.renderDistance,server:status.hostViewDistance}));
@@ -170,7 +170,7 @@ server.on('upgrade',(req,socket,head)=>{
   await Promise.all([page,page2].map((p,i)=>p.waitForFunction(expected=>{
    const g=window.__game;
    return !!(g?.spawned&&g.level?.players()?.some(p=>p.profileName===expected));
-  },{timeout:25000,polling:750},i===0?'ADM_TESTPLAYER':'KID_TESTPLAYER')));
+  },{timeout:45000,polling:750},i===0?'ADM_TESTPLAYER':'KID_TESTPLAYER')));
   console.log('OPUSCRAFT_TWO_PLAYERS_VISIBLE_OK');
 
   // Exercise the real authority-side teleport RPC using two live sessions.

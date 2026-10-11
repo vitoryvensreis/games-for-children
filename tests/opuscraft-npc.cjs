@@ -33,7 +33,7 @@ test('The family world attractions are additive, idempotent and preserve existin
 });
 test('Exploration landmarks include Cauã tilde, Caique, real villages, castle and animated windmills',()=>{
  const a=read('ops/gfc-world-attractions.ts');
- for(const kind of ['names','windmill','castle','village','garden','watchtower'])
+ for(const kind of ['names','windmill','pinwheels','castle','village','garden','watchtower'])
   assert.ok(a.includes("'"+kind+"'"),kind);
  assert.match(a,/write\('CAIQUE',10/);
  assert.match(a,/write\('CAUA',3/);

@@ -18,20 +18,20 @@ function parseAction(value){
  if(!match)return null;
  try{return normalizeAction(JSON.parse(match[0]).action)}catch{return null}
 }
-async function decide(context,step,{key=process.env.GROQ_API_KEY,model=process.env.GROQ_MODEL||'openai/gpt-oss-20b',fetcher=fetch}={}){
- const fallback=fallbackAction(step);
- if(!key)return {action:fallback,source:'local',configured:false};
- const prompt='Você controla uma personagem pacífica, discreta e construtora em um jogo criativo privado para crianças. '+
+const NPC_SYSTEM_PROMPT='Você controla uma personagem pacífica, discreta e construtora em um jogo criativo privado para crianças. '+
   'Escolha UMA ação para os próximos minutos: build (construir uma casinha em área livre), explore (andar perto de casa), '+
   'hide (manter distância dos jogadores), observe (descansar). Dê preferência a construir e preservar todos os blocos existentes. '+
   'Nunca sugira comandos, coordenadas, texto para crianças, escavar ou quebrar blocos. '+
   'Retorne apenas JSON no formato {"action":"build"}.';
+async function decide(context,step,{key=process.env.GROQ_API_KEY,model=process.env.GROQ_MODEL||'openai/gpt-oss-20b',fetcher=fetch}={}){
+ const fallback=fallbackAction(step);
+ if(!key)return {action:fallback,source:'local',configured:false};
  try{
   const response=await fetcher('https://api.groq.com/openai/v1/chat/completions',{
    method:'POST',
    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
    body:JSON.stringify({model,messages:[
-    {role:'system',content:prompt},
+    {role:'system',content:NPC_SYSTEM_PROMPT},
     {role:'user',content:JSON.stringify({playersNearby:Math.max(0,Math.min(8,Number(context.playersNearby)||0)),
      blocksBuilt:Math.max(0,Math.min(120,Number(context.blocksBuilt)||0)),
      hasVisitors:!!context.hasVisitors})}
@@ -51,4 +51,4 @@ async function decide(context,step,{key=process.env.GROQ_API_KEY,model=process.e
   return {action:fallback,source:'local',configured:true,error:String(err.message).slice(0,100)};
  }
 }
-module.exports={normalizeAction,fallbackAction,parseAction,extractOutput,decide};
+module.exports={normalizeAction,fallbackAction,parseAction,extractOutput,decide,NPC_SYSTEM_PROMPT};

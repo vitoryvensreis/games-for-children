@@ -180,6 +180,22 @@ server.on('upgrade',(req,socket,head)=>{
    throw Error('The live two-player teleport failed: '+JSON.stringify({status:tp.status,result:tpResult}));
   console.log('OPUSCRAFT_TWO_PLAYER_TELEPORT_OK',JSON.stringify(tpResult));
 
+  // NPC is the existing host avatar; it must not take another family player slot.
+  const npc=await fetch('http://127.0.0.1:4173/__npc/status').then(r=>r.json());
+  if(!npc.ok || npc.name!=='Andarilha')throw Error('NPC host bridge missing: '+JSON.stringify(npc));
+  const visit=await fetch('http://127.0.0.1:4173/__npc/visit',{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:adm.name})
+  });
+  const visitResult=await visit.json();
+  if(visit.status!==200||!visitResult.ok)
+   throw Error('Administrator could not visit resident: '+JSON.stringify(visitResult));
+  const badVisit=await fetch('http://127.0.0.1:4173/__npc/visit',{
+   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:kid.name})
+  });
+  if(badVisit.status!==400)throw Error('Child identity was accepted as an administrator by the NPC host');
+  console.log('OPUSCRAFT_NPC_ADMIN_VISIT_OK');
+
+
  }catch(err){
   console.error('OpusCraft guest multiplayer smoke failed:',err?.stack||err);
   if(errors.length)console.error('Diagnostics:',errors.slice(-20));

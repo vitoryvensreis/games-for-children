@@ -185,6 +185,33 @@ if(pathname==='/api/opuscraft/teleport'&&req.method==='POST'){
   return json(res,200,{ok:true,dimension:data.dimension});
  }catch{return json(res,503,{error:'Mundo ocupado. Tente novamente em alguns instantes'})}
 }
+// The resident is a host-owned avatar; only the administrator can locate or visit it.
+if(pathname==='/api/admin/opuscraft/npc'&&req.method==='GET'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
+ try{
+  const r=await fetch('http://127.0.0.1:4173/__npc/status',{signal:AbortSignal.timeout(3500)});
+  if(!r.ok)return json(res,503,{error:'A personagem ainda nao esta disponivel'});
+  return json(res,200,await r.json());
+ }catch{return json(res,503,{error:'Servidor da familia indisponivel'})}
+}
+if(pathname==='/api/admin/opuscraft/npc/visit'&&req.method==='POST'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
+ const current=now();
+ if(current-(lastOpusTeleport.get(u.id)||0)<8000)
+  return json(res,429,{error:'Aguarde alguns segundos para teleportar novamente'});
+ if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
+  return json(res,409,{error:'Entre primeiro no servidor da familia'});
+ try{
+  const r=await fetch('http://127.0.0.1:4173/__npc/visit',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:opusName(u)}),signal:AbortSignal.timeout(5500)
+  });
+  const result=await r.json();
+  if(!result.ok)return json(res,409,{error:result.error||'Personagem indisponivel'});
+  lastOpusTeleport.set(u.id,current);
+  return json(res,200,{ok:true});
+ }catch{return json(res,503,{error:'Nao foi possivel visitar a personagem agora'})}
+}
 if(pathname==='/api/opuscraft/world-backups'&&req.method==='GET'){
  return json(res,200,{backups:opusBackupIndex(u).sort((a,b)=>b.created.localeCompare(a.created))});
 }

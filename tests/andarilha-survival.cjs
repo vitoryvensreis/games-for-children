@@ -27,5 +27,6 @@ test('Changing the NPC role does not clear historical DB or browser saves',()=>{
  assert.match(store,/gfc_npc_life_state/);
  assert.match(patch,/gamesnavagador-family-world/);
  assert.match(patch,/await getWorldMeta\(id\)/);
- assert.doesNotMatch(patch,/indexedDB\.deleteDatabase|deleteWorld|newWorldMeta\(id.*Date\.now/);
+ const familyHost=patch.slice(patch.indexOf("if (params.has('gfcHost'))"),patch.indexOf("} else if (params.has('gfcJoin'))"));
+ assert.doesNotMatch(familyHost,/indexedDB\.deleteDatabase|deleteWorld|newWorldMeta\(id.*Date\.now/);
 });

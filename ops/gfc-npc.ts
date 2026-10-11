@@ -138,12 +138,19 @@ export function installGfcNpc(game:Game):void{
    const bx=x+dx,bz=z+dz;
    const fy=surface(bx,bz);
    if(fy===null||Math.abs(fy-y)>3)return false;
-   for(let yy=fy;yy<=fy+18;yy++){
+   for(let yy=fy-6;yy<=fy+18;yy++){
     const n=blockName(bx,yy,bz);
-    // Survey only previously undeveloped clearings; even natural-looking logs,
-    // stone or soil ABOVE the ground could be part of a family construction.
-    if(!/^(?:air|short_grass|tall_grass|grass|fern|large_fern|dead_bush|dandelion|poppy|oxeye_daisy|cornflower|snow)$/.test(n))
-     return false;
+    // Natural-looking underground basements and tunnels usually contain air
+    // cavities; reject them rather than excavate into a possible family build.
+    // Solid rock/soil must fill the subterranean clearance volume.
+    if(yy<fy){
+     if(n==='air'||n==='cave_air'||n==='void_air'||!NATURAL.test(n))return false;
+    }else{
+     // Clearings only; even natural-looking logs, stone and soil ABOVE
+     // surface could belong to a family building.
+     if(!/^(?:air|short_grass|tall_grass|grass|fern|large_fern|dead_bush|dandelion|poppy|oxeye_daisy|cornflower|snow)$/.test(n))
+      return false;
+    }
    }
   }
   return true;

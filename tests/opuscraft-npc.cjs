@@ -41,6 +41,24 @@ test('Agent changes only empty blocks at a fixed small blueprint and builds in e
  assert.match(patch,/getWorldMeta\(id\)/);
  assert.match(build,/cp "\$REPO_ROOT\/ops\/gfc-npc\.ts" src\/gfc-npc\.ts/);
 });
+
+test('Agent keeps roaming safely if no buildable plot exists',()=>{
+ const agent=read('ops/gfc-npc.ts');
+ // The plot finder must include nearby and cardinal candidates, without overwriting blocks.
+ assert.match(agent,/for\(const radius of \[12,16,20,24,32,40\]\)/);
+ assert.match(agent,/function roam\(\):boolean/);
+ assert.match(agent,/if\(!plot && action!=='observe'\)\{\s*\/\/[^\n]*\n\s*roam\(\)/);
+ assert.match(agent,/distance\(x,z,start\.x,start\.z\)>16\)continue/);
+ assert.match(agent,/kids\.some\(p=>distance\(p\.x,p\.z,x,z\)<18\)\)continue/);
+ assert.match(agent,/if\(move\(x,z\)\)\{roamMoves\+\+;return true;/);
+ assert.match(agent,/now-lastPlotSearch>=18000/);
+ assert.match(agent,/for\(let checked=0;checked<4;checked\+\+\)/);
+ assert.match(agent,/nextPlotCandidate\+\+%candidates\.length/);
+ assert.match(agent,/plotSearchChecked:nextPlotCandidate/);
+ assert.match(agent,/roamMoves,lastMoveOk/);
+ assert.match(agent,/if\(old!==0\)return/);
+});
+
 test('NPC API and visit authorization are restricted to current administrator session',()=>{
  const server=read('server.cjs'),host=read('ops/opuscraft-host.cjs'),app=read('public/app.js');
  assert.match(server,/pathname==='\/api\/admin\/opuscraft\/npc\/visit'/);

@@ -24,7 +24,7 @@ test('The family world attractions are additive, idempotent and preserve existin
  assert.match(a,/const OPEN=new Set/);
  assert.match(a,/if\(!OPEN\.has\(current\)\)/);
  assert.match(a,/if\(!OPEN\.has\(nameAt\(xx,yy,zz\)\)\)return null/);
- assert.match(a,/state\.work=\{site:\{kind,x,y:platformY,z\},cursor:0\}/);
+ assert.match(a,/state\.work=\{site:\{kind,x,y:platformY,z,elevated:normal===null\},cursor:0\}/);
  assert.match(a,/game\.level\.setBlock\(x,y,z,S\(b\.name\)\)/);
  assert.match(a,/await|\.then\(\(\)=>/);
  assert.match(a,/game\.saveWorld\(\)/);
@@ -86,7 +86,7 @@ test('Only family multiplayer receives lower graphics defaults on weak devices',
  assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
  assert.match(p,/game\.opts\.graphics = 0/);
  assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
- assert.match(p,/location\.search\.includes\('gfcJoin'\)/);
+ assert.match(patch,/location\.search\.includes\('gfcJoin'\)/);
  assert.match(p,/export const CHUNKS_PER_TICK = 5/);
  assert.match(p,/game\.opts\.particles = 2/);
  assert.match(p,/game\.opts\.entityShadows = false/);

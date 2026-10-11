@@ -29,7 +29,7 @@ export function installGfcSiteCare(
  game:Game,state:CareState,planFor:(kind:FamilyKind)=>FamilyBlock[],
  persist:()=>void,parked:()=>boolean,canStart:()=>boolean
 ){
- let ticks=0,busy=false,reason='Aguardando manutenção do terreno',repaired=0,skipped=0;
+ let ticks=0,busy=false,reason='Aguardando manutenção do terreno',repaired=0;
  const nameAt=(x:number,y:number,z:number)=>blockOf(game.level.getState(x,y,z)).name;
  const loaded=(x:number,z:number)=>game.level.world.isLoaded(x,z);
  const release=()=>game.chunks.setTicket('gfc-site-care',null);

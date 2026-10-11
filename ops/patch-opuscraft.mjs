@@ -186,14 +186,14 @@ patch('src/net/transport/webSocket.ts',
 // outward (5 desktop / 3 mobile) without a huge synchronous mesh burst.
 patch('src/game/game.ts',
  "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
- `    this.chunks.renderDistance = login && location.search.includes('gfcJoin') ?
-      Math.min(3,this.opts.renderDistance) : this.opts.renderDistance;
+ `    this.chunks.renderDistance = login && this.mode === 'client' && (window as any).__gfcFamilySession === true ?
+      Math.min(1,this.opts.renderDistance) : this.opts.renderDistance;
     this.chunks.smoothLighting = this.opts.smoothLighting;`);
 patch('src/game/game.ts',
  "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
  `    client?.receive();
     if (this.mode === 'client' && this.inWorld && this.spawned &&
-        location.search.includes('gfcJoin') && this.chunks &&
+        (window as any).__gfcFamilySession === true && this.chunks &&
         this.ticks % 80 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
       this.chunks.renderDistance++;
       this.renderer.renderDistance = this.chunks.renderDistance;
@@ -206,7 +206,7 @@ patch('src/game/game.ts',
 patch('src/game/game.ts',
  "    const dpr = window.devicePixelRatio || 1;",
  `    const native = window.devicePixelRatio || 1;
-    const family = location.search.includes('gfcJoin');
+    const family = (window as any).__gfcFamilySession === true && this.mode === 'client';
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const ratio = family ? (mobile ? 0.82 : 0.70) : 1;
     const maxW = family ? (mobile ? 1200 : 1440) : 8192;
@@ -223,7 +223,7 @@ patch('src/render/renderer.ts',
 // above dense jungle foliage. Solo worlds retain vanilla precipitation.
 patch('src/render/renderer.ts',
  "    if (e.level && e.weather.rain > 0) {",
- "    if (e.level && e.weather.rain > 0 && !location.search.includes('gfcJoin')) {");
+ "    if (e.level && e.weather.rain > 0 && !((window as any).__gfcFamilySession === true && e.mode === 'client')) {");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 3;",
  "export const CHUNKS_PER_TICK = 3;");

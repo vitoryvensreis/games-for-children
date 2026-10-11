@@ -339,3 +339,14 @@ body:has(.pong-game) #app{position:fixed;inset:0;width:100%;height:100dvh;min-wi
 .npc-vital-track{grid-column:1/-1;height:7px;background:#dce4f2;border-radius:30px;overflow:hidden}
 .npc-vital-track>i{display:block;height:100%;max-width:100%;background:#416caa;border-radius:30px;transition:width .3s ease}
 @media(max-width:520px){.npc-vitals{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.npc-vital{padding:8px}}
+
+/* Connection failure shown above the game instead of leaving a silent menu. */
+.opuscraft-join-alert[hidden]{display:none!important}
+.opuscraft-join-alert{position:absolute;z-index:65;top:50%;left:50%;
+ transform:translate(-50%,-50%);width:min(420px,calc(100vw - 32px));max-height:85dvh;
+ overflow:auto;background:#132044;color:#fff;border:1px solid #a7bdf8;
+ box-shadow:0 12px 44px #0009;border-radius:18px;padding:22px;text-align:center}
+.opuscraft-join-alert strong{display:block;font-weight:800;font-size:17px}
+.opuscraft-join-alert p{font-size:13px;color:#dbe7ff;line-height:1.5}
+.opuscraft-join-alert .row{justify-content:center;gap:10px;flex-wrap:wrap}
+.opuscraft-join-alert button{min-height:40px;font-size:13px;background:#25b99f;color:#081d34}

@@ -85,3 +85,46 @@ node --test tests/integration.cjs
 ## Versões anteriores (arquivadas)
 As integrações MCGalaxy e ClassiCube foram removidas do código de produção. O OpusCraft permanece como único jogo de blocos ativo.
 Dados históricos e construções do servidor antigo não são apagados: caso existam na VPS, os arquivos `.lvl` e a configuração antiga são preservados em `backup/classicube-legacy.tar.gz` antes de qualquer limpeza. Esse backup é independente do mundo e perfil persistentes do OpusCraft em `data/opuscraft/profile`.
+
+## Andarilha — arquiteta de mundo (primeira etapa)
+
+A personagem residente do mundo familiar é uma **arquiteta de obras**. Não tem fome/sede
+nem objetivos de sobrevivência: planeja uma obra, executa bloco a bloco,
+registra a conclusão, então solicita outra ideia. O avatar VPS usa o mesmo
+IndexedDB e a mesma simulação OpenCraft de sempre — **não redefina o perfil**.
+
+### Gemini (chave privada no servidor)
+
+Gere uma chave em https://aistudio.google.com/apikey e configure
+`GEMINI_API_KEY` **somente no ambiente da VPS** (systemd/EnvironmentFile já usado
+pelo serviço). Opcional: `GEMINI_MODEL=gemini-3.5-flash-lite`.
+A chave nunca deve aparecer no navegador, no painel do ADM ou no Git.
+Sem chave configurada ou se a API falhar, a Andarilha usa um catálogo local
+variável; os registros mostram `source=local` em vez de `source=gemini`.
+O uso gratuito do Gemini está sujeito às cotas do Google. Pesquisa externa
+com Search Grounding, potencialmente cobrada, **não é ativada**.
+
+### Integridade e limitações
+
+- Exatamente **uma obra ativa por vez**, com posicionamento de blocos a cada segundo.
+- Lê terreno previamente carregado; não força carregamento/criação massiva de chunks.
+- Rejeita locais próximos ao spawn, jogadores, obras anteriores e blocos
+  incompatíveis com terreno natural. Só pode remover alguns blocos de solo
+  natural e escavar galerias pequenas em locais isolados; ao detectar material
+  desconhecido ou construção posterior, a obra é pausada, não demolida.
+- A identificação de construções por inspeção é **conservadora, mas não infalível**
+  quando uma obra usa exclusivamente blocos idênticos aos naturais. A fase
+  futura deverá criar um registro autoritativo de blocos colocados por jogadores.
+- Vila, castelo, moinho, ponte, pequena cidade, galeria, torre, jardim e portal
+  são formas procedurais **iniciais**. **Moinhos ainda não giram; pontes ainda não
+  se levantam; portais não transportam jogadores** nesta etapa.
+- Progresso e obras concluídas são preservados em
+  `gfc_npc_life_state` (MySQL + cópia privada JSON). Não editam nem limpam os
+  dados existentes do mundo Minecraft no Chromium IndexedDB.
+
+Para verificar o status na VPS:
+
+```bash
+curl -s http://127.0.0.1:4173/__npc/status | python3 -m json.tool
+sudo journalctl -u games-for-children.service -f -o cat | grep --line-buffered -E 'NPC_(QUESTION|DECISION|STEP)'
+```

@@ -21,7 +21,7 @@ export function installGfcNpc(game: Game): void {
   let plot: Plot | null = null;
   let stepCount = 0, built = 0, lastMeet = Date.now(), visibleUntil = 0, lastVisit = 0;
   let lastAction: Intent = 'observe';
-  let nextBlock = 0;
+  let nextBlock = 0, lastBuildReason = 'not_started';
   let lastPlotSearch = 0, nextPlotCandidate = 0, roamMoves = 0, lastMoveOk = false;
   // The host avatar uses the game's own player input/physics, never coordinate teleporting.
   let waypoint: {x:number;z:number}|null = null;
@@ -135,7 +135,7 @@ export function installGfcNpc(game: Game): void {
     lastX=resident.x;lastZ=resident.z;
     // A long-running 'build' plan should not freeze the character at one spot.
     // Even an 'observe' plan allows an occasional short, believable walk.
-    if(!waypoint&&driveTicks%120===0)roam();
+    if(!waypoint&&lastAction!=='build'&&driveTicks%120===0)roam();
     if(!waypoint)return;
     const dx=waypoint.x-resident.x,dz=waypoint.z-resident.z;
     if(Math.hypot(dx,dz)<0.65){waypoint=null;return;}
@@ -154,28 +154,33 @@ export function installGfcNpc(game: Game): void {
     }
     if(!canAdvance){
       waypoint=null;lastMoveOk=false;
-      if(driveTicks%20===0)roam();
+      if(lastAction!=='build'&&driveTicks%20===0)roam();
       return;
     }
     if(Math.abs(delta)<30)inp.forward=true;
     if(inp.forward&&driveTicks%20===0){
       if(motion<0.012)stuckSamples++;
-      if(stuckSamples>=3){waypoint=null;lastMoveOk=false;stuckSamples=0;roam();}
+      if(stuckSamples>=3){waypoint=null;lastMoveOk=false;stuckSamples=0;if(lastAction!=='build')roam();}
     }
   }
   function build():void{
-    if(!plot || nextBlock>=blueprint.length || built>=MAX_BUILD)return;
-    // Building is limited to a tiny predefined footprint, never model-generated coordinates.
-    // A child/admin standing there pauses construction to avoid interference.
-    // Keep only the actual build footprint clear; ADM watching nearby is allowed.
-    if(guests().some(p=>distance(p.x,p.z,plot!.x,plot!.z)<4))return;
+    if(!plot){lastBuildReason='no_plot';return;}
+    if(nextBlock>=blueprint.length || built>=MAX_BUILD){
+      lastBuildReason='blueprint_finished';return;
+    }
+    // Do not build on top of a visitor, but ADM can watch from outside the footprint.
+    if(guests().some(p=>distance(p.x,p.z,plot!.x,plot!.z)<4)){
+      lastBuildReason='visitor_in_build_area';return;
+    }
     const block=blueprint[nextBlock++];
     const x=plot.x+block.x,y=plot.y+block.y,z=plot.z+block.z;
-    const old=game.level.getState(x,y,z);
-    if(old!==0)return; // Existing construction has absolute priority.
+    if(game.level.getState(x,y,z)!==0){
+      lastBuildReason='existing_block_preserved';return;
+    }
     game.level.setBlock(x,y,z,S(block.block));
-    resident.swing(); // Other players see the work animation.
+    resident.swing(); // Guests see the player working.
     built++;
+    lastBuildReason='placed_block';
   }
   function hide(){
     if(!plot){roam();return;}
@@ -212,9 +217,15 @@ export function installGfcNpc(game: Game): void {
       // Still roam while the site finder waits for chunks/flat terrain.
       roam();
     } else if(plot && action==='build'){
-      // Work from different sides instead of standing forever on a single block.
-      const a=stepCount*Math.PI/4;
-      if(!move(plot.x+Math.round(Math.cos(a)*5),plot.z+Math.round(Math.sin(a)*5)))roam();
+      // No aimless wandering during building; finish the current task first.
+      const paused=nextBlock>=blueprint.length ||
+        guests().some(p=>distance(p.x,p.z,plot!.x,plot!.z)<4);
+      if(paused)waypoint=null;
+      else {
+        const a=stepCount*Math.PI/4;
+        if(!move(plot.x+Math.round(Math.cos(a)*5),plot.z+Math.round(Math.sin(a)*5)))
+          waypoint=null;
+      }
       build();
     } else if(plot && action==='explore'){
       const a=stepCount/4, x=plot.x+Math.round(Math.cos(a)*7),z=plot.z+Math.round(Math.sin(a)*7);
@@ -239,6 +250,7 @@ export function installGfcNpc(game: Game): void {
       built,planned:blueprint.length,steps:stepCount,visitors:guests().length,
       roamMoves,lastMoveOk,plotSearchChecked:nextPlotCandidate,
       walkingTicks,walkedBlocks:Math.round(walkedBlocks*10)/10,walkingTo:waypoint,
+      buildCursor:nextBlock,buildReason:lastBuildReason,buildPlot:plot,
       position:{x:Math.round(resident.x),y:Math.round(resident.y),z:Math.round(resident.z)}};
   }
   (window as any).__gfcNpc={step,drive,status,visit};

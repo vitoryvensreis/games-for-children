@@ -7,11 +7,13 @@ const fs=require('node:fs');
 const path=require('node:path');
 const puppeteer=require('puppeteer-core');
 const chromium=require('@sparticuz/chromium');
+const {decide}=require('./opuscraft-npc-brain.cjs');
 const ROOT=path.resolve(__dirname,'..');
 const SITE=path.join(ROOT,'public','opuscraft');
 const PROFILE=path.join(ROOT,'data','opuscraft','profile');
 const PORT=Number(process.env.OPUSCRAFT_PORT||4173);
 let browser=null,hostPage=null,relay=null,starting=false,stopping=false,lastSave=null,lastError='',tries=0;
+let npcTimer=null,npcBusy=false,npcPlanTime=0,npcStep=0,npcDecision='build',npcSource='local';
 const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
@@ -59,6 +61,30 @@ const server=http.createServer((req,res)=>{
    }catch(e){
     res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}));
    }
+  });return;
+ }
+ if(url.pathname==='/__npc/status'&&req.method==='GET'){
+  Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>
+   (window.__gfcNpc?.status?.()||{ok:false,ready:false})): {ok:false,ready:false})
+   .then(result=>{
+    res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+    res.end(JSON.stringify({...result,brain:npcSource,configured:!!process.env.XAI_API_KEY}));
+   }).catch(()=>{res.writeHead(503).end('NPC offline')});
+  return;
+ }
+ if(url.pathname==='/__npc/visit'&&req.method==='POST'){
+  let bytes=0,chunks=[];
+  req.on('data',part=>{bytes+=part.length;if(bytes>256){req.destroy();return}chunks.push(part)});
+  req.on('end',async()=>{
+   try{
+    const {from}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||''))throw Error('Identidade invalida');
+    if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponivel');
+    const result=await hostPage.evaluate(name=>window.__gfcNpc?.visit?.(name)
+     ||{ok:false,error:'NPC ainda nao iniciou'},from);
+    res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'});
+    res.end(JSON.stringify(result));
+   }catch(err){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(err.message).slice(0,100)}))}
   });return;
  }
  if(url.pathname==='/__ci/world-block'&&process.env.OPUSCRAFT_CI_MARKER==='yes'){
@@ -166,9 +192,26 @@ async function save(){
   return done;
  }catch(err){lastError='Save error: '+String(err.message).slice(0,160);log(lastError);return false}
 }
+async function tickNpc(){
+ if(stopping||npcBusy||!hostPage||hostPage.isClosed())return;
+ npcBusy=true;
+ try{
+  const status=await hostPage.evaluate(()=>window.__gfcNpc?.status?.()||null);
+  if(!status?.ok)return;
+  if(!npcPlanTime||Date.now()-npcPlanTime>240000){
+   npcPlanTime=Date.now();
+   const plan=await decide({playersNearby:status.visitors,blocksBuilt:status.built,
+    hasVisitors:status.visitors>0},npcStep++);
+   npcDecision=plan.action;npcSource=plan.source;
+   if(plan.error)log('NPC using offline fallback:',plan.error);
+  }
+  await hostPage.evaluate(action=>window.__gfcNpc?.step?.(action),npcDecision);
+ }catch(err){log('NPC step failed:',String(err.message).slice(0,150))}
+ finally{npcBusy=false}
+}
 async function stop(){
  if(stopping)return;stopping=true;
- clearInterval(watchTimer);clearInterval(saveTimer);
+ clearInterval(watchTimer);clearInterval(saveTimer);clearInterval(npcTimer);
  try{await Promise.race([save(),new Promise(resolve=>setTimeout(resolve,9000))])}catch{}
  try{await browser?.close()}catch{}
  relay?.close();
@@ -190,5 +233,7 @@ let watchTimer=null,saveTimer=null;
    if(!relay.stats().hosting){if(browser){try{await browser.close()}catch{};browser=null;hostPage=null}await start()}
   },30000);
   saveTimer=setInterval(()=>void save(),60000);
+  npcTimer=setInterval(()=>void tickNpc(),20000);
+  void tickNpc();
  });
 })().catch(err=>{log('Startup failed:',err);process.exit(1)});

@@ -73,10 +73,10 @@ test('NPC API and visit authorization are restricted to current administrator se
 test('Headless host refreshes OpusCraft code after deploy but retains family IndexedDB',()=>{
  const host=read('ops/opuscraft-host.cjs');
  const build=read('ops/build-opuscraft.sh');
- assert.match(build,/GFC-BUILD-ID\\.txt/);
- assert.match(host,/relative==='index\\.html'\\|\\|relative==='GFC-BUILD-ID\\.txt'\\?'no-store, max-age=0'/);
- assert.match(host,/readFileSync\\(path\\.join\\(SITE,'GFC-BUILD-ID\\.txt'\\)/);
- assert.match(host,/gfcHost=1&build=/);
- assert.match(host,/userDataDir:PROFILE/);
- assert.doesNotMatch(host,/rmSync\\(PROFILE/);
+ assert.ok(build.includes('GFC-BUILD-ID.txt'));
+ assert.ok(host.includes("relative==='index.html'||relative==='GFC-BUILD-ID.txt'?'no-store, max-age=0'"));
+ assert.ok(host.includes("readFileSync(path.join(SITE,'GFC-BUILD-ID.txt')"));
+ assert.ok(host.includes('gfcHost=1&build='));
+ assert.ok(host.includes('userDataDir:PROFILE'));
+ assert.ok(!host.includes('rmSync(PROFILE'));
 });

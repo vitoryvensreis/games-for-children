@@ -170,7 +170,7 @@ export function installGfcWorldAttractions(game:Game){
  }catch{}
  const state=saved;
  const persist=()=>{try{localStorage.setItem(key,JSON.stringify(state))}catch{}};
- let ticks=0,blocked='',finishedPending=false,spinnerFrame=0,pinwheelFrame=0;
+ let ticks=0,blocked='',finishedPending=false;
  let surveyed=0,rejected=0,waiting=0,firstCandidateAt=0;
  let pending:{kind:Kind;x:number;z:number}|null=null;
  const visitors=()=>game.server?[...game.server.sessions.values()].filter(
@@ -339,40 +339,6 @@ export function installGfcWorldAttractions(game:Game){
    }).catch(()=>{finishedPending=false;blocked='Falha ao salvar estrutura';});
   }
  }
- const arms=(frame:number)=>{
-  const out=new Set<string>();
-  for(let t=1;t<=4;t++)for(const [dx,dy] of (frame===0?
-   [[1,0],[-1,0],[0,1],[0,-1]]:[[1,1],[-1,1],[1,-1],[-1,-1]])){
-   if(t>3&&frame===1)continue;
-   out.add((dx*t)+','+(dy*t));
-  }
-  return out;
- };
- function animate(){
-  const mill=state.completed.find(s=>s.kind==='windmill');
-  if(!mill||!game.level.world.isLoaded(mill.x,mill.z))return;
-  const front=mill.z-6,cy=mill.y+10;
-  const matches=(frame:number)=>{
-   const expected=arms(frame),other=arms(1-frame);
-   for(const p of new Set([...expected,...other])){
-    const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
-    if(!game.level.world.isLoaded(x,front))return false;
-    if(nameAt(x,y,front)!==(expected.has(p)?'white_wool':'air'))return false;
-   }
-   return true;
-  };
-  if(!matches(spinnerFrame)){
-   if(matches(1-spinnerFrame))spinnerFrame=1-spinnerFrame;
-   else return; // A player may have edited the rotor: never overwrite it.
-  }
-  const before=arms(spinnerFrame),after=arms(1-spinnerFrame);
-  for(const p of new Set([...before,...after])){
-   const [dx,dy]=p.split(',').map(Number),x=mill.x+dx,y=cy+dy;
-   const expected=after.has(p)?'white_wool':'air';
-   if(nameAt(x,y,front)!==expected)game.level.setBlock(x,y,front,S(expected));
-  }
-  spinnerFrame=1-spinnerFrame;
- }
  let signRepairCursor=0,signRepairStatus='Aguardando',signRepairSaving=false;
  function repairOriginalMarquee(){
   const sign=state.completed.find(site=>site.kind==='names');
@@ -426,39 +392,6 @@ export function installGfcWorldAttractions(game:Game){
     signRepairStatus='Corrigido';
     game.chunks.setTicket('gfc-sign-maintenance',null);
   }).catch(()=>{signRepairSaving=false;signRepairStatus='Falha ao salvar letras';});
- }
- function animatePinwheels(){
-  const site=state.completed.find(s=>s.kind==='pinwheels');
-  if(!site||!game.level.world.isLoaded(site.x,site.z))return;
-  const front=site.z-3,cy=site.y+7;
-  const positions=(f:number)=>{
-   const result=new Set<string>();
-   for(const ox of [-5,0,5])
-    for(let t=1;t<=2;t++)for(const [dx,dy] of (f===0?
-      [[1,0],[-1,0],[0,1],[0,-1]]:[[1,1],[-1,1],[1,-1],[-1,-1]]))
-     result.add((site.x+ox+dx*t)+','+(cy+dy*t));
-   return result;
-  };
-  const matches=(frame:number)=>{
-   const on=positions(frame),off=positions(1-frame);
-   for(const point of new Set([...on,...off])){
-    const [x,y]=point.split(',').map(Number);
-    if(!game.level.world.isLoaded(x,front))return false;
-    if(nameAt(x,y,front)!==(on.has(point)?'red_wool':'air'))return false;
-   }
-   return true;
-  };
-  if(!matches(pinwheelFrame)){
-   if(matches(1-pinwheelFrame))pinwheelFrame=1-pinwheelFrame;
-   else return;
-  }
-  const old=positions(pinwheelFrame),next=positions(1-pinwheelFrame);
-  for(const point of new Set([...old,...next])){
-   const [x,y]=point.split(',').map(Number);
-   const name=next.has(point)?'red_wool':'air';
-   if(nameAt(x,y,front)!==name)game.level.setBlock(x,y,front,S(name));
-  }
-  pinwheelFrame=1-pinwheelFrame;
  }
  let rotorSaving=false;
  const rotorReady=(site:Site)=>localStorage.getItem(key+':3d-rotor:'+site.kind+':'+site.x+':'+site.z)==='1';

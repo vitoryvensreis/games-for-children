@@ -264,7 +264,7 @@ export function installGfcNpc(game:Game):void{
   if(!game.inWorld||game.mode!=='host'||!game.spawned)return {ok:false};
   steps++;lastAction=intent==='build'?'build':'observe';
   if(project)buildOne();
-  else if(queue)startNext(queue);
+  else if(queue&&steps%6===0)startNext(queue);
   return status();
  }
  function createProject(data:any){

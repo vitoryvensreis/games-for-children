@@ -170,26 +170,26 @@ export function installGfcWorldAttractions(game:Game){
   if(!OPEN.has(nameAt(x,y,z)))return null;
   return y;
  };
- function siteAllowed(kind:Kind,x:number,y:number,z:number):boolean{
+ function siteAllowed(kind:Kind,x:number,y:number,z:number):number|null{
   const {w,d,h}=dims[kind];
-  if(Math.hypot(x-anchor.x,z-anchor.z)<30)return false;
-  if(state.completed.some(s=>Math.hypot(s.x-x,s.z-z)<36))return false;
+  if(Math.hypot(x-anchor.x,z-anchor.z)<30)return null;
+  if(state.completed.some(s=>Math.hypot(s.x-x,s.z-z)<36))return null;
   if(game.server && [...game.server.sessions.values()].some(s=>s.state==='play'&&s.player&&
-   Math.hypot(s.player.x-x,s.player.z-z)<22))return false;
+   Math.hypot(s.player.x-x,s.player.z-z)<22))return null;
   let maxY=y,minY=y;
   // Survey every footprint column + 2 block buffer for artificial walls or trees.
   for(let xx=x-w-2;xx<=x+w+2;xx++)for(let zz=z-d-2;zz<=z+d+2;zz++){
    const fy=surface(xx,zz);
-   if(fy===null)return false;
+   if(fy===null)return null;
    minY=Math.min(minY,fy);maxY=Math.max(maxY,fy);
-   if(maxY-minY>2)return false;
+   if(maxY-minY>2)return null;
    // Presence of structures, trees, unknown vegetation or artificial roofs
    // disqualifies the site before any block is placed.
    for(let yy=fy;yy<=fy+h;yy++){
-    if(!OPEN.has(nameAt(xx,yy,zz)))return false;
+    if(!OPEN.has(nameAt(xx,yy,zz)))return null;
    }
   }
-  return true;
+  return maxY;
  }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
@@ -204,8 +204,9 @@ export function installGfcWorldAttractions(game:Game){
     if(!game.level.world.isLoaded(xx,zz)){blocked='Carregando terreno para explorar';return;}
   state.attempts++;
   const y=surface(x,z);
-  if(y!==null&&siteAllowed(kind,x,y,z)){
-   state.work={site:{kind,x,y,z},cursor:0};
+  const platformY=y!==null?siteAllowed(kind,x,y,z):null;
+  if(platformY!==null){
+   state.work={site:{kind,x,y:platformY,z},cursor:0};
    blocked='';persist();
   }else blocked='Procurando terreno livre e sem construções';
  }

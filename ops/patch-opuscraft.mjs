@@ -87,7 +87,11 @@ patch('src/main.ts',
     // by production reverse proxies. Always connect directly to our private relay.
     // Family multiplayer uses a short initial radius so guests never try to
     // mesh an entire world on entry. Keep individual single-player settings intact.
-    game.opts.renderDistance = Math.min(game.opts.renderDistance, 2);
+    // Two chunks caused visible map cliffs on desktop. Give the player a
+    // practical horizon, while keeping the phone radius inexpensive.
+    const familyOnPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
+    game.opts.renderDistance = familyOnPhone ? 3 : 5;
     game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
     // Use economical multiplayer defaults on every device, including desktop.
     // The browser's own GPU still renders the world, but without heavy weather
@@ -117,7 +121,9 @@ patch('src/gui/screens/multiplayer.ts',
       const identity = await r.json() as { playerName:string; joinCode:string };
       if (!/^[A-Za-z0-9_]{3,16}$/.test(identity.playerName)) throw Error('Identidade invalida');
       this.closeLists();
-      this.game.opts.renderDistance = Math.min(this.game.opts.renderDistance, 3);
+      const onPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
+      this.game.opts.renderDistance = onPhone ? 3 : 5;
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
     } catch (error) {
       this.game.setScreen(this);

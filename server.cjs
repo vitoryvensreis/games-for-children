@@ -62,9 +62,10 @@ const bucket=new Map();
 function limit(ip){const a=bucket.get(ip)||[];const b=a.filter(t=>now()-t<900000);b.push(now());bucket.set(ip,b);return b.length<=15}
 function localDay(t){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Fortaleza',year:'numeric',month:'2-digit',day:'2-digit'}).format(t)}
 function usage(u){const d=localDay(now());return state.sessions.filter(s=>s.userId===u.id).reduce((sum,s)=>sum+(s.daily?.[d]||0),0)}
+function timeLimitReached(u){return u.role==='child'&&usage(u)>=u.dailyLimit*60000}
 function activeUser(u){return [...peers.values()].some(p=>p.user.id===u.id&&p.ws.readyState===1)||state.sessions.some(s=>s.userId===u.id&&!s.revoked&&s.expires>now()&&s.lastSeen&&now()-s.lastSeen<45000)}
 function touch(s){const t=now();if(!s.lastTick){s.lastTick=t;return}const delta=Math.min(t-s.lastTick,15000);s.lastTick=t;if(delta>0&&delta<16000){const k=localDay(t);s.daily??={};s.daily[k]=(s.daily[k]||0)+delta}}
-function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return null;return {s,u}}
+function checkSession(req){const value=(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('gfc_sid='))?.slice(8);if(!value)return null;const key=crypto.createHash('sha256').update(value).digest('hex');const s=state.sessions.find(s=>s.key===key&&!s.revoked&&s.expires>now());const u=s&&state.users.find(u=>u.id===s.userId&&u.enabled&&u.version===s.version);if(!u||timeLimitReached(u))return null;return {s,u}}
 function end(s){touch(s);s.revoked=true;for(const p of opusConnections)if(p.session===s){try{p.ws.close(4001,'Acesso encerrado pelo responsavel')}catch{};try{p.remote?.close()}catch{}}for(const [id,cube] of cubeSessions){if(cube.session===s){cube.close(4001,'Sessão encerrada pelo responsável');cubeSessions.delete(id)}}for(const p of peers.values())if(p.session===s){emit(p.ws,{type:'logout'});p.ws.close(4001,'Sessão encerrada')}save()}
 function cubePlayerName(u){return familyName(u)}
 function adventureStatus(u){
@@ -327,7 +328,7 @@ const origin=req.headers.origin;if(req.method!=='GET'&&origin){const allowed='ht
 if(pathname==='/api/login'&&req.method==='POST'){
 if(!limit(req.socket.remoteAddress||''))return json(res,429,{error:'Muitas tentativas; aguarde'});
 const b=await readBody(req),u=state.users.find(u=>u.name.toLowerCase()===String(b.name||'').trim().toLowerCase());
-if(!u||!u.enabled||!u.loginEnabled||!verify(b.password,u.pass)||u.role==='child'&&usage(u)>=u.dailyLimit*60000)return json(res,401,{error:'Acesso negado'});
+if(!u||!u.enabled||!u.loginEnabled||!verify(b.password,u.pass)||timeLimitReached(u))return json(res,401,{error:'Acesso negado'});
 const token=crypto.randomBytes(32).toString('base64url'),s={id:uuid(),key:crypto.createHash('sha256').update(token).digest('hex'),userId:u.id,version:u.version,expires:now()+90*DAY,revoked:false,lastTick:now(),daily:{}};
 state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{user:userInfo(u)},'gfc_sid='+token+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000');
 }
@@ -567,7 +568,7 @@ cubeWss.on('connection',(ws,{u,s})=>{
  tcp.on('data',data=>{if(ws.readyState===1){if(ws.bufferedAmount>1024*1024){close();return}ws.send(data,{binary:true})}});
  tcp.on('error',()=>close());tcp.on('close',()=>close());ws.on('error',()=>close());ws.on('close',()=>close());
  ws.on('message',(payload,isBinary)=>{
-  if(!isBinary||s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){close();return}
+  if(!isBinary||s.revoked||!u.enabled||timeLimitReached(u)){close();return}
   const data=Buffer.from(payload);
   if(!accepted){handshake=Buffer.concat([handshake,data]);if(handshake.length>500){close();return}if(handshake.length<131)return;
    if(handshake[0]!==0||handshake[1]>12){close();return}
@@ -590,7 +591,7 @@ opusWss.on('connection',(ws,ctx)=>{
   for(const [b,binary] of queued)remote.send(b,{binary});queued=[];queuedBytes=0
  });
  ws.on('message',(b,binary)=>{
-  if(s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000)return done();
+  if(s.revoked||!u.enabled||u.version!==s.version||timeLimitReached(u))return done();
   if(remote.readyState===WebSocket.OPEN){if(remote.bufferedAmount>12*1024*1024)return done();remote.send(b,{binary})}
   else if(remote.readyState===WebSocket.CONNECTING&&queuedBytes+b.length<524288){queued.push([b,binary]);queuedBytes+=b.length}
   else done();
@@ -625,7 +626,7 @@ server.on('upgrade',(req,socket,head)=>{
  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))
 });
 wss.on('connection',(ws,{u,s})=>{const p={ws,user:u,session:s,room:null,id:uuid()};peers.set(p.id,p);track(u,'online');emit(ws,{type:'hello',id:p.id,user:userInfo(u)});for(const item of (state.familyChat||[]).slice(-30))emit(ws,item);emit(ws,{type:'voicePresence',items:voiceMembers().map(q=>({id:q.id,name:q.user.name,role:q.user.role}))});report();
-ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||usage(u)>=u.dailyLimit*60000){end(s);return}
+ws.on('message',b=>{let m;try{m=JSON.parse(b.toString())}catch{return}if(s.revoked||!u.enabled||timeLimitReached(u)){end(s);return}
 if(m.type==='lobby')lobby();
 if(m.type==='create'&&(u.role==='child'||u.role==='admin')){leaveRoom(p);let code;do{code=crypto.randomBytes(3).toString('hex').toUpperCase()}while(rooms.has(code));const game=m.game==='pong'?'pong':m.game==='race'?'race':'pong';const r={code,game,players:new Set([u.id]),lanes:{[u.id]:1},scores:{[u.id]:0},obstacles:[],started:false,finished:false,endAt:0};rooms.set(code,r);p.room=code;p.playing=true;emit(ws,{...roomState(r),mode:'player'});if(m.solo===true)start(r);report()}
 if(m.type==='join'&&typeof m.code==='string'){
@@ -660,7 +661,7 @@ if(m.type==='peers'){emit(ws,{type:'peers',items:voiceList(p)})}
 if(m.type==='signal'&&p.voiceActive&&voiceEligible(p)&&typeof m.to==='string'&&['offer','answer','ice'].includes(m.kind)&&JSON.stringify(m.data||{}).length<14000){const recipient=peers.get(m.to);if(recipient?.voiceActive&&voiceEligible(recipient))emit(recipient.ws,{type:'signal',kind:m.kind,data:m.data,from:p.id,name:u.name})}
 });
 ws.on('close',()=>{if(p.voiceActive){p.voiceActive=false;for(const q of voiceMembers())emit(q.ws,{type:'peerLeft',id:p.id})}leaveRoom(p);peers.delete(p.id);voicePresence();touch(s);save();if(!activeUser(u))track(u,'offline');report()})});
-setInterval(()=>{for(const [id,cube] of cubeSessions){const u=cube.user,s=cube.session;if(!s||!u||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){cube.close(4001,'Acesso da família encerrado');cubeSessions.delete(id)}}for(const p of opusConnections){const {user:u,session:s}=p;if(s&&!s.revoked)touch(s);if(!s||s.revoked||!u.enabled||u.version!==s.version||usage(u)>=u.dailyLimit*60000){p.ws.close(4001,'Tempo encerrado pelo responsavel');p.remote?.close()}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||usage(u)>=u.dailyLimit*60000){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
+setInterval(()=>{for(const [id,cube] of cubeSessions){const u=cube.user,s=cube.session;if(!s||!u||s.revoked||!u.enabled||u.version!==s.version||timeLimitReached(u)){cube.close(4001,'Acesso da família encerrado');cubeSessions.delete(id)}}for(const p of opusConnections){const {user:u,session:s}=p;if(s&&!s.revoked)touch(s);if(!s||s.revoked||!u.enabled||u.version!==s.version||timeLimitReached(u)){p.ws.close(4001,'Tempo encerrado pelo responsavel');p.remote?.close()}}for(const p of peers.values()){const u=p.user;if(p.session.revoked||!u.enabled||u.version!==p.session.version||timeLimitReached(u)){end(p.session);continue}touch(p.session);emit(p.ws,{type:'pulse',usedSeconds:Math.floor(usage(u)/1000)})}save();report()},10000).unref();
 async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data;for(const k of ['users','sessions','events','games','pushSubscriptions'])state[k]??=[]});
  // MySQL can replace the local JSON snapshot with a legacy state lacking house metadata.
  // Normalise after selecting the authoritative source, before handlers or MCGalaxy start.

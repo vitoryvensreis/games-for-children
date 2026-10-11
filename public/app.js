@@ -102,7 +102,7 @@ async function openOpusCraft(){
   });
   const root=$('#cubeRoot'),overlay=$('#opuscraftRotate');
   const joinAlert=$('#opuscraftJoinAlert');
-  let joinCheckTimer=null,joinTimeout=null,joinSucceeded=false;
+  let joinCheckTimer=null,joinTimeout=null,joinSucceeded=false,joinTracked=false;
   function checkFamilyJoin(){
    if(!gameFrame.isConnected){clearInterval(joinCheckTimer);return}
    try{
@@ -114,6 +114,7 @@ async function openOpusCraft(){
    }catch{}
   }
   function scheduleFamilyJoinCheck(){
+   joinTracked=true;
    joinSucceeded=false;
    clearInterval(joinCheckTimer);clearTimeout(joinTimeout);
    joinCheckTimer=setInterval(checkFamilyJoin,1000);

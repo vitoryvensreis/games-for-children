@@ -4,7 +4,7 @@ const fs=require('node:fs'),path=require('node:path');
 const {normalizeAction,fallbackAction,parseAction,decide}=require('../ops/opuscraft-npc-brain.cjs');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
 
-test('Grok is constrained to four non-destructive actions',async()=>{
+test('GroqCloud is constrained to four non-destructive actions',async()=>{
  assert.equal(normalizeAction('build'),'build');
  assert.equal(normalizeAction('remove_blocks'),null);
  assert.equal(parseAction('{"action":"hide"}'),'hide');
@@ -12,16 +12,20 @@ test('Grok is constrained to four non-destructive actions',async()=>{
  const local=await decide({playersNearby:2},0,{key:''});
  assert.deepEqual(local,{action:'build',source:'local',configured:false});
  assert.equal(fallbackAction(2),'explore');
- const grok=await decide({playersNearby:1},12,{key:'test',fetcher:async(url,opt)=>{
-  assert.equal(url,'https://api.x.ai/v1/responses');
+ const groq=await decide({playersNearby:1},12,{key:'test',fetcher:async(url,opt)=>{
+  assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
   assert.equal(opt.headers.Authorization,'Bearer test');
   assert.ok(!opt.body.includes('KID_'));
-  return {ok:true,json:async()=>({output:[{content:[{type:'output_text',text:'{"action":"observe"}'}]}]})};
+  const payload=JSON.parse(opt.body);
+  assert.equal(payload.model,'openai/gpt-oss-20b');
+  assert.equal(payload.response_format.json_schema.strict,true);
+  assert.deepEqual(payload.response_format.json_schema.schema.properties.action.enum,['build','explore','hide','observe']);
+  return {ok:true,json:async()=>({choices:[{message:{content:'{"action":"observe"}'}}]})};
  }});
- assert.equal(grok.action,'observe');
- assert.equal(grok.source,'grok');
+ assert.equal(groq.action,'observe');
+ assert.equal(groq.source,'groq');
  const rejected=await decide({},3,{key:'test',fetcher:async()=>({
-  ok:true,json:async()=>({output_text:'{"action":"destroy"}'})
+  ok:true,json:async()=>({choices:[{message:{content:'{"action":"destroy"}'}}]})
  })});
  assert.equal(rejected.source,'local');
 });

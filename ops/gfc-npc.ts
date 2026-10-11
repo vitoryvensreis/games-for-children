@@ -40,7 +40,12 @@ export function installGfcNpc(game:Game):void{
   if(!s?.player||s.player.level!==resident.level)
    return {ok:false,error:'Entre primeiro no mundo da família'};
   const p=attractions?.destination();
-  if(!p)return {ok:false,error:'Atrações ainda em construção'};
+  if(!p){
+   // Keep the existing administrator visit RPC functional while landmarks load.
+   // Spectator host stays invisible; only the administrator moves.
+   s.teleportTo(resident.x+2,resident.y+1,resident.z+2,s.player.yaw,s.player.pitch);
+   return {ok:true,action:'waiting_for_landmark'};
+  }
   s.teleportTo(p.x,p.y+1.2,p.z-2,s.player.yaw,s.player.pitch);
   return {ok:true,action:'visit_landmark'};
  }

@@ -383,7 +383,7 @@ async function refreshMinecraftDashboard(){
       '<div class="npc-landmarks">'+familyLandmarkButtons(npc.worldAttractions)+'</div>'+
       (npc.worldAttractions.signRepair?'<p class="sub">Letreiro: '+esc(npc.worldAttractions.signRepair)+'</p>':''):
      '<p class="sub">Aguardando o carregamento do mundo</p>')+
-    '</div>':'')+
+    '</div>':'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3><p class="sub">O mundo está hospedado, mas a consulta das atrações não respondeu. Aguarde ou atualize a página antes de visitar as construções.</p></div>')+
    '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+

@@ -411,6 +411,8 @@ export function installGfcWorldAttractions(game:Game){
     game.chunks.setTicket('gfc-landmarks',null);
    }
    if(state.work)game.chunks.setTicket('gfc-landmarks',null);
+   game.chunks.setTicket('gfc-sign-maintenance',null);
+   game.chunks.setTicket('gfc-rotor-cleanup',null);
    blocked='Atrações pausadas enquanto a família joga';
   }
   if(ticks%40===0&&state.work&&parked()){

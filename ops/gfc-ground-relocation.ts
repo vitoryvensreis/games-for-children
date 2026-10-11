@@ -137,7 +137,7 @@ export function installGroundRelocation(
   if(!game.level.world.isLoaded(to.x,to.z)||!game.level.world.isLoaded(from.x,from.z))return;
   const list=job.phase==='fill'?job.foundation:planFor(job.kind);
   if(job.phase==='fill'||job.phase==='copy'||job.phase==='erase'){
-   for(let n=0;n<12&&job.cursor<list.length;n++,job.cursor++){
+   for(let n=0;n<24&&job.cursor<list.length;n++,job.cursor++){
     const b=list[job.cursor],dest=job.phase==='erase'?from:to;
     const x=job.phase==='fill'?b.x:dest.x+b.x;
     const y=job.phase==='fill'?b.y:dest.y+b.y;
@@ -190,7 +190,7 @@ export function installGroundRelocation(
   }
   if(state.relocation){
    if(tickNumber%4===0)nextStep();
-  }else if(tickNumber%80===0)tryStart();
+  }else if(tickNumber%40===0)tryStart();
  }
  function status(){return {relocating:state.relocation?{
   kind:state.relocation.kind,phase:state.relocation.phase,cursor:state.relocation.cursor,

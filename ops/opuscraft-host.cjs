@@ -7,36 +7,11 @@ const fs=require('node:fs');
 const path=require('node:path');
 const puppeteer=require('puppeteer-core');
 const chromium=require('@sparticuz/chromium');
-const {decide,NPC_SYSTEM_PROMPT}=require('./opuscraft-npc-brain.cjs');
 const ROOT=path.resolve(__dirname,'..');
 const SITE=path.join(ROOT,'public','opuscraft');
 const PROFILE=path.join(ROOT,'data','opuscraft','profile');
 const PORT=Number(process.env.OPUSCRAFT_PORT||4173);
 let browser=null,hostPage=null,relay=null,starting=false,stopping=false,lastSave=null,lastError='',tries=0;
-let npcTimer=null,npcBusy=false,npcPlanTime=0,npcStep=0,npcDecision='build',npcSource='local';
-let npcLastAudit='',npcLastAuditAt=0,npcGoal='survive',npcReason='Continuar viva';
-let resolveLife=null;
-process.on('message',msg=>{
- if(msg?.type==='npcLifeRestore'&&resolveLife){resolveLife(msg.data||null);resolveLife=null;}
-});
-function restoreNpcLife(){
- if(typeof process.send!=='function'||!process.connected)return Promise.resolve(null);
- return new Promise(resolve=>{
-  resolveLife=resolve;
-  try{process.send({type:'npcLifeLoad'})}catch{resolveLife=null;resolve(null);return}
-  setTimeout(()=>{if(resolveLife===resolve){resolveLife=null;resolve(null)}},3500).unref();
- });
-}
-function publishLife(data){
- if(typeof process.send!=='function'||!process.connected||!data)return;
- try{process.send({type:'npcLifeSnapshot',data})}catch{}
-}
-function publishNpc(type,details){
- // Parent node server stores in MySQL and broadcasts to authenticated ADM.
- // Never transfer tokens, raw provider payload, usernames, or chat.
- if(typeof process.send!=='function'||!process.connected)return;
- try{process.send({type:'npcAudit',event:{type,action:npcDecision,source:npcSource,details}})}catch{}
-}
 const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
@@ -91,7 +66,7 @@ const server=http.createServer((req,res)=>{
    (window.__gfcNpc?.status?.()||{ok:false,ready:false})): {ok:false,ready:false})
    .then(result=>{
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    res.end(JSON.stringify({...result,brain:npcSource,configured:!!process.env.GROQ_API_KEY}));
+    res.end(JSON.stringify({...result,brain:'disabled',configured:false}));
    }).catch(()=>{res.writeHead(503).end('NPC offline')});
   return;
  }
@@ -199,11 +174,6 @@ async function start(){
   const launchUrl='http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcHost=1&build='+encodeURIComponent(buildId);
   await page.goto(launchUrl,{waitUntil:'domcontentloaded',timeout:45000});
   await page.waitForFunction(()=>{const g=window.__game;return !!(g&&g.mode==='host'&&g.inWorld)},{timeout:150000,polling:1000});
-  const savedLife=await restoreNpcLife();
-  if(savedLife)try{
-   const restored=await page.evaluate(state=>window.__gfcNpc?.restoreLife?.(state)||false,savedLife);
-   log('NPC_MEMORY_RESTORE',restored?'success':'rejected');
-  }catch(e){log('NPC_MEMORY_RESTORE unavailable:',String(e.message).slice(0,100))}
   if(!await save())throw Error('The family world did not save successfully to VPS IndexedDB');
   lastError='';
   log('Family world is hosted and backed up in IndexedDB');
@@ -217,66 +187,22 @@ async function start(){
 async function save(){
  if(!hostPage||hostPage.isClosed())return false;
  try{
-  const result=await hostPage.evaluate(async()=>{
-   const game=window.__game;
-   if(!game?.inWorld||game.mode!=='host')return {saved:false};
-   await game.saveWorld();
-   return {saved:true,life:window.__gfcNpc?.lifeSnapshot?.()||null};
+  const done=await hostPage.evaluate(async()=>{
+   const g=window.__game;
+   if(!g?.inWorld||g.mode!=='host')return false;
+   await g.saveWorld();
+   return true;
   });
-  if(result?.saved){lastSave=new Date().toISOString();publishLife(result.life)}
-  return !!result?.saved;
- }catch(err){lastError='Save error: '+String(err.message).slice(0,160);log(lastError);return false}
-}
-async function tickNpc(){
- if(stopping||npcBusy||!hostPage||hostPage.isClosed())return;
- npcBusy=true;
- try{
-  const status=await hostPage.evaluate(()=>window.__gfcNpc?.status?.()||null);
-  if(!status?.ok)return;
-  if(!npcPlanTime||Date.now()-npcPlanTime>240000){
-   npcPlanTime=Date.now();
-   // The Groq query never contains usernames, chat, tokens or family identifiers.
-   const input={playersNearby:status.visitors,needs:status.needs,
-    currentGoal:status.currentGoal,memories:status.memories,
-    discoveries:status.discoveries,underwater:status.underwater,
-    hasVisitors:status.visitors>0};
-   const question={number:npcStep+1,model:process.env.GROQ_MODEL||'openai/gpt-oss-20b',
-    system:NPC_SYSTEM_PROMPT,input};
-   log('NPC_QUESTION',JSON.stringify(question));
-   publishNpc('question',question);
-   const plan=await decide(input,npcStep++);
-   npcDecision=plan.action;npcSource=plan.source;
-   npcGoal=plan.goal||'continuar viva';npcReason=plan.reason||'';
-   const decision={number:npcStep,configured:plan.configured,error:plan.error||null,
-    goal:npcGoal,reason:npcReason};
-   log('NPC_DECISION',JSON.stringify({...decision,source:plan.source,action:plan.action}));
-   publishNpc('decision',decision);
-  }
-  const safeAction=status.underwater&&status.needs?.oxygen<40?'surface':npcDecision;
-  const result=await hostPage.evaluate(({action,goal,reason})=>{
-   window.__gfcNpc?.setGoal?.(goal,reason);
-   return window.__gfcNpc?.step?.(action);
-  },{action:safeAction,goal:npcGoal,reason:npcReason});
-  // Each 20-second execution is auditable even if nothing is placed.
-  if(result?.ok){
-   const snapshot={step:result.steps,built:result.built,cursor:result.buildCursor,
-    reason:result.actionReason||result.buildReason,visitors:result.visitors,
-    health:result.needs?.health,oxygen:result.needs?.oxygen,thirst:result.needs?.thirst,
-    hunger:result.needs?.hunger,goal:result.currentGoal};
-   log('NPC_STEP',JSON.stringify({...snapshot,action:safeAction,source:npcSource,walkingTo:result.walkingTo}));
-   // Save meaningful changes, not the noisy repeated 20-second heartbeat.
-   const key=[safeAction,result.built,result.buildCursor,result.actionReason,result.currentGoal,Math.floor((result.needs?.health||20)/2)].join('|');
-   if(key!==npcLastAudit||Date.now()-npcLastAuditAt>120000){
-    npcLastAudit=key;npcLastAuditAt=Date.now();
-    publishNpc('step',snapshot);
-   }
-  }
- }catch(err){log('NPC step failed:',String(err.message).slice(0,150))}
- finally{npcBusy=false}
+  if(done)lastSave=new Date().toISOString();
+  return done;
+ }catch(err){
+  lastError='Save error: '+String(err.message).slice(0,160);
+  log(lastError);return false;
+ }
 }
 async function stop(){
  if(stopping)return;stopping=true;
- clearInterval(watchTimer);clearInterval(saveTimer);clearInterval(npcTimer);
+ clearInterval(watchTimer);clearInterval(saveTimer);
  try{await Promise.race([save(),new Promise(resolve=>setTimeout(resolve,9000))])}catch{}
  try{await browser?.close()}catch{}
  relay?.close();
@@ -298,7 +224,5 @@ let watchTimer=null,saveTimer=null;
    if(!relay.stats().hosting){if(browser){try{await browser.close()}catch{};browser=null;hostPage=null}await start()}
   },30000);
   saveTimer=setInterval(()=>void save(),60000);
-  npcTimer=setInterval(()=>void tickNpc(),20000);
-  void tickNpc();
  });
 })().catch(err=>{log('Startup failed:',err);process.exit(1)});

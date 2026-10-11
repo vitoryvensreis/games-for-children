@@ -127,7 +127,7 @@ server.on('upgrade',(req,socket,head)=>{
    renderDistance:window.__game?.opts?.renderDistance,
    hostViewDistance:window.__game?.client?.info?.viewDistance,
   }));
-  if(status.renderDistance!==4||status.hostViewDistance!==4)
+  if(status.renderDistance!==5||status.hostViewDistance!==5)
    throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
   console.log('OPUSCRAFT_FAMILY_DESKTOP_CHUNK_RADIUS_OK',JSON.stringify({
    client:status.renderDistance,server:status.hostViewDistance}));

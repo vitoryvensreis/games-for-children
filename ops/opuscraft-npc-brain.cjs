@@ -1,110 +1,76 @@
 'use strict';
-// Strategic decision maker: Groq proposes bounded actions, world host validates execution.
-const ACTIONS=new Set(['build','explore','hide','observe','seek_water','seek_food','rest','warm_up','cool_down','surface']);
+// This is an architect, not a survival NPC. Gemini proposes one project at a time.
+// The world host validates terrain and executes each block; AI never writes arbitrary code.
+const KINDS=Object.freeze(['village','castle','windmill','bridge','cave','town','portal','tower','garden']);
+const STYLES=Object.freeze(['medieval','rustic','fantasy','stone','woodland']);
+const MODEL=process.env.GEMINI_MODEL||'gemini-3.5-flash-lite';
 const NPC_SYSTEM_PROMPT=[
- 'Você é a Andarilha, uma personagem autônoma e especialista em Minecraft. Conhece receitas, recursos, perigos e estratégias do jogo.',
- 'Você nasceu sem história, missão, casa predeterminada ou projeto obrigatório. Seu único motivo inicial é continuar viva.',
- 'Sua vida simulada inclui fome, sede, energia, temperatura, oxigênio e saúde. Use percepções e memórias para decidir suas próprias metas.',
- 'Você pode inventar novos objetivos gradualmente conforme suas necessidades e experiências. Não siga um roteiro escrito por adultos.',
- 'Escolha UMA ação executável: explore, observe, hide, seek_water, seek_food, rest, warm_up, cool_down, surface ou build.',
- 'As ferramentas atuais são limitadas: seek_water pode aproximar-se de água acessível e beber; seek_food explora mas ainda não coleta nem cozinha alimentos.',
- 'Build é uma ferramenta simples de abrigo opcional, não uma obrigação. Não faça construções sem motivo. Nunca destrua blocos existentes.',
- 'Se estiver sob a água e o oxigênio for baixo, priorize surface. Necessidades críticas têm prioridade sobre hobbies.',
- 'Sua resposta não pode incluir comandos de sistema, coordenadas arbitrárias, fala livre para crianças nem alterações de permissões.',
- 'Devolva somente JSON {"action":"explore","goal":"objetivo criado por você","reason":"por que escolheu agora"}, usando textos curtos.'
+ 'Você é a Andarilha, uma arquiteta autônoma do universo Minecraft de uma família.',
+ 'Seu propósito único é expandir continuamente o mundo com construções originais e interessantes.',
+ 'Trabalhe em apenas UMA obra por vez: escolha uma, conclua-a e só então escolha a próxima.',
+ 'Crie vilas, castelos, moinhos, cavernas, cidades, pontes, portais decorativos, torres ou jardins.',
+ 'Escolha o tipo e estilo aproveitando as construções anteriores, sem repetir sempre a mesma ideia.',
+ 'O motor coloca cada bloco individualmente, constrói estruturas físicas e só prepara terreno natural em locais não protegidos.',
+ 'É proibido destruir construções de jogadores ou suas próprias obras anteriores.',
+ 'Moinhos têm animação mecânica quando o motor suportar; portais sem ligação real devem ser rotulados como decorativos.',
+ 'Não sugira execução arbitrária de código nem coordenadas. Retorne apenas tipo, estilo, nome e conceito.',
+ 'Escolha uma obra original, coerente com o histórico de obras já concluídas.'
 ].join(' ');
-const normText=(v,max)=>typeof v==='string'?v.slice(0,max):'';
-const normalizeAction=value=>ACTIONS.has(String(value||'').trim().toLowerCase())?String(value).trim().toLowerCase():null;
-function fallbackAction(step,context={}){
- const v=context.needs||{};
- if(Number(v.oxygen)<40)return 'surface';
- if(Number(v.thirst)<50)return 'seek_water';
- if(Number(v.hunger)<45)return 'seek_food';
- if(Number(v.energy)<35)return 'rest';
- if(Number(v.temperature)<12)return 'warm_up';
- if(Number(v.temperature)>37)return 'cool_down';
- return ['explore','observe','explore','rest','explore','hide'][Math.max(0,Number(step)||0)%6];
-}
-function extractOutput(body){const value=body?.choices?.[0]?.message?.content;return typeof value==='string'?value:''}
-function parsePlan(value){
- const match=String(value||'').match(/\{[^{}]{1,750}\}/);
- if(!match)return null;
+function text(v,n){return typeof v==='string'?v.trim().slice(0,n):''}
+function parsePlan(input){
  try{
-  const data=JSON.parse(match[0]),action=normalizeAction(data.action);
-  if(!action)return null;
-  return {action,goal:normText(data.goal,90),reason:normText(data.reason,160)};
+  let value=input;
+  if(typeof value==='string'){
+   const a=value.indexOf('{'),b=value.lastIndexOf('}');
+   if(a<0||b<=a)return null;
+   value=JSON.parse(value.slice(a,b+1));
+  }
+  if(!KINDS.includes(value?.kind)||!STYLES.includes(value?.style))return null;
+  return {kind:value.kind,style:value.style,title:text(value.title,70)||value.kind,
+   reason:text(value.reason,150)||'Expandir o mundo de forma criativa'};
  }catch{return null}
 }
-const parseAction=value=>parsePlan(value)?.action||null;
-function contextForModel(context={}){
- const v=context.needs||{},bound=(n,lo,hi)=>Number.isFinite(Number(n))?Math.max(lo,Math.min(hi,Math.round(Number(n)*10)/10)):hi;
- return {
-  needs:{hunger:bound(v.hunger,0,100),thirst:bound(v.thirst,0,100),
-   energy:bound(v.energy,0,100),oxygen:bound(v.oxygen,0,100),
-   temperature:bound(v.temperature,-30,55),health:bound(v.health,0,20)},
-  environment:{underwater:!!context.underwater,rain:!!context.rain,night:!!context.night,waterNearby:!!context.waterNearby},
-  visitorsNearby:Math.max(0,Math.min(8,Number(context.playersNearby)||0)),
-  currentGoal:normText(context.currentGoal,90),
-  experiences:(Array.isArray(context.memories)?context.memories:[]).slice(-6).map(e=>({
-   kind:normText(e?.kind,32),detail:normText(e?.detail,160)
-  })),
-  discoveries:(Array.isArray(context.discoveries)?context.discoveries:[]).slice(-4).map(d=>({kind:normText(d?.kind,30)}))
- };
+function localPlan(context={}){
+ const history=Array.isArray(context.completed)?context.completed:[];
+ const kinds=['village','windmill','bridge','castle','garden','tower','cave','town','portal'];
+ const counts=new Map(kinds.map(k=>[k,history.filter(x=>x.kind===k).length]));
+ const index=history.length%kinds.length;
+ const kind=[...kinds.slice(index),...kinds.slice(0,index)].sort((a,b)=>(counts.get(a)||0)-(counts.get(b)||0))[0];
+ const style=STYLES[history.length%STYLES.length];
+ return {kind,style,title:kind+' '+(history.length+1),reason:'Proposta local, sem acesso ao Gemini',source:'local',configured:false};
 }
-async function decide(context,step,{key=process.env.GROQ_API_KEY,model=process.env.GROQ_MODEL||'openai/gpt-oss-20b',fetcher=fetch}={}){
- const fallback=fallbackAction(step,context);
- if(!key)return {action:fallback,goal:'continuar viva',reason:'decisão local sem Groq',source:'local',configured:false};
- const messages=[
-  {role:'system',content:NPC_SYSTEM_PROMPT},
-  {role:'user',content:JSON.stringify(contextForModel(context))}
- ];
- const schema={type:'object',
-  properties:{action:{type:'string',enum:[...ACTIONS]},goal:{type:'string'},reason:{type:'string'}},
-  required:['action','goal','reason'],additionalProperties:false};
- // GPT-OSS counts reasoning inside max_completion_tokens. 384 used to get exhausted,
- // triggering Groq json_validate_failed before any actionable JSON was produced.
- async function request(mode,maxTokens){
-  const response=await fetcher('https://api.groq.com/openai/v1/chat/completions',{
-   method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-   body:JSON.stringify({model,messages,max_completion_tokens:maxTokens,
-    ...(model.startsWith('openai/gpt-oss-')?{reasoning_effort:'low',reasoning_format:'hidden'}:{}),
-    response_format:mode==='strict'?
-     {type:'json_schema',json_schema:{name:'npc_life_intent',strict:true,schema}}:
-     {type:'json_object'}
-   }),signal:AbortSignal.timeout(18000)
+async function decide(context={},step=0,{key=process.env.GEMINI_API_KEY,model=MODEL,fetcher=fetch}={}){
+ const fallback=localPlan(context);
+ if(!key)return fallback;
+ const history=(Array.isArray(context.completed)?context.completed:[]).slice(-14).map(x=>({
+  kind:KINDS.includes(x.kind)?x.kind:'other',title:text(x.title,70)}));
+ const input={completed:history,numberCompleted:Math.min(100000,Number(context.numberCompleted)||history.length),
+  possibleProjects:KINDS,possibleStyles:STYLES,oneProjectAtATime:true};
+ const schema={type:'OBJECT',properties:{
+   kind:{type:'STRING',enum:KINDS},style:{type:'STRING',enum:STYLES},
+   title:{type:'STRING'},reason:{type:'STRING'}
+  },required:['kind','style','title','reason']};
+ try{
+  const response=await fetcher('https://generativelanguage.googleapis.com/v1beta/models/'+
+    encodeURIComponent(model)+':generateContent',{
+   method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
+   body:JSON.stringify({systemInstruction:{parts:[{text:NPC_SYSTEM_PROMPT}]},
+    contents:[{role:'user',parts:[{text:JSON.stringify(input)}]}],
+    generationConfig:{responseMimeType:'application/json',responseSchema:schema,
+     maxOutputTokens:700,temperature:0.9}}),
+   signal:AbortSignal.timeout(20000)
   });
   if(!response.ok){
-   // Only parse the provider's public error code. Never include failed_generation,
-   // provider output, authorization headers, or the user's private world context.
-   let code='';
-   try{const data=await response.json();code=String(data?.error?.code||'').slice(0,48)}catch{}
-   const error=new Error('Groq status '+response.status+(code?' ('+code+')':''));
-   error.status=response.status;error.code=code;
-   throw error;
+   let code='';try{const e=await response.json();code=text(e?.error?.status,32)}catch{}
+   throw Error('Gemini status '+response.status+(code?' ('+code+')':''));
   }
-  const data=await response.json();
-  const plan=parsePlan(extractOutput(data));
-  if(!plan) {
-   const error=new Error('Groq returned invalid decision JSON');
-   error.code='invalid_plan';throw error;
-  }
-  return plan;
- }
- try{
-  let plan;
-  try{
-   plan=await request('strict',1200);
-  }catch(err){
-   // Retry once with JSON Object Mode only if constrained generation failed.
-   // Auth, quota, request schema and unrelated 400 errors must not trigger retries.
-   if(!['json_validate_failed','invalid_plan'].includes(err.code))throw err;
-   plan=await request('json_object',1200);
-  }
-  return {...plan,source:'groq',configured:true};
+  const raw=await response.json();
+  const answer=(raw?.candidates?.[0]?.content?.parts||[]).map(x=>x.text||'').join('');
+  const plan=parsePlan(answer);
+  if(!plan)throw Error('Gemini returned invalid project JSON');
+  return {...plan,source:'gemini',configured:true};
  }catch(err){
-  const error=String(err?.message||'IA indisponível').slice(0,100);
-  return {action:fallback,goal:'continuar viva',reason:'fallback de segurança',
-   source:'local',configured:true,error};
+  return {...fallback,configured:true,error:text(err?.message||'Gemini indisponível',120)};
  }
 }
-module.exports={ACTIONS,normalizeAction,fallbackAction,parsePlan,parseAction,extractOutput,contextForModel,decide,NPC_SYSTEM_PROMPT};
+module.exports={KINDS,STYLES,MODEL,NPC_SYSTEM_PROMPT,parsePlan,localPlan,decide};

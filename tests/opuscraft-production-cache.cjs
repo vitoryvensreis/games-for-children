@@ -9,7 +9,12 @@ const read=p=>fs.readFileSync(path.join(root,p),'utf8');
 
 test('Production OpusCraft never serves stale JavaScript/HTML and tracks build version',()=>{
  const server=read('server.cjs'),app=read('public/app.js'),build=read('ops/build-opuscraft.sh');
- assert.match(server,/pathname\.startsWith\('\/opuscraft\/'\)\?'private, no-store, max-age=0'/);
+ assert.match(server,/function opuscraftStaticHeaders\(file,ext\)/);
+ assert.match(server,/file==='opuscraft\/index.html'/);
+ assert.match(server,/max-age=31536000, immutable/);
+ assert.match(server,/zlib\.gzip\(body,\{level:5\}/);
+ assert.match(server,/Content-Encoding':'gzip'/);
+ assert.match(server,/Accept-Encoding/);
  assert.match(server,/GFC-BUILD-ID\.txt/);
  assert.match(build,/GFC-BUILD-ID\.txt/);
  assert.match(app,/status\.clientVersion/);

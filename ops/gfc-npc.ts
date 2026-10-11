@@ -107,11 +107,12 @@ export function installGfcNpc(game: Game): void {
     // Short, safe waypoints inside the original clearing. Physics handles the trip.
     const directions=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[-1,-1],[1,-1]];
     const stride=2+stepCount%3;
+    const anchor=plot??start; // Wander near the build, even if it is far from world spawn.
     const kids=guests().filter(p=>p.name.startsWith('KID_'));
     for(let offset=0;offset<directions.length;offset++){
       const [dx,dz]=directions[(driveTicks+stepCount+offset)%directions.length];
       const x=Math.floor(resident.x)+dx*stride,z=Math.floor(resident.z)+dz*stride;
-      if(distance(x,z,start.x,start.z)>16)continue;
+      if(distance(x,z,anchor.x,anchor.z)>16)continue;
       if(kids.some(p=>distance(p.x,p.z,x,z)<18))continue;
       if(move(x,z)){roamMoves++;return true;}
     }
@@ -133,7 +134,8 @@ export function installGfcNpc(game: Game): void {
     }
     lastX=resident.x;lastZ=resident.z;
     // A long-running 'build' plan should not freeze the character at one spot.
-    if(!waypoint&&lastAction!=='observe'&&driveTicks%80===0)roam();
+    // Even an 'observe' plan allows an occasional short, believable walk.
+    if(!waypoint&&driveTicks%120===0)roam();
     if(!waypoint)return;
     const dx=waypoint.x-resident.x,dz=waypoint.z-resident.z;
     if(Math.hypot(dx,dz)<0.65){waypoint=null;return;}

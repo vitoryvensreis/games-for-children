@@ -95,6 +95,10 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.match(family,/game\.opts\.particles = 0/);
  assert.match(family,/game\.opts\.entityShadows = false/);
  assert.doesNotMatch(family,/game\.saveOptions\(\)/);
+ assert.match(family,/__gfcRestoreVideo=/);
+ assert.match(family,/Object\.assign\(game\.opts,previous\)/);
+ assert.match(patch,/__gfcFamilySession === true\) this\.resize\(\)/);
+ assert.match(patch,/__gfcRestoreVideo\?\.\(\)/);
 });
 
 test('Never create new floating structures after a failed terrain survey',()=>{

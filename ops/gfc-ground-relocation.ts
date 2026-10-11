@@ -69,9 +69,10 @@ export function installGroundRelocation(
  let choice=0;
  function tryStart(){
   if(!canWork())return;
-  const existing=state.completed.find(s=>s.elevated===true&&!state.movedKinds?.includes(s.kind)&&!state.blockedKinds?.includes(s.kind));
+  // Source elevation, not a legacy completed flag, determines whether it is still floating.
+  const existing=state.completed.find(s=>s.elevated===true&&!state.blockedKinds?.includes(s.kind)&&(s.kind!=='names'||marqueeReady()));
   if(!existing){reason=(state.blockedKinds?.length||0)?'Estruturas alteradas manualmente aguardam revisão':'Estruturas flutuantes verificadas já foram tratadas';return}
-  if(existing.kind==='names'&&!marqueeReady()){reason='Aguardando correção segura do letreiro';return}
+  // An uncorrected sign must not block moving the castle or other attractions.
   // Original floating structures are outside the VPS host's two-chunk view.
   // Load their footprint first, or the source validation never progresses.
   game.chunks.setTicket('gfc-old-attraction',[existing.x>>4,existing.z>>4,2]);

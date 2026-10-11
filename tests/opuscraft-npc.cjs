@@ -86,7 +86,7 @@ test('Only family multiplayer receives lower graphics defaults on weak devices',
  const patch=read('ops/patch-opuscraft.mjs');
  const p=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
   patch.indexOf("} else if (params.has('seed')"));
- assert.match(p,/game\.opts\.renderDistance = familyOnPhone \? 3 : 5/);
+ assert.match(p,/game\.opts\.renderDistance = familyOnPhone \? 3 : 4/);
  assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
  assert.match(p,/game\.opts\.graphics = 0/);
  assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
@@ -139,8 +139,8 @@ test('Family chunk radius improves desktop horizon without changing solo worlds'
  const patch=read('ops/patch-opuscraft.mjs');
  const part=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
    patch.indexOf("} else if (params.has('seed')"));
- assert.match(part,/renderDistance = familyOnPhone \? 3 : 5/);
- assert.match(patch,/renderDistance = onPhone \? 3 : 5/);
+ assert.match(part,/renderDistance = familyOnPhone \? 3 : 4/);
+ assert.match(patch,/renderDistance = onPhone \? 3 : 4/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
  assert.match(patch,/CHUNKS_PER_TICK = 2/);
  assert.match(patch,/this\.chunks\.renderDistance\+\+/);

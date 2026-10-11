@@ -7,7 +7,7 @@ type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number};
 type Work={site:Site;cursor:number};
-type State={version:1;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
 const LAND=['grass_block','dirt','coarse_dirt','podzol','stone','sand','gravel','snow_block'];
@@ -140,17 +140,20 @@ export function installGfcWorldAttractions(game:Game){
  const planFor=(kind:Kind)=>plans.get(kind)!;
  const anchor={x:Math.floor(game.player.x),z:Math.floor(game.player.z)};
  const key=SAVE_KEY+':'+String(game.meta?.id||'family');
- const fresh=():State=>({version:1,anchor,completed:[],work:null,attempts:0,phase:0});
+ const fresh=():State=>({version:1,searchRevision:2,anchor,completed:[],work:null,attempts:0,phase:0});
  let saved:State=fresh();
  try{
   const data=JSON.parse(localStorage.getItem(key)||'null');
   if(data?.version===1&&Array.isArray(data.completed)&&data.anchor&&
     Math.abs(data.anchor.x-anchor.x)<5&&Math.abs(data.anchor.z-anchor.z)<5){
-   saved={version:1,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
+   saved={version:1,searchRevision:2,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
     Number.isFinite(x.x)&&Number.isFinite(x.y)&&Number.isFinite(x.z)).slice(0,10),
     work:data.work?.site&&KINDS.includes(data.work.site.kind)?
       {site:data.work.site,cursor:0}:null,
-    attempts:Number.isFinite(data.attempts)?data.attempts:0,phase:Number.isFinite(data.phase)?data.phase:0};
+    // Migration: previous search exhaustively scanned and pushed the cursor
+    // many kilometres away. Restart its *search*, not the family world.
+    attempts:data.searchRevision===2&&Number.isFinite(data.attempts)?Math.max(0,Math.floor(data.attempts)):0,
+    phase:Number.isFinite(data.phase)?data.phase:0};
   }
  }catch{}
  const state=saved;
@@ -166,7 +169,8 @@ export function installGfcWorldAttractions(game:Game){
   const i=KINDS.indexOf(kind),[dx,dz]=dir[Math.max(0,i)];
   const baseline=[45,78,110,142,170,200,230][Math.max(0,i)];
   const offsets=[[0,0],[12,0],[-12,0],[0,12],[0,-12],[16,16],[-16,-16],[-16,16],[16,-16]];
-  const [ox,oz]=offsets[tries%offsets.length],extra=Math.floor(tries/offsets.length)*22;
+  const probe=tries%270;
+  const [ox,oz]=offsets[probe%offsets.length],extra=Math.floor(probe/offsets.length)*22;
   return {x:anchor.x+Math.round(dx*(baseline+extra))+ox,
    z:anchor.z+Math.round(dz*(baseline+extra))+oz};
  };

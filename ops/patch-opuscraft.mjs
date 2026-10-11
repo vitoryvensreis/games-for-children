@@ -110,7 +110,9 @@ patch('src/gui/screens/multiplayer.ts',
       this.closeLists();
       actions.prepare();
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
+      (window as any).__gfcFamilyJoining = false;
     } catch (error) {
+      (window as any).__gfcFamilyJoining = false;
       this.game.setScreen(this);
       window.alert('Nao foi possivel entrar no Servidor da Familia: ' + String(error));
     }

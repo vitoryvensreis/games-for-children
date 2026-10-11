@@ -88,13 +88,17 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.match(patch,/await actions\.preflight\(\)/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/prepareFamilyClient\(game\)/);
- assert.match(family,/game\.opts\.renderDistance = mobile \? 4 : 5/);
- assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 2\)/);
+ assert.match(family,/game\.opts\.renderDistance = mobile \? 2 : 3/);
+ assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 1\)/);
  assert.match(family,/game\.opts\.graphics = 0/);
- assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
- assert.match(family,/game\.opts\.particles = 2/);
+ assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, mobile \? 30 : 40\)/);
+ assert.match(family,/game\.opts\.particles = 0/);
  assert.match(family,/game\.opts\.entityShadows = false/);
  assert.doesNotMatch(family,/game\.saveOptions\(\)/);
+ assert.match(family,/__gfcRestoreVideo=/);
+ assert.match(family,/Object\.assign\(game\.opts,previous\)/);
+ assert.match(patch,/__gfcFamilySession === true\) this\.resize\(\)/);
+ assert.match(patch,/__gfcRestoreVideo\?\.\(\)/);
 });
 
 test('Never create new floating structures after a failed terrain survey',()=>{
@@ -135,12 +139,12 @@ test('Admin can choose only recorded landmarks, including the current build',()=
 test('Family chunk radius improves desktop horizon without changing solo worlds',()=>{
  const patch=read('ops/patch-opuscraft.mjs');
  const family=read('ops/gfc-family-client.ts');
- assert.match(family,/game\.opts\.renderDistance = mobile \? 4 : 5/);
+ assert.match(family,/game\.opts\.renderDistance = mobile \? 2 : 3/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
- assert.match(patch,/CHUNKS_PER_TICK = 5/);
+ assert.match(patch,/CHUNKS_PER_TICK = 4/);
  assert.match(patch,/this\.chunks\.renderDistance\+\+/);
- assert.match(patch,/this\.ticks % 30 === 0/);
+ assert.match(patch,/this\.ticks % 100 === 0/);
 });
 
 test('Floating structures are migrated with two durable save checkpoints and natural-tree-only clearance',()=>{
@@ -163,12 +167,38 @@ test('Floating structures are migrated with two durable save checkpoints and nat
  assert.match(host,/blockedKinds:Array\.isArray\(data\.blockedKinds\)/);
  assert.doesNotMatch(s,/indexedDB\.deleteDatabase|deleteWorld|resetWorld/);
 });
+test('Automated attractions are flattened and de-forested at their original X/Z with durable checkpoints',()=>{
+ const s=read('ops/gfc-site-care.ts'),host=read('ops/gfc-world-attractions.ts'),
+  build=read('ops/build-opuscraft.sh'),ui=read('public/app.js');
+ assert.match(build,/gfc-site-care\.ts/);
+ assert.match(host,/installGfcSiteCare/);
+ assert.match(host,/if\(state\.relocation\)grounding\.tick\(\)/);
+ assert.match(host,/else siteCare\.tick\(\)/);
+ assert.match(host,/terrainCare:siteCare\.status\(\)/);
+ assert.match(host,/caredSites:Array\.isArray\(data\.caredSites\)/);
+ assert.match(host,/careBlocked:Array\.isArray\(data\.careBlocked\)/);
+ assert.match(s,/const PAD=3/);
+ assert.match(s,/const TREE=/);
+ assert.match(s,/const targetY=moving\?top:s\.y/);
+ assert.match(s,/x:s\.x\+b\.x,y:j\.targetY\+b\.y,z:s\.z\+b\.z|x:j\.site\.x\+b\.x,y:j\.targetY\+b\.y,z:j\.site\.z\+b\.z/);
+ assert.match(s,/if\(p===n\)continue/);
+ assert.match(s,/if\(!natural\(now\)\)/);
+ assert.match(s,/if\(!parked\(\)\|\|!canStart\(\)\)/);
+ assert.match(s,/game\.saveWorld\(\)\.then/);
+ assert.match(s,/j\.phase==='saveNew'&&j\.moving/);
+ assert.match(s,/j\.phase='eraseOld'/);
+ assert.match(s,/entry\.y=j\.targetY/);
+ assert.match(s,/state\.siteCare=null;persist\(\)/);
+ assert.match(ui,/npc\.worldAttractions\.terrainCare/);
+ assert.doesNotMatch(s,/deleteWorld|resetWorld|rmSync|unlinkSync/);
+});
+
 test('Frame budget and rotor animations avoid block-by-block updates during player visits',()=>{
  const patch=read('ops/patch-opuscraft.mjs'),rotors=read('ops/gfc-rotors.ts'),
   host=read('ops/gfc-world-attractions.ts'),server=read('server.cjs');
- assert.match(patch,/const ratio = family \? \(mobile \? 0\.82 : 0\.70\) : 1/);
+ assert.match(patch,/const ratio = family \? \(mobile \? 0\.62 : 0\.60\) : 1/);
  assert.match(patch,/Math\.min\(2,this\.opts\.renderDistance\)/);
- assert.match(patch,/export const CHUNKS_PER_TICK = 5/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 4/);
  assert.match(patch,/__gfcRotorRender\?\.\(this,cam\)/);
  assert.match(rotors,/performance\.now\(\)/);
  assert.match(rotors,/pose\.rotZ\(time\+arm\*90\)/);

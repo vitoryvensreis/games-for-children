@@ -3,12 +3,13 @@
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
 import { installGroundRelocation } from './gfc-ground-relocation';
+import { installGfcSiteCare, type SiteCareJob } from './gfc-site-care';
 
 type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number;elevated?:boolean};
 type Work={site:Site;cursor:number};
-type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[];blockedKinds?:Kind[]};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[];blockedKinds?:Kind[];siteCare?:SiteCareJob|null;caredSites?:string[];careBlocked?:string[]};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SEARCH_REVISION=3;
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
@@ -166,7 +167,14 @@ export function installGfcWorldAttractions(game:Game){
     relocation:data.relocation?.kind&&KINDS.includes(data.relocation.kind)&&
       ['fill','copy','saveNew','erase','saveOld'].includes(data.relocation.phase)?data.relocation:null,
     movedKinds:Array.isArray(data.movedKinds)?data.movedKinds.filter((k:any)=>KINDS.includes(k)):[],
-    blockedKinds:Array.isArray(data.blockedKinds)?data.blockedKinds.filter((k:any)=>KINDS.includes(k)):[]};
+    blockedKinds:Array.isArray(data.blockedKinds)?data.blockedKinds.filter((k:any)=>KINDS.includes(k)):[],
+    siteCare:data.siteCare&&['clear','foundation','copy','saveNew','eraseOld','saveOld'].includes(data.siteCare.phase)&&
+      KINDS.includes(data.siteCare.site?.kind)&&Number.isInteger(data.siteCare.cursor)&&
+      Number.isInteger(data.siteCare.targetY)&&Array.isArray(data.siteCare.clear)&&
+      Array.isArray(data.siteCare.foundation)&&data.siteCare.clear.length<=40000&&data.siteCare.foundation.length<=40000?
+      data.siteCare:null,
+    caredSites:Array.isArray(data.caredSites)?data.caredSites.filter((v:any)=>typeof v==='string').slice(0,20):[],
+    careBlocked:Array.isArray(data.careBlocked)?data.careBlocked.filter((v:any)=>typeof v==='string').slice(0,20):[]};
   }
  }catch{}
  const state=saved;
@@ -177,8 +185,12 @@ export function installGfcWorldAttractions(game:Game){
  const visitors=()=>game.server?[...game.server.sessions.values()].filter(
    session=>session.state==='play'&&session.player&&!session.player.removed):[];
  const parked=()=>visitors().length===0;
+ // Existing cross-site copy transactions may finish safely, but no NEW relocation
+ // is started. All ongoing maintenance now keeps the original X/Z.
  const grounding=installGroundRelocation(game,state,planFor,persist,parked,
    ()=>signRepairStatus==='Corrigido');
+ const siteCare=installGfcSiteCare(game,state,planFor,persist,parked,
+   ()=>!state.work&&!state.relocation);
  const siteFor=(kind:Kind,tries:number)=>{
   // Rotate ALL compass directions instead of searching a single narrow ray.
   // Forest at the spawn can otherwise reject every candidate indefinitely.
@@ -243,7 +255,7 @@ export function installGfcWorldAttractions(game:Game){
  }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
-  if(!kind||state.work||!parked())return;
+  if(!kind||state.work||state.siteCare||!parked())return;
   if(!pending||pending.kind!==kind){
    const site=siteFor(kind,state.attempts);
    pending={kind,...site};
@@ -315,7 +327,7 @@ export function installGfcWorldAttractions(game:Game){
  let signRepairCursor=0,signRepairStatus='Aguardando',signRepairSaving=false;
  function repairOriginalMarquee(){
   const sign=state.completed.find(site=>site.kind==='names');
-  if(!sign||!parked()||signRepairSaving)return;
+  if(!sign||!parked()||signRepairSaving||state.siteCare)return;
   const fixedKey=key+':marquee-direction-v2:'+sign.x+':'+sign.z;
   if(localStorage.getItem(fixedKey)==='1'){signRepairStatus='Corrigido';return;}
   game.chunks.setTicket('gfc-sign-maintenance',[sign.x>>4,sign.z>>4,1]);
@@ -369,7 +381,7 @@ export function installGfcWorldAttractions(game:Game){
  let rotorSaving=false;
  const rotorReady=(site:Site)=>localStorage.getItem(key+':3d-rotor:'+site.kind+':'+site.x+':'+site.z)==='1';
  function retireVoxelBlades(){
-  if(!parked()||rotorSaving||state.relocation)return;
+  if(!parked()||rotorSaving||state.relocation||state.siteCare)return;
   const site=state.completed.find(s=>
    (s.kind==='windmill'||s.kind==='pinwheels')&&!rotorReady(s));
   if(!site)return;
@@ -419,12 +431,13 @@ export function installGfcWorldAttractions(game:Game){
    const s=state.work.site;game.chunks.setTicket('gfc-landmarks',[s.x>>4,s.z>>4,2]);
   }
   if(ticks%4===0&&state.work&&parked())buildBatch();
-  if(ticks%60===0&&!state.work&&state.completed.length<KINDS.length&&parked())trySelect();
+  if(ticks%60===0&&!state.work&&!state.siteCare&&state.completed.length<KINDS.length&&parked())trySelect();
   // No more world-block swapping during gameplay: rotor motion is now
   // client-side 3D animation. Only retire old blades while the host is idle.
   if(ticks%80===0)retireVoxelBlades();
   if(ticks%40===0&&parked())repairOriginalMarquee();
-  grounding.tick();
+  if(state.relocation)grounding.tick();
+  else siteCare.tick();
   if(ticks%200===0)persist();
  }
  function status(){
@@ -437,7 +450,7 @@ export function installGfcWorldAttractions(game:Game){
     done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
    blocked,searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
-   signRepair:signRepairStatus,grounding:grounding.status(),
+   signRepair:signRepairStatus,grounding:grounding.status(),terrainCare:siteCare.status(),
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }

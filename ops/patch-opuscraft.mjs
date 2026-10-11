@@ -112,6 +112,7 @@ patch('src/gui/screens/multiplayer.ts',
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
       (window as any).__gfcFamilyJoining = false;
     } catch (error) {
+      (window as any).__gfcRestoreVideo?.();
       (window as any).__gfcFamilyJoining = false;
       this.game.setScreen(this);
       window.alert('Nao foi possivel entrar no Servidor da Familia: ' + String(error));
@@ -173,7 +174,7 @@ patch('src/net/config.ts',
  "export const TIMEOUT_TICKS = 120 * 20;");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 6;",
- "export const CHUNKS_PER_TICK = 5;");
+ "export const CHUNKS_PER_TICK = 4;");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");
@@ -196,12 +197,21 @@ patch('src/game/game.ts',
  `    client?.receive();
     if (this.mode === 'client' && this.inWorld && this.spawned &&
         (window as any).__gfcFamilySession === true && this.chunks &&
-        this.ticks % 30 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
+        this.ticks % 100 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
       this.chunks.renderDistance++;
       this.renderer.renderDistance = this.chunks.renderDistance;
       this.chunks.refreshRadius();
     }
     if (!this.inWorld) return client?.sendTick();`);
+// Apply the lower pixel ratio as soon as a real multiplayer connection begins,
+// then restore the exact solo framebuffer and options on returning to the title.
+patch('src/game/game.ts',
+ "    this.mode = 'client';\n    this.joinedWith = me.code;",
+ "    this.mode = 'client';\n    if ((window as any).__gfcFamilySession === true) this.resize();\n    this.joinedWith = me.code;");
+patch('src/game/game.ts',
+ "    if (!c) return false;\n    this.client = null;\n    this.guestPoem = null;\n    this.mode = 'single';\n    this.clock.stop();",
+ "    if (!c) return false;\n    this.client = null;\n    this.guestPoem = null;\n    this.mode = 'single';\n    (window as any).__gfcRestoreVideo?.();\n    this.clock.stop();");
+
 // Reduce framebuffer pixel count in the family multiplayer: the GPU
 // draws the same voxel geometry but at 70% of desktop resolution (85%
 // mobile) and CSS upscales it. Does not change anyone's solo settings.
@@ -210,8 +220,8 @@ patch('src/game/game.ts',
  `    const native = window.devicePixelRatio || 1;
     const family = (window as any).__gfcFamilySession === true && this.mode === 'client';
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const ratio = family ? (mobile ? 0.82 : 0.70) : 1;
-    const maxW = family ? (mobile ? 1200 : 1440) : 8192;
+    const ratio = family ? (mobile ? 0.62 : 0.60) : 1;
+    const maxW = family ? (mobile ? 800 : 1024) : 8192;
     const dpr = Math.min(native * ratio, maxW / Math.max(1,window.innerWidth));`);
 
 // Draw rotating 3D sails in the native entity pass, after opaque terrain.

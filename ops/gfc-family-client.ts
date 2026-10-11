@@ -3,19 +3,32 @@
 import type { Game } from './game/game';
 
 export function prepareFamilyClient(game: Game): void {
+  // Per-session overrides. Revert without changing a child's saved solo options.
+  const previous={
+    renderDistance:game.opts.renderDistance,simulationDistance:game.opts.simulationDistance,
+    graphics:game.opts.graphics,fancy:game.opts.fancy,clouds:game.opts.clouds,
+    particles:game.opts.particles,entityShadows:game.opts.entityShadows,
+    smoothLighting:game.opts.smoothLighting,maxFps:game.opts.maxFps
+  };
+  (window as any).__gfcRestoreVideo=()=>{
+    Object.assign(game.opts,previous);
+    (window as any).__gfcFamilySession=false;
+    (window as any).__gfcFamilyJoining=false;
+    game.resize();
+  };
   (window as any).__gfcFamilySession = true;
   (window as any).__gfcFamilyJoining = true;
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-  game.opts.renderDistance = mobile ? 4 : 5;
-  game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 2);
+  game.opts.renderDistance = mobile ? 2 : 3;
+  game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 1);
   game.opts.graphics = 0;
   game.opts.fancy = false;
   game.opts.clouds = 0;
-  game.opts.particles = 2;
+  game.opts.particles = 0;
   game.opts.entityShadows = false;
   game.opts.smoothLighting = false;
-  game.opts.maxFps = Math.min(game.opts.maxFps, 60);
+  game.opts.maxFps = Math.min(game.opts.maxFps, mobile ? 30 : 40);
 }
 
 // Test exactly the authenticated public relay route, not the unrelated lobby WS.

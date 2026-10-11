@@ -40,7 +40,7 @@ async function appendNpcEvent(event){
  const eventType=validTypes.has(event?.type)?event.type:null;
  if(!eventType)return null;
  const action=validActions.has(event.action)?event.action:null;
- const source=['groq','local'].includes(event.source)?event.source:null;
+ const source=['gemini','groq','local'].includes(event.source)?event.source:null;
  // Enforce a strict allowlist: no credentials or player names from the host.
  const detail=event.details&&typeof event.details==='object'&&!Array.isArray(event.details)?event.details:{};
  const detailsJson=JSON.stringify(detail).slice(0,4096);

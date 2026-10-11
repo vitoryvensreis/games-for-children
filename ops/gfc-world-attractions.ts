@@ -245,7 +245,7 @@ export function installGfcWorldAttractions(game:Game){
    const top=nameAt(xx,high-1,zz);
    if(!/^(?:air|grass_block|dirt|stone|sand|gravel|snow_block|oak_leaves|spruce_leaves|birch_leaves|jungle_leaves|acacia_leaves|dark_oak_leaves|cherry_leaves|mangrove_leaves|pale_oak_leaves|short_grass|tall_grass|grass|fern|large_fern)$/.test(top))return null;
   }
-  if(tallest-shortest>18)return null;
+  if(tallest-shortest>64)return null;
   const platform=tallest+4;
   if(platform+h>=245)return null;
   // Test the exact new blocks, not a large arbitrary rectangle. If anything

@@ -3,6 +3,7 @@
 // Chromium game instance. The actual world remains the same saved IndexedDB.
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
+import { BIOMES } from './world/gen/biomes';
 
 type Intent = 'build' | 'explore' | 'hide' | 'observe' | 'seek_water' | 'seek_food' | 'rest' | 'warm_up' | 'cool_down' | 'surface';
 type Plot = { x:number; y:number; z:number };
@@ -61,12 +62,15 @@ export function installGfcNpc(game: Game): void {
         safe={x:resident.x,y:resident.y,z:resident.z};
     }
     vitals.hunger=clip(vitals.hunger-0.025);
-    vitals.thirst=clip(vitals.thirst-(resident.inWater?0.065:0.05));
+    vitals.thirst=clip(vitals.thirst-(resident.inWater?0.065:0.05)-(vitals.temperature>35?0.04:0));
     vitals.energy=clip(vitals.energy-(lastAction==='rest'?-0.45:0.035));
     const x=Math.floor(resident.x),y=Math.floor(resident.y),z=Math.floor(resident.z);
     const wet=resident.inWater||game.level.isRainingAt(x,y,z);
     const night=game.level.dayTime%24000>=12500;
-    const target=wet?15:night?19:y>110?17:26;
+    const biome=BIOMES[game.level.world.getBiome(x,z)];
+    // Biome climate + altitude + wetness + nighttime; no global gamerule changes.
+    const target=clip(22+((biome?.temperature??0.8)-0.8)*23-
+      (wet?6:0)-(night?4:0)-Math.max(0,y-100)*0.07,-30,55);
     vitals.temperature=clip(vitals.temperature+(target-vitals.temperature)*0.08,-30,55);
     if(vitals.hunger<1||vitals.thirst<1||vitals.temperature<8||vitals.temperature>41)
       vitals.health=clip(vitals.health-0.13,0,20);

@@ -14,7 +14,7 @@ test('OpusCraft is pinned and world persistence is owned by the VPS',()=>{
  assert.ok(patch.includes("role === 'host' ? '/__mp' : '/ws?opus=1'"));
  assert.ok(!patch.includes("joinFirstLanWorld(game, identity.joinCode)"));
  assert.match(host,/data','opuscraft','profile/);
- assert.match(host,/game\.saveWorld\(\)/);
+ assert.match(host,/g\.saveWorld\(\)/);
  assert.match(host,/attachRelay/);
  assert.match(host,/127\.0\.0\.1/);
 });

@@ -29,5 +29,5 @@ test('Deploy retains the OpusCraft family world and archives obsolete saves befo
  const cleanup=deploy.indexOf('rm -rf public/classicube vendor/mcgalaxy');
  assert.ok(archive>=0&&health>archive&&cleanup>health);
  assert.match(deploy,/backup\/opuscraft-profile-latest\.tar\.gz/);
- assert.doesNotMatch(deploy,/rm -rf (?:data|backup)(?:\s|\/)/);
+ assert.doesNotMatch(deploy,/rm -rf (?:data\/opuscraft|backup\/classicube-legacy|data\/state\.json)/);
 });

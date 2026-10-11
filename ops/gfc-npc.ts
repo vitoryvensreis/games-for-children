@@ -127,7 +127,7 @@ export function installGfcNpc(game:Game):void{
    const ground=blockName(x,y-1,z);
    const foot=blockName(x,y,z),head=blockName(x,y+1,z);
    // Short grass and flowers must not make an otherwise safe clearing invisible.
-   const open=n=>n==='air'||REPLACEABLE.test(n);
+   const open=(n:string)=>n==='air'||REPLACEABLE.test(n);
    if(!open(foot)||!open(head))continue;
    if(/^(?:grass_block|dirt|stone|sand|gravel|podzol|coarse_dirt|snow_block)$/.test(ground))return y;
   }

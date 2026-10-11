@@ -83,19 +83,18 @@ test('World attractions search holds one chunk ticket, caches plans and pauses f
  assert.match(a,/if\(!OPEN\.has\(current\)\)/);
  assert.match(a,/surveyed,rejected,waiting/);
 });
-test('Only family multiplayer receives lower graphics defaults on weak devices',()=>{
- const patch=read('ops/patch-opuscraft.mjs');
- const p=patch.slice(patch.indexOf("} else if (params.has('gfcJoin'))"),
-  patch.indexOf("} else if (params.has('seed')"));
- assert.match(p,/game\.opts\.renderDistance = familyOnPhone \? 3 : 5/);
- assert.match(p,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 3\)/);
- assert.match(p,/game\.opts\.graphics = 0/);
- assert.match(p,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
- assert.match(patch,/location\.search\.includes\('gfcJoin'\)/);
- assert.match(patch,/export const CHUNKS_PER_TICK = 3/);
- assert.match(p,/game\.opts\.particles = 2/);
- assert.match(p,/game\.opts\.entityShadows = false/);
- assert.doesNotMatch(p,/game\.saveOptions\(\)/);
+test('Only explicit family multiplayer uses lightweight graphics without changing solo settings',()=>{
+ const patch=read('ops/patch-opuscraft.mjs'),family=read('ops/gfc-family-client.ts');
+ assert.match(patch,/await actions\.preflight\(\)/);
+ assert.match(patch,/actions\.prepare\(\)/);
+ assert.match(patch,/prepareFamilyClient\(game\)/);
+ assert.match(family,/game\.opts\.renderDistance = mobile \? 3 : 4/);
+ assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 2\)/);
+ assert.match(family,/game\.opts\.graphics = 0/);
+ assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, 60\)/);
+ assert.match(family,/game\.opts\.particles = 2/);
+ assert.match(family,/game\.opts\.entityShadows = false/);
+ assert.doesNotMatch(family,/game\.saveOptions\(\)/);
 });
 
 test('Dense forest fallback adds buildings above treetops without removing trees or overwriting existing blocks',()=>{

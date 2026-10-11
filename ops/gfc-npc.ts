@@ -10,9 +10,9 @@ const intents: readonly Intent[] = ['build','explore','hide','observe','seek_wat
 const MAX_BUILD = 130;
 const ENCOUNTER_COOLDOWN = 25 * 60 * 1000;
 const greetings = [
-  'Que bom encontrar voce por aqui! Estou construindo meu cantinho.',
-  'Ola! Explorar com cuidado rende boas descobertas.',
-  'Se precisar de uma ideia, experimente construir uma pequena ponte.'
+  'Ola! Espero que esteja aproveitando a aventura.',
+  'Ainda tenho muito deste mundo para descobrir.',
+  'Que bom encontrar alguem por aqui.'
 ];
 
 export function installGfcNpc(game: Game): void {

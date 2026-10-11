@@ -255,7 +255,7 @@ export function installGfcWorldAttractions(game:Game){
  }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
-  if(!kind||state.work||!parked())return;
+  if(!kind||state.work||state.siteCare||!parked())return;
   if(!pending||pending.kind!==kind){
    const site=siteFor(kind,state.attempts);
    pending={kind,...site};
@@ -327,7 +327,7 @@ export function installGfcWorldAttractions(game:Game){
  let signRepairCursor=0,signRepairStatus='Aguardando',signRepairSaving=false;
  function repairOriginalMarquee(){
   const sign=state.completed.find(site=>site.kind==='names');
-  if(!sign||!parked()||signRepairSaving)return;
+  if(!sign||!parked()||signRepairSaving||state.siteCare)return;
   const fixedKey=key+':marquee-direction-v2:'+sign.x+':'+sign.z;
   if(localStorage.getItem(fixedKey)==='1'){signRepairStatus='Corrigido';return;}
   game.chunks.setTicket('gfc-sign-maintenance',[sign.x>>4,sign.z>>4,1]);
@@ -381,7 +381,7 @@ export function installGfcWorldAttractions(game:Game){
  let rotorSaving=false;
  const rotorReady=(site:Site)=>localStorage.getItem(key+':3d-rotor:'+site.kind+':'+site.x+':'+site.z)==='1';
  function retireVoxelBlades(){
-  if(!parked()||rotorSaving||state.relocation)return;
+  if(!parked()||rotorSaving||state.relocation||state.siteCare)return;
   const site=state.completed.find(s=>
    (s.kind==='windmill'||s.kind==='pinwheels')&&!rotorReady(s));
   if(!site)return;
@@ -431,7 +431,7 @@ export function installGfcWorldAttractions(game:Game){
    const s=state.work.site;game.chunks.setTicket('gfc-landmarks',[s.x>>4,s.z>>4,2]);
   }
   if(ticks%4===0&&state.work&&parked())buildBatch();
-  if(ticks%60===0&&!state.work&&state.completed.length<KINDS.length&&parked())trySelect();
+  if(ticks%60===0&&!state.work&&!state.siteCare&&state.completed.length<KINDS.length&&parked())trySelect();
   // No more world-block swapping during gameplay: rotor motion is now
   // client-side 3D animation. Only retire old blades while the host is idle.
   if(ticks%80===0)retireVoxelBlades();

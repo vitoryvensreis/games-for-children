@@ -323,7 +323,22 @@ export function installGfcNpc(game: Game): void {
       if(!found)remember('search','Procurei água por perto, mas ainda não encontrei acesso seguro.');
     }
     if(action==='rest' && vitals.energy<97) waypoint=null;
-    if(action==='seek_food') remember('food','Procurei alimento; preciso localizar uma fonte comestível acessível.');
+    if(action==='seek_food'){
+      // Use *existing* food in the NPC's own inventory. Never conjure items.
+      const slot=resident.inventory.findSlot(stack=>Boolean(stack.item.food));
+      if(slot>=0){
+        const stack=resident.inventory.getSlot(slot);
+        if(stack?.item.food){
+          const nutrition=stack.item.food.nutrition;
+          resident.inventory.setSlot(slot,stack.count>1?stack.copyWithCount(stack.count-1):null);
+          vitals.hunger=clip(vitals.hunger+Math.max(8,Math.min(60,nutrition*9)));
+          remember('meal','Comi alimento que já carregava no inventário.');
+        }
+      }else {
+        remember('food','Não tenho alimentos no inventário; preciso procurar uma fonte comestível.');
+        roam();
+      }
+    }
     if(action==='surface'){waypoint=null;resident.input.jump=true;}
     if(action==='warm_up'||action==='cool_down')remember('temperature','Procuro um lugar de temperatura mais confortável.');
     if(action==='explore' && stepCount%5===0){

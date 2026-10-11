@@ -7,14 +7,14 @@ const fs=require('node:fs');
 const path=require('node:path');
 const puppeteer=require('puppeteer-core');
 const chromium=require('@sparticuz/chromium');
-const {decide,NPC_SYSTEM_PROMPT}=require('./opuscraft-npc-brain.cjs');
+const {decide,NPC_SYSTEM_PROMPT,MODEL}=require('./opuscraft-npc-brain.cjs');
 const ROOT=path.resolve(__dirname,'..');
 const SITE=path.join(ROOT,'public','opuscraft');
 const PROFILE=path.join(ROOT,'data','opuscraft','profile');
 const PORT=Number(process.env.OPUSCRAFT_PORT||4173);
 let browser=null,hostPage=null,relay=null,starting=false,stopping=false,lastSave=null,lastError='',tries=0;
 let npcTimer=null,npcBusy=false,npcPlanTime=0,npcStep=0,npcDecision='build',npcSource='local';
-let npcLastAudit='',npcLastAuditAt=0,npcGoal='survive',npcReason='Continuar viva';
+let npcLastAudit='',npcLastAuditAt=0,npcGoal='expandir o mundo',npcReason='Criar uma obra por vez';
 let resolveLife=null;
 process.on('message',msg=>{
  if(msg?.type==='npcLifeRestore'&&resolveLife){resolveLife(msg.data||null);resolveLife=null;}
@@ -91,7 +91,7 @@ const server=http.createServer((req,res)=>{
    (window.__gfcNpc?.status?.()||{ok:false,ready:false})): {ok:false,ready:false})
    .then(result=>{
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    res.end(JSON.stringify({...result,brain:npcSource,configured:!!process.env.GROQ_API_KEY}));
+    res.end(JSON.stringify({...result,brain:npcSource,configured:!!process.env.GEMINI_API_KEY,model:MODEL}));
    }).catch(()=>{res.writeHead(503).end('NPC offline')});
   return;
  }
@@ -232,46 +232,39 @@ async function tickNpc(){
  npcBusy=true;
  try{
   const status=await hostPage.evaluate(()=>window.__gfcNpc?.status?.()||null);
-  if(!status?.ok)return;
-  if(!npcPlanTime||Date.now()-npcPlanTime>240000){
+  if(!status?.ok||status.role!=='world_architect')return;
+  // Never request a new idea before the current work has finished.
+  if(!status.project&&!status.nextProjectQueued&&
+    (!npcPlanTime||Date.now()-npcPlanTime>90000)){
    npcPlanTime=Date.now();
-   // The Groq query never contains usernames, chat, tokens or family identifiers.
-   const input={playersNearby:status.visitors,needs:status.needs,
-    currentGoal:status.currentGoal,memories:status.memories,
-    discoveries:status.discoveries,underwater:status.underwater,
-    hasVisitors:status.visitors>0};
-   const question={number:npcStep+1,model:process.env.GROQ_MODEL||'openai/gpt-oss-20b',
-    system:NPC_SYSTEM_PROMPT,input};
+   const input={completed:status.completed,numberCompleted:status.completedCount,
+    role:'world_architect',oneProjectAtATime:true};
+   const question={number:npcStep+1,model:MODEL,system:NPC_SYSTEM_PROMPT,input};
    log('NPC_QUESTION',JSON.stringify(question));
    publishNpc('question',question);
    const plan=await decide(input,npcStep++);
-   npcDecision=plan.action;npcSource=plan.source;
-   npcGoal=plan.goal||'continuar viva';npcReason=plan.reason||'';
-   const decision={number:npcStep,configured:plan.configured,error:plan.error||null,
-    goal:npcGoal,reason:npcReason};
-   log('NPC_DECISION',JSON.stringify({...decision,source:plan.source,action:plan.action}));
-   publishNpc('decision',decision);
+   npcSource=plan.source;npcDecision='build';npcGoal=plan.title;npcReason=plan.reason;
+   const outcome=await hostPage.evaluate(p=>window.__gfcNpc?.createProject?.(p)||false,plan);
+   log('NPC_DECISION',JSON.stringify({number:npcStep,source:plan.source,
+    project:plan.kind,title:plan.title,goal:plan.title,reason:plan.reason,
+    configured:plan.configured,accepted:outcome,error:plan.error||null}));
+   publishNpc('decision',{number:npcStep,configured:plan.configured,error:plan.error||null,
+    goal:plan.title,reason:plan.reason,project:plan.kind,accepted:outcome});
   }
-  const safeAction=status.underwater&&status.needs?.oxygen<40?'surface':npcDecision;
-  const result=await hostPage.evaluate(({action,goal,reason})=>{
-   window.__gfcNpc?.setGoal?.(goal,reason);
-   return window.__gfcNpc?.step?.(action);
-  },{action:safeAction,goal:npcGoal,reason:npcReason});
-  // Each 20-second execution is auditable even if nothing is placed.
+  const result=await hostPage.evaluate(()=>window.__gfcNpc?.step?.('build'));
   if(result?.ok){
-   const snapshot={step:result.steps,built:result.built,cursor:result.buildCursor,
-    reason:result.actionReason||result.buildReason,visitors:result.visitors,
-    health:result.needs?.health,oxygen:result.needs?.oxygen,thirst:result.needs?.thirst,
-    hunger:result.needs?.hunger,goal:result.currentGoal};
-   log('NPC_STEP',JSON.stringify({...snapshot,action:safeAction,source:npcSource,walkingTo:result.walkingTo}));
-   // Save meaningful changes, not the noisy repeated 20-second heartbeat.
-   const key=[safeAction,result.built,result.buildCursor,result.actionReason,result.currentGoal,Math.floor((result.needs?.health||20)/2)].join('|');
+   const snapshot={step:result.steps,built:result.placedTotal,cursor:result.project?.progress||0,
+    reason:result.lastReason,visitors:result.visitors,goal:result.currentGoal,
+    kind:result.project?.kind||'',completed:result.completedCount,
+    total:result.project?.total||0,placed:result.project?.placed||0};
+   const key=[snapshot.kind,snapshot.cursor,snapshot.reason,snapshot.completed].join('|');
    if(key!==npcLastAudit||Date.now()-npcLastAuditAt>120000){
     npcLastAudit=key;npcLastAuditAt=Date.now();
+    log('NPC_STEP',JSON.stringify({...snapshot,source:npcSource,action:'build'}));
     publishNpc('step',snapshot);
    }
   }
- }catch(err){log('NPC step failed:',String(err.message).slice(0,150))}
+ }catch(err){log('NPC builder failed:',String(err.message).slice(0,150))}
  finally{npcBusy=false}
 }
 async function stop(){
@@ -298,7 +291,7 @@ let watchTimer=null,saveTimer=null;
    if(!relay.stats().hosting){if(browser){try{await browser.close()}catch{};browser=null;hostPage=null}await start()}
   },30000);
   saveTimer=setInterval(()=>void save(),60000);
-  npcTimer=setInterval(()=>void tickNpc(),20000);
+  npcTimer=setInterval(()=>void tickNpc(),1000);
   void tickNpc();
  });
 })().catch(err=>{log('Startup failed:',err);process.exit(1)});

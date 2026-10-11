@@ -7,7 +7,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const puppeteer=require('puppeteer-core');
 const chromium=require('@sparticuz/chromium');
-const {decide}=require('./opuscraft-npc-brain.cjs');
+const {decide,NPC_SYSTEM_PROMPT}=require('./opuscraft-npc-brain.cjs');
 const ROOT=path.resolve(__dirname,'..');
 const SITE=path.join(ROOT,'public','opuscraft');
 const PROFILE=path.join(ROOT,'data','opuscraft','profile');
@@ -207,12 +207,27 @@ async function tickNpc(){
   if(!status?.ok)return;
   if(!npcPlanTime||Date.now()-npcPlanTime>240000){
    npcPlanTime=Date.now();
-   const plan=await decide({playersNearby:status.visitors,blocksBuilt:status.built,
-    hasVisitors:status.visitors>0},npcStep++);
+   // The Groq query never contains usernames, chat, tokens or family identifiers.
+   const input={playersNearby:status.visitors,blocksBuilt:status.built,
+    hasVisitors:status.visitors>0};
+   log('NPC_QUESTION',JSON.stringify({
+    number:npcStep+1,model:process.env.GROQ_MODEL||'openai/gpt-oss-20b',
+    system:NPC_SYSTEM_PROMPT,input
+   }));
+   const plan=await decide(input,npcStep++);
    npcDecision=plan.action;npcSource=plan.source;
-   if(plan.error)log('NPC using offline fallback:',plan.error);
+   log('NPC_DECISION',JSON.stringify({
+    number:npcStep,source:plan.source,action:plan.action,
+    configured:plan.configured,error:plan.error||null
+   }));
   }
-  await hostPage.evaluate(action=>window.__gfcNpc?.step?.(action),npcDecision);
+  const result=await hostPage.evaluate(action=>window.__gfcNpc?.step?.(action),npcDecision);
+  // Each 20-second execution is auditable even if nothing is placed.
+  if(result?.ok)log('NPC_STEP',JSON.stringify({
+   step:result.steps,action:npcDecision,source:npcSource,
+   built:result.built,cursor:result.buildCursor,reason:result.buildReason,
+   visitors:result.visitors,walkingTo:result.walkingTo
+  }));
  }catch(err){log('NPC step failed:',String(err.message).slice(0,150))}
  finally{npcBusy=false}
 }

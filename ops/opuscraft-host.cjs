@@ -68,7 +68,7 @@ const server=http.createServer((req,res)=>{
    (window.__gfcNpc?.status?.()||{ok:false,ready:false})): {ok:false,ready:false})
    .then(result=>{
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    res.end(JSON.stringify({...result,brain:npcSource,configured:!!process.env.XAI_API_KEY}));
+    res.end(JSON.stringify({...result,brain:npcSource,configured:!!process.env.GROQ_API_KEY}));
    }).catch(()=>{res.writeHead(503).end('NPC offline')});
   return;
  }

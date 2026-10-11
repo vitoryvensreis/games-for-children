@@ -23,6 +23,11 @@ export function installGfcNpc(game: Game): void {
   let lastAction: Intent = 'observe';
   let nextBlock = 0;
   let lastPlotSearch = 0, nextPlotCandidate = 0, roamMoves = 0, lastMoveOk = false;
+  // The host avatar uses the game's own player input/physics, never coordinate teleporting.
+  let waypoint: {x:number;z:number}|null = null;
+  let driveTicks=0, walkingTicks=0, walkedBlocks=0, stuckSamples=0;
+  let lastX=resident.x, lastZ=resident.z;
+  let canAdvance=true;
   const blueprint: {x:number;y:number;z:number;block:string}[] = [];
   for(let x=-2;x<=2;x++)for(let z=-2;z<=2;z++)
     blueprint.push({x,y:0,z,block:'oak_planks'});
@@ -80,22 +85,31 @@ export function installGfcNpc(game: Game): void {
     }
     return null;
   }
+  function nearFeet(x:number,z:number):number|null{
+    // Small vertical search around the current feet, not a 340-block column every tick.
+    const bx=Math.floor(x),bz=Math.floor(z),base=Math.floor(resident.y);
+    for(const dy of [0,1,-1,2,-2]){
+      const y=base+dy, ground=game.level.getState(bx,y-1,bz);
+      if(ground===0||game.level.getState(bx,y,bz)!==0||game.level.getState(bx,y+1,bz)!==0)continue;
+      if(/water|lava|leaves|log|cactus|magma|ice|snow|fire|portal|fence|wall|glass/.test(blockOf(ground).name))continue;
+      return y;
+    }
+    return null;
+  }
   function move(x:number,z:number):boolean{
-    const ground=feet(x,z);
-    if(ground===null){lastMoveOk=false;return false;}
-    resident.moveTo(Math.floor(x)+0.5,ground,Math.floor(z)+0.5,
-      (Math.atan2(resident.z-z,x-resident.x)*180/Math.PI)+90,0);
+    const gx=Math.floor(x)+0.5,gz=Math.floor(z)+0.5;
+    if(nearFeet(gx,gz)===null){lastMoveOk=false;return false;}
+    waypoint={x:gx,z:gz};
     lastMoveOk=true;
     return true;
   }
   function roam():boolean{
-    // A missing building plot must never immobilize the resident.
-    // Stay inside the original spawn area and use only walkable, loaded terrain.
-    const directions = [[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[-1,-1],[1,-1]];
+    // Short, safe waypoints inside the original clearing. Physics handles the trip.
+    const directions=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[-1,-1],[1,-1]];
     const stride=2+stepCount%3;
     const kids=guests().filter(p=>p.name.startsWith('KID_'));
     for(let offset=0;offset<directions.length;offset++){
-      const [dx,dz]=directions[(stepCount+offset)%directions.length];
+      const [dx,dz]=directions[(driveTicks+stepCount+offset)%directions.length];
       const x=Math.floor(resident.x)+dx*stride,z=Math.floor(resident.z)+dz*stride;
       if(distance(x,z,start.x,start.z)>16)continue;
       if(kids.some(p=>distance(p.x,p.z,x,z)<18))continue;
@@ -104,16 +118,61 @@ export function installGfcNpc(game: Game): void {
     lastMoveOk=false;
     return false;
   }
+  function drive():void{
+    // Called from the native host game tick just before level.tick().
+    // Turning, collision, jumping, walk animation and network replication are native.
+    const inp=resident.input;
+    inp.forward=inp.back=inp.left=inp.right=inp.jump=inp.sprint=inp.sneak=false;
+    if(!game.inWorld||game.mode!=='host'||!game.spawned)return;
+    driveTicks++;
+    const motion=Math.hypot(resident.x-lastX,resident.z-lastZ);
+    if(motion>0.012){
+      walkedBlocks+=Math.min(motion,0.4);
+      walkingTicks++;
+      stuckSamples=0;
+    }
+    lastX=resident.x;lastZ=resident.z;
+    // A long-running 'build' plan should not freeze the character at one spot.
+    if(!waypoint&&lastAction!=='observe'&&driveTicks%80===0)roam();
+    if(!waypoint)return;
+    const dx=waypoint.x-resident.x,dz=waypoint.z-resident.z;
+    if(Math.hypot(dx,dz)<0.65){waypoint=null;return;}
+    const intendedYaw=Math.atan2(-dx,dz)*180/Math.PI;
+    const delta=((intendedYaw-resident.yaw+540)%360)-180;
+    resident.yaw+=Math.max(-11,Math.min(11,delta));
+    resident.headYaw=resident.yaw;
+    // Check the next footstep at 4 Hz; avoid any unloaded or obstructed blocks.
+    if(driveTicks%5===0){
+      const n=Math.hypot(dx,dz),x=resident.x+dx/n*0.7,z=resident.z+dz/n*0.7;
+      const y=nearFeet(x,z);
+      canAdvance=y!==null && Math.abs(y-resident.y)<=1.2;
+      inp.jump=canAdvance && y!==null && y>resident.y+0.5 && resident.onGround;
+    }else{
+      inp.jump=false;
+    }
+    if(!canAdvance){
+      waypoint=null;lastMoveOk=false;
+      if(driveTicks%20===0)roam();
+      return;
+    }
+    if(Math.abs(delta)<30)inp.forward=true;
+    if(inp.forward&&driveTicks%20===0){
+      if(motion<0.012)stuckSamples++;
+      if(stuckSamples>=3){waypoint=null;lastMoveOk=false;stuckSamples=0;roam();}
+    }
+  }
   function build():void{
     if(!plot || nextBlock>=blueprint.length || built>=MAX_BUILD)return;
     // Building is limited to a tiny predefined footprint, never model-generated coordinates.
     // A child/admin standing there pauses construction to avoid interference.
-    if(guests().some(p=>distance(p.x,p.z,plot!.x,plot!.z)<13))return;
+    // Keep only the actual build footprint clear; ADM watching nearby is allowed.
+    if(guests().some(p=>distance(p.x,p.z,plot!.x,plot!.z)<4))return;
     const block=blueprint[nextBlock++];
     const x=plot.x+block.x,y=plot.y+block.y,z=plot.z+block.z;
     const old=game.level.getState(x,y,z);
     if(old!==0)return; // Existing construction has absolute priority.
     game.level.setBlock(x,y,z,S(block.block));
+    resident.swing(); // Other players see the work animation.
     built++;
   }
   function hide(){
@@ -151,7 +210,9 @@ export function installGfcNpc(game: Game): void {
       // Still roam while the site finder waits for chunks/flat terrain.
       roam();
     } else if(plot && action==='build'){
-      if(!move(plot.x+5,plot.z+4))roam();
+      // Work from different sides instead of standing forever on a single block.
+      const a=stepCount*Math.PI/4;
+      if(!move(plot.x+Math.round(Math.cos(a)*5),plot.z+Math.round(Math.sin(a)*5)))roam();
       build();
     } else if(plot && action==='explore'){
       const a=stepCount/4, x=plot.x+Math.round(Math.cos(a)*7),z=plot.z+Math.round(Math.sin(a)*7);
@@ -175,7 +236,8 @@ export function installGfcNpc(game: Game): void {
     return {ok:true,ready:game.spawned && game.mode==='host',hasPlot:!!plot,name:'Andarilha',action:lastAction,
       built,planned:blueprint.length,steps:stepCount,visitors:guests().length,
       roamMoves,lastMoveOk,plotSearchChecked:nextPlotCandidate,
+      walkingTicks,walkedBlocks:Math.round(walkedBlocks*10)/10,walkingTo:waypoint,
       position:{x:Math.round(resident.x),y:Math.round(resident.y),z:Math.round(resident.z)}};
   }
-  (window as any).__gfcNpc={step,status,visit};
+  (window as any).__gfcNpc={step,drive,status,visit};
 }

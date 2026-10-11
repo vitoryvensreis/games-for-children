@@ -34,7 +34,8 @@ patch('src/main.ts',
 patch('src/main.ts',
  "  installScreens(game);",
  `  installScreens(game);
-  if (params.has('gfcJoin')) installGfcRotors(game);
+  (window as any).__gfcFamilyActions = { preflight: checkFamilyRelay, prepare: () => prepareFamilyClient(game) };
+  if (!params.has('gfcHost')) installGfcRotors(game);
   if (!params.has('gfcHost')) {
     let accessLost=false;
     setInterval(async () => {

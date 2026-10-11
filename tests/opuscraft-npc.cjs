@@ -116,7 +116,7 @@ test('Groq decisions and every execution have private audit entries without toke
  assert.match(host,/NPC_DECISION/);
  assert.match(host,/NPC_STEP/);
  assert.match(host,/system:NPC_SYSTEM_PROMPT,input/);
- assert.match(host,/reason:result\.buildReason/);
+ assert.match(host,/reason:result\.actionReason\|\|result\.buildReason/);
  assert.match(agent,/buildCursor:nextBlock,buildReason:lastBuildReason/);
  assert.match(agent,/lastBuildReason='visitor_in_build_area'/);
  assert.match(agent,/lastBuildReason='blueprint_finished'/);

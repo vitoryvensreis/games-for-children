@@ -7,7 +7,7 @@ function sanitizeNpcAudit(raw){
  const text=(v,max=220)=>typeof v==='string'?v.slice(0,max):'';
  const number=(v,max=100000)=>Number.isFinite(v)?Math.max(0,Math.min(max,Math.round(v))):0;
  const source=['groq','local'].includes(raw.source)?raw.source:null;
- const action=['build','explore','hide','observe'].includes(raw.action)?raw.action:null;
+ const action=['build','explore','hide','observe','seek_water','seek_food','rest','warm_up','cool_down','surface'].includes(raw.action)?raw.action:null;
  const d=raw.details&&typeof raw.details==='object'&&!Array.isArray(raw.details)?raw.details:{};
  let details={};
  if(raw.type==='question')details={

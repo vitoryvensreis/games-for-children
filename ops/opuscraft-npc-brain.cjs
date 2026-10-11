@@ -54,27 +54,57 @@ function contextForModel(context={}){
 async function decide(context,step,{key=process.env.GROQ_API_KEY,model=process.env.GROQ_MODEL||'openai/gpt-oss-20b',fetcher=fetch}={}){
  const fallback=fallbackAction(step,context);
  if(!key)return {action:fallback,goal:'continuar viva',reason:'decisão local sem Groq',source:'local',configured:false};
- try{
+ const messages=[
+  {role:'system',content:NPC_SYSTEM_PROMPT},
+  {role:'user',content:JSON.stringify(contextForModel(context))}
+ ];
+ const schema={type:'object',
+  properties:{action:{type:'string',enum:[...ACTIONS]},goal:{type:'string'},reason:{type:'string'}},
+  required:['action','goal','reason'],additionalProperties:false};
+ // GPT-OSS counts reasoning inside max_completion_tokens. 384 used to get exhausted,
+ // triggering Groq json_validate_failed before any actionable JSON was produced.
+ async function request(mode,maxTokens){
   const response=await fetcher('https://api.groq.com/openai/v1/chat/completions',{
    method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-   body:JSON.stringify({model,messages:[
-    {role:'system',content:NPC_SYSTEM_PROMPT},
-    {role:'user',content:JSON.stringify(contextForModel(context))}
-   ],max_completion_tokens:384,
-    response_format:{type:'json_schema',json_schema:{name:'npc_life_intent',strict:true,schema:{
-      type:'object',
-      properties:{action:{type:'string',enum:[...ACTIONS]},goal:{type:'string'},reason:{type:'string'}},
-      required:['action','goal','reason'],additionalProperties:false
-    }}}}),
-   signal:AbortSignal.timeout(12000)
+   body:JSON.stringify({model,messages,max_completion_tokens:maxTokens,
+    ...(model.startsWith('openai/gpt-oss-')?{reasoning_effort:'low',reasoning_format:'hidden'}:{}),
+    response_format:mode==='strict'?
+     {type:'json_schema',json_schema:{name:'npc_life_intent',strict:true,schema}}:
+     {type:'json_object'}
+   }),signal:AbortSignal.timeout(18000)
   });
-  if(!response.ok)throw Error('Groq status '+response.status);
-  const plan=parsePlan(extractOutput(await response.json()));
-  if(!plan)throw Error('Invalid Groq plan');
+  if(!response.ok){
+   // Only parse the provider's public error code. Never include failed_generation,
+   // provider output, authorization headers, or the user's private world context.
+   let code='';
+   try{const data=await response.json();code=String(data?.error?.code||'').slice(0,48)}catch{}
+   const error=new Error('Groq status '+response.status+(code?' ('+code+')':''));
+   error.status=response.status;error.code=code;
+   throw error;
+  }
+  const data=await response.json();
+  const plan=parsePlan(extractOutput(data));
+  if(!plan) {
+   const error=new Error('Groq returned invalid decision JSON');
+   error.code='invalid_plan';throw error;
+  }
+  return plan;
+ }
+ try{
+  let plan;
+  try{
+   plan=await request('strict',1200);
+  }catch(err){
+   // Retry once with JSON Object Mode only if constrained generation failed.
+   // Auth, quota, request schema and unrelated 400 errors must not trigger retries.
+   if(!['json_validate_failed','invalid_plan'].includes(err.code))throw err;
+   plan=await request('json_object',1200);
+  }
   return {...plan,source:'groq',configured:true};
  }catch(err){
+  const error=String(err?.message||'IA indisponível').slice(0,100);
   return {action:fallback,goal:'continuar viva',reason:'fallback de segurança',
-   source:'local',configured:true,error:String(err?.message||'IA indisponível').slice(0,100)};
+   source:'local',configured:true,error};
  }
 }
 module.exports={ACTIONS,normalizeAction,fallbackAction,parsePlan,parseAction,extractOutput,contextForModel,decide,NPC_SYSTEM_PROMPT};

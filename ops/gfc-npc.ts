@@ -22,7 +22,7 @@ export function installGfcNpc(game: Game): void {
   let plot: Plot | null = null;
   let stepCount = 0, built = 0, lastMeet = Date.now(), visibleUntil = 0, lastVisit = 0;
   let lastAction: Intent = 'observe';
-  let nextBlock = 0, lastBuildReason = 'not_started';
+  let nextBlock = 0, lastBuildReason = 'not_started', lastActionReason='not_started';
   let lastPlotSearch = 0, nextPlotCandidate = 0, roamMoves = 0, lastMoveOk = false;
   // The host avatar uses the game's own player input/physics, never coordinate teleporting.
   let waypoint: {x:number;z:number}|null = null;
@@ -296,6 +296,9 @@ export function installGfcNpc(game: Game): void {
     const action=intents.includes(intent as Intent)?intent as Intent:'observe';
     const nearby=guests().filter(p=>p.name.startsWith('KID_')&&distance(p.x,p.z,resident.x,resident.z)<25);
     stepCount++;lastAction=action;
+    lastActionReason=({build:lastBuildReason,explore:'exploring',hide:'avoiding_players',observe:'observing',
+      seek_water:'water_not_found',seek_food:'food_not_found',rest:'resting',warm_up:'warming_up',
+      cool_down:'cooling_down',surface:'trying_to_surface'} as Record<Intent,string>)[action];
     if(action==='seek_water' || action==='cool_down'){
       const cx=Math.floor(resident.x),cy=Math.floor(resident.y),cz=Math.floor(resident.z);
       // Only inspect a small local grid once per NPC step, not in a game tick.
@@ -315,12 +318,13 @@ export function installGfcNpc(game: Game): void {
             if(nearFeet(ax,az)===null)continue;
             if(distance(resident.x,resident.z,ax,az)<2.3){
               vitals.thirst=clip(vitals.thirst+48);
+              lastActionReason='water_drunk';
               remember('drink','Encontrei água acessível e consegui matar a sede.');
               discoveries.push({x:bx,z:bz,kind:'water'});
               if(discoveries.length>12)discoveries.shift();
               found=true;break;
             }
-            if(move(ax,az)){found=true;break;}
+            if(move(ax,az)){lastActionReason='walking_to_water';found=true;break;}
           }
           if(found)break;
         }
@@ -336,10 +340,12 @@ export function installGfcNpc(game: Game): void {
           const nutrition=stack.item.food.nutrition;
           resident.inventory.setSlot(slot,stack.count>1?stack.copyWithCount(stack.count-1):null);
           vitals.hunger=clip(vitals.hunger+Math.max(8,Math.min(60,nutrition*9)));
+          lastActionReason='food_eaten';
           remember('meal','Comi alimento que já carregava no inventário.');
         }
       }else {
         remember('food','Não tenho alimentos no inventário; preciso procurar uma fonte comestível.');
+        lastActionReason='no_food_in_inventory';
         roam();
       }
     }
@@ -377,6 +383,7 @@ export function installGfcNpc(game: Game): void {
           waypoint=null;
       }
       build();
+      lastActionReason=lastBuildReason;
     } else if(plot && action==='explore'){
       const a=stepCount/4, x=plot.x+Math.round(Math.cos(a)*7),z=plot.z+Math.round(Math.sin(a)*7);
       if(!move(x,z))roam();
@@ -400,7 +407,7 @@ export function installGfcNpc(game: Game): void {
       built,planned:blueprint.length,steps:stepCount,visitors:guests().length,
       roamMoves,lastMoveOk,plotSearchChecked:nextPlotCandidate,
       walkingTicks,walkedBlocks:Math.round(walkedBlocks*10)/10,walkingTo:waypoint,
-      buildCursor:nextBlock,buildReason:lastBuildReason,buildPlot:plot,
+      buildCursor:nextBlock,buildReason:lastBuildReason,actionReason:lastActionReason,buildPlot:plot,
       needs:{...vitals},livedSeconds,deaths,currentGoal,goalReason,underwater:resident.isUnderWater(),
       memoryCount:experiences.length,memories:experiences.slice(-5),discoveries:discoveries.slice(-5),
       position:{x:Math.round(resident.x),y:Math.round(resident.y),z:Math.round(resident.z)}};

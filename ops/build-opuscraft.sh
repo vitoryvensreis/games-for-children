@@ -16,6 +16,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  cp "$REPO_ROOT/ops/gfc-npc.ts" src/gfc-npc.ts
 cp "$REPO_ROOT/ops/gfc-world-attractions.ts" src/gfc-world-attractions.ts
 cp "$REPO_ROOT/ops/gfc-ground-relocation.ts" src/gfc-ground-relocation.ts
+cp "$REPO_ROOT/ops/gfc-rotors.ts" src/gfc-rotors.ts
  node "$REPO_ROOT/ops/patch-opuscraft.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )

@@ -100,6 +100,9 @@ patch('src/gui/screens/multiplayer.ts',
  "  private nameOk(): boolean {",
  `  private async enterFamilyServer(): Promise<void> {
     try {
+      const actions = (window as any).__gfcFamilyActions;
+      if (!actions) throw Error('Menu familiar indisponivel.');
+      await actions.preflight();
       const r = await fetch('/api/opuscraft/identity', { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) throw Error('Acesso da familia encerrado. Faca login novamente.');
       const identity = await r.json() as { playerName:string; joinCode:string };

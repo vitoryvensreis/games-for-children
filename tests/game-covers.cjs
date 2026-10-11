@@ -82,3 +82,61 @@ test('Catalog and admin expose three game covers and OpusCraft listing',()=>{
  assert.match(css,/left:env\(safe-area-inset-left,0px\)/);
  assert.match(css,/right:env\(safe-area-inset-right,0px\)/);
 });
+
+
+test('Sessions: admin stays connected above daily limit; children remain restricted',async()=>{
+ const crypto=require('node:crypto');
+ const {WebSocket}=require('ws');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gfc-auth-time-limit-'));
+ const port=31971;
+ const base='http://127.0.0.1:'+port;
+ const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Fortaleza',year:'numeric',month:'2-digit',day:'2-digit'}).format(Date.now());
+ const pass=(plain)=>{const salt=crypto.randomBytes(16).toString('hex');return salt+':'+crypto.scryptSync(plain,salt,64).toString('hex')};
+ const tokenKey=(token)=>crypto.createHash('sha256').update(token).digest('hex');
+ const adminToken='integration-admin-cookie',childToken='integration-child-cookie';
+ const adminCookie='gfc_sid='+adminToken,childCookie='gfc_sid='+childToken;
+ const users=[
+  {id:'integration-admin',name:'Administrador',role:'admin',pass:pass('integration-admin-secret-123'),enabled:true,loginEnabled:true,dailyLimit:1440,version:0,voiceEnabled:true},
+  {id:'integration-child',name:'TestChild',role:'child',pass:pass('123456'),enabled:true,loginEnabled:true,dailyLimit:1,version:0,voiceEnabled:true}
+ ];
+ const session=(id,userId,token,minutes)=>({id,userId,key:tokenKey(token),version:0,revoked:false,expires:Date.now()+86400000,lastTick:Date.now(),daily:{[day]:minutes*60000}});
+ fs.writeFileSync(path.join(dir,'state.json'),JSON.stringify({
+  users,sessions:[session('session-admin',users[0].id,adminToken,1441),session('session-child',users[1].id,childToken,2)],
+  events:[],games:[],pushSubscriptions:[]
+ }));
+ let proc,socket;
+ const api=(url,{cookie,method='GET',body}={})=>fetch(base+'/api/'+url,{
+  method,headers:{...(cookie?{Cookie:cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},
+  ...(body?{body:JSON.stringify(body)}:{})
+ });
+ try{
+  proc=spawn(process.execPath,[path.join(__dirname,'../server.cjs')],{
+   env:{...process.env,PORT:String(port),DATA_DIR:dir,DB_HOST:'',DB_NAME:'',DB_USER:'',DB_PASSWORD:'',ADMIN_PASSWORD:'integration-admin-secret-123',MCGALAXY_ENABLED:'false',MCGALAXY_EXTERNAL:'false'},
+   stdio:'ignore'
+  });
+  let ready=false;
+  for(let i=0;i<90;i++){try{if((await api('health')).ok){ready=true;break}}catch{}await sleep(80)}
+  assert.ok(ready,'Backend did not start');
+  assert.equal((await api('me',{cookie:adminCookie})).status,200,'Admin existing session is valid even after exceeding 24h');
+  assert.equal((await api('admin/overview',{cookie:adminCookie})).status,200);
+  assert.equal((await api('me',{cookie:childCookie})).status,401,'Child above their limit must be denied');
+  socket=new WebSocket('ws://127.0.0.1:'+port+'/ws',{
+   headers:{Origin:'https://gamesforchildren.escotilhaprodutora.com',Cookie:adminCookie}
+  });
+  await Promise.race([
+   new Promise((resolve,reject)=>{socket.once('open',resolve);socket.once('error',reject)}),
+   sleep(4000).then(()=>{throw Error('Admin WebSocket did not open')})
+  ]);
+  socket.send(JSON.stringify({type:'lobby'}));
+  await sleep(11200); // Observe the server's 10-second session enforcement interval.
+  assert.equal(socket.readyState,WebSocket.OPEN,'Admin socket must not be closed by child-only time enforcement');
+  assert.equal((await api('me',{cookie:adminCookie})).status,200,'Admin session must not be revoked by periodic enforcement');
+  assert.equal((await api('admin/overview',{cookie:adminCookie})).status,200);
+  assert.equal((await api('login',{method:'POST',body:{name:'Administrador',password:'integration-admin-secret-123'}})).status,200,'Admin can log in above 24h');
+  assert.equal((await api('login',{method:'POST',body:{name:'TestChild',password:'123456'}})).status,401,'Child cannot log in after hitting their limit');
+ }finally{
+  try{socket?.terminate()}catch{}
+  if(proc){proc.kill('SIGTERM');await Promise.race([new Promise(r=>proc.once('exit',r)),sleep(1900)])}
+  fs.rmSync(dir,{recursive:true,force:true,maxRetries:8,retryDelay:120});
+ }
+});

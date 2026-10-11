@@ -1,124 +1,56 @@
 'use strict';
-const test=require('node:test'),assert=require('node:assert/strict');
-const fs=require('node:fs'),path=require('node:path');
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
-const {fallbackAction,contextForModel,decide}=require('../ops/opuscraft-npc-brain.cjs');
 const {limitedLife}=require('../database/store.cjs');
-
-test('urgent needs prioritize life without predefined house, job or story',()=>{
- assert.equal(fallbackAction(0,{needs:{oxygen:10}}),'surface');
- assert.equal(fallbackAction(0,{needs:{oxygen:90,thirst:10}}),'seek_water');
- assert.equal(fallbackAction(0,{needs:{oxygen:90,thirst:80,hunger:10}}),'seek_food');
- assert.equal(fallbackAction(0,{needs:{oxygen:90,thirst:80,hunger:80,energy:8}}),'rest');
- assert.equal(fallbackAction(0,{needs:{oxygen:90,thirst:80,hunger:80,energy:80,temperature:6}}),'warm_up');
- assert.equal(fallbackAction(0,{needs:{oxygen:90,thirst:80,hunger:80,energy:80,temperature:41}}),'cool_down');
- const source=read('ops/opuscraft-npc-brain.cjs');
- assert.match(source,/nasceu sem história, missão, casa predeterminada ou projeto obrigatório/);
- assert.match(source,/Seu único motivo inicial é continuar viva/);
- assert.doesNotMatch(source,/Dê preferência a construir uma casinha/);
+const {sanitizeNpcAudit}=require('../database/npc-audit.cjs');
+test('Safe clearing is restricted to natural terrain and avoids existing structures',()=>{
+ const agent=read('ops/gfc-npc.ts');
+ assert.match(agent,/const NATURAL=/);
+ assert.match(agent,/const DIGGABLE=/);
+ assert.match(agent,/safeSite\(x,y,z,r\)/);
+ assert.match(agent,/if\(!NATURAL\.test\(n\)\)return false/);
+ assert.match(agent,/if\(!allowed\)/);
+ assert.match(agent,/p\.state='blocked'/);
+ assert.match(agent,/blockedReason='protected_or_unknown_block:'/);
+ assert.match(agent,/nearby_construction_detected/);
+ assert.match(agent,/guestNear\(p\.x,p\.z,siteSizes\[p\.kind\]\+5\)/);
+ assert.match(agent,/if\(distance\(x,z,start\.x,start\.z\)<44\)return false/);
+ assert.match(agent,/for\(let dx=-r-3;dx<=r\+3;dx\+\+\)/);
+ assert.match(agent,/if\(task\.name==='air'\&\&name==='air'\)/);
+ assert.doesNotMatch(agent,/dropWorld|deleteWorld|removeWorld|resetWorld/);
 });
-test('Groq never receives credentials or child identifiers from world context',async()=>{
- const payload=contextForModel({needs:{oxygen:20,hunger:30},currentGoal:'survive',
-  memories:[{kind:'air',detail:'Fiquei submersa'}],
-  discoveries:[{x:4,z:5,kind:'water'}],playersNearby:2,
-  username:'KID_NAME',GROQ_API_KEY:'SECRET'});
- assert.equal(payload.needs.oxygen,20);
- assert.equal(payload.experiences[0].kind,'air');
- assert.equal(payload.discoveries[0].kind,'water');
- assert.ok(!JSON.stringify(payload).includes('KID_NAME'));
- assert.ok(!JSON.stringify(payload).includes('SECRET'));
- assert.ok(!JSON.stringify(payload).includes('"x"'));
- const out=await decide(payload,0,{key:'',model:'example'});
- assert.equal(out.action,'surface');
-});
-test('oxygen drops only while head submerged, damages gradually and triggers surfacing',()=>{
- const agent=read('ops/gfc-npc.ts'),host=read('ops/opuscraft-host.cjs');
- assert.match(agent,/resident\.isUnderWater\(\)/);
- assert.match(agent,/vitals\.oxygen=clip\(vitals\.oxygen-7\)/);
- assert.match(agent,/vitals\.health=clip\(vitals\.health-1,0,20\)/);
- assert.match(agent,/vitals\.oxygen=clip\(vitals\.oxygen\+24\)/);
- assert.match(agent,/if\(vitals\.oxygen<35&&resident\.isUnderWater\(\)\)/);
- assert.match(agent,/resident\.input\.jump=true/);
- assert.match(agent,/resident\.moveTo\(safe\.x,safe\.y,safe\.z\)/);
- assert.match(host,/status\.underwater&&status\.needs\?\.oxygen<40\?'surface'/);
-});
-test('only NPC changes: preserve player world and learn without conjuring food or resources',()=>{
- const agent=read('ops/gfc-npc.ts'),host=read('ops/opuscraft-host.cjs');
- assert.match(agent,/stack\.item\.food/);
- assert.match(agent,/resident\.inventory\.setSlot\(/);
- assert.match(agent,/if\(game\.level\.getState\(x,y,z\)!==0\)/);
- assert.match(agent,/lifeSnapshot,restoreLife,setGoal/);
+test('Construction memory persists project cursor and completed sites separately from world IndexedDB',()=>{
+ const state={version:2,role:'world_architect',
+  project:{kind:'castle',style:'stone',title:'Castelo',reason:'Muralhas',x:200,y:69,z:55,
+   cursor:127,placed:80,skipped:12,startedAt:5000,state:'building',blockedReason:''},
+  queue:null,completed:[{kind:'windmill',title:'Moinho',x:180,y:70,z:24,placed:220}],
+  placedTotal:300,searchCursor:12,blockedSites:[],apiKey:'SECRET'};
+ const safe=limitedLife(state);
+ assert.equal(safe.version,2);
+ assert.equal(safe.project.cursor,127);
+ assert.equal(safe.completed[0].kind,'windmill');
+ assert.equal(safe.completed[0].x,180);
+ assert.equal(safe.apiKey,undefined);
+ assert.ok(!JSON.stringify(safe).includes('SECRET'));
+ assert.equal(limitedLife({...state,project:{...state.project,kind:'destroy_everything'}}).project,null);
+ const db=read('database/store.cjs'),host=read('ops/opuscraft-host.cjs');
+ assert.match(db,/gfc_npc_life_state/);
+ assert.match(db,/renameSync\(tmp,file\)/);
  assert.match(host,/publishLife\(result\.life\)/);
  assert.match(host,/NPC_MEMORY_RESTORE/);
  assert.match(host,/userDataDir:PROFILE/);
- assert.doesNotMatch(host,/rmSync\(PROFILE/);
 });
-test('NPC memory is bounded, sanitized and independent from game_state and world IndexedDB',()=>{
- const migration=read('database/migrations/003_npc_life_state.sql');
- const store=read('database/store.cjs');
- assert.match(migration,/CREATE TABLE IF NOT EXISTS gfc_npc_life_state/);
- assert.doesNotMatch(migration,/DROP|DELETE|UPDATE game_state/);
- const raw={version:1,vitals:{hunger:55,thirst:20,energy:75,oxygen:10,temperature:17,health:12},
-  currentGoal:'Encontrar água',goalReason:'Sede',livedSeconds:500,deaths:1,
-  experiences:Array.from({length:80},()=>({kind:'test',detail:'record',at:4})),
-  discoveries:Array.from({length:50},()=>({x:0,z:0,kind:'water'})),
-  safe:{x:10,y:66,z:20},token:'NEVER_SAVE',playerName:'KID_PRIVATE'};
- const safe=limitedLife(raw);
- assert.equal(safe.experiences.length,25);
- assert.equal(safe.discoveries.length,12);
- assert.equal(safe.vitals.oxygen,10);
- assert.equal(safe.deaths,1);
- assert.ok(!JSON.stringify(safe).includes('NEVER_SAVE'));
- assert.ok(!JSON.stringify(safe).includes('KID_PRIVATE'));
- assert.match(store,/gfc_npc_life_state/);
- assert.match(store,/renameSync\(tmp,file\)/);
-});
-
-test('Groq recovers from json_validate_failed caused by the 384-token budget',async()=>{
- const calls=[];
- const got=await decide({needs:{oxygen:100,hunger:33,thirst:18},currentGoal:'Buscar água'},5,{
-  key:'fixture',fetcher:async(url,options)=>{
-   const payload=JSON.parse(options.body);
-   calls.push(payload);
-   assert.equal(payload.reasoning_effort,'low');
-   assert.equal(payload.reasoning_format,'hidden');
-   assert.equal(payload.max_completion_tokens,1200);
-   if(calls.length===1){
-    assert.equal(payload.response_format.type,'json_schema');
-    assert.equal(payload.response_format.json_schema.strict,true);
-    return {ok:false,status:400,json:async()=>({error:{code:'json_validate_failed',
-      failed_generation:'NEVER_EXPOSE_THIS_PROVIDER_OUTPUT'}})};
-   }
-   assert.equal(payload.response_format.type,'json_object');
-   return {ok:true,json:async()=>({choices:[{message:{content:
-    '{"action":"seek_water","goal":"Encontrar água","reason":"Estou com sede"}'
-   }}]})};
-  }});
- assert.equal(calls.length,2);
- assert.equal(got.source,'groq');
- assert.equal(got.action,'seek_water');
- assert.equal(got.goal,'Encontrar água');
- assert.ok(!JSON.stringify(got).includes('NEVER_EXPOSE_THIS_PROVIDER_OUTPUT'));
-});
-test('Groq must not retry authentication or quota errors',async()=>{
- let calls=0;
- const got=await decide({needs:{oxygen:99,hunger:90,thirst:12}},2,{key:'fixture',
-  fetcher:async()=>{calls++;return {ok:false,status:401,json:async()=>({error:{code:'invalid_api_key'}})}}});
- assert.equal(calls,1);
- assert.equal(got.source,'local');
- assert.match(got.error,/401/);
- assert.ok(!got.error.includes('fixture'));
-});
-test('Audit preserves survival actions and explains why they did or did not work',()=>{
- const {sanitizeNpcAudit}=require('../database/npc-audit.cjs');
- const store=read('database/store.cjs'),app=read('public/app.js');
- for(const action of ['seek_water','seek_food','rest','warm_up','cool_down','surface']){
-  assert.equal(sanitizeNpcAudit({type:'step',action,details:{reason:'no_food_in_inventory'}}).action,action);
-  assert.ok(store.includes("'"+action+"'"));
-  assert.ok(app.includes(action+':'));
- }
- const npc=read('ops/gfc-npc.ts'),host=read('ops/opuscraft-host.cjs');
- assert.match(npc,/actionReason:lastActionReason/);
- assert.match(host,/reason:result\.actionReason\|\|result\.buildReason/);
- assert.match(app,/no_food_in_inventory:'Sem comida no inventário'/);
+test('Audit stores sanitized Gemini model and blueprint progress, not user or key information',()=>{
+ const item=sanitizeNpcAudit({type:'decision',source:'gemini',action:'build',details:{
+  project:'castle',goal:'Construir um castelo',reason:'Expandir região',accepted:true,
+  key:'SECRET',name:'KID_ABC'}});
+ assert.equal(item.source,'gemini');
+ assert.equal(item.details.project,'castle');
+ assert.equal(item.details.accepted,true);
+ assert.ok(!JSON.stringify(item).includes('SECRET'));
+ assert.ok(!JSON.stringify(item).includes('KID_ABC'));
+ const store=read('database/store.cjs'),ui=read('public/app.js');
+ assert.match(store,/\['gemini','groq','local'\]/);
+ assert.match(ui,/Andarilha — Arquiteta do Universo/);
+ assert.match(ui,/npc\.project\.progress/);
 });

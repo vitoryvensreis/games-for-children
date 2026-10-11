@@ -21,7 +21,7 @@ if(m.type==='error')notify(m.message);
 if(m.type==='notice')notify(m.text);
 if(m.type==='notice'&&me?.role==='admin'){notify(m.text);if(Notification.permission==='granted')new Notification('GamesForChildren',{body:m.text})}
 if(m.type==='adminUpdate'&&me?.role==='admin')refreshAdmin();
-if(m.type==='npcAudit'&&me?.role==='admin')appendNpcAudit(m.event);
+
 if(m.type==='peers'){for(const p of m.items)if(p.id!==myId)maybeCall(p)}
 if(m.type==='peerLeft')hangupPeer(m.id);
 if(m.type==='voiceReady'&&voiceStream)maybeCall({id:m.id,name:m.name});
@@ -87,7 +87,7 @@ async function openOpusCraft(){
   '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<div class="opus-player"><div><strong>🌿 Andarilha</strong><small>Personagem autônoma do servidor</small></div><button id="opusNpcVisit" type="button">Ir até ela</button></div>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<div class="opus-player"><div><strong>🏰 Aventura da família</strong><small>Visite o letreiro de Caique e Cauã</small></div><button id="opusNpcVisit" type="button">Ir ao letreiro</button></div>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -126,9 +126,9 @@ async function openOpusCraft(){
    npcVisit.disabled=true;
    try{
     const status=await api('admin/opuscraft/npc');
-    if(!status.ready)throw Error('A personagem ainda está preparando o seu cantinho.');
-    await api('admin/opuscraft/npc/visit','POST',{});
-    notify('Você foi até a Andarilha!');
+    if(!status.ready)throw Error('O mundo ainda está iniciando.');
+    const visit=await api('admin/opuscraft/npc/visit','POST',{});
+    notify(visit.action==='waiting_for_landmark'?'Ponto de encontro alcançado. O letreiro ainda está sendo preparado.':'Você chegou à área das aventuras!');
    }catch(e){notify(e.message)}
    finally{npcVisit.disabled=false}
   };
@@ -286,79 +286,12 @@ function paint(){if(!$('#road')||!room)return;t++;const horizon=90;const topWidt
 function move(d){if(!room?.started||room.finished)return;const time=performance.now();if(time-lastLaneInput<95)return;lastLaneInput=time;const lane=Math.min(2,Math.max(0,desiredLane+d));if(lane===desiredLane)return;desiredLane=lane;inputSeq++;send({type:'lane',lane,seq:inputSeq});}
 function bindSteering(){for(const [selector,dir] of [['#left',-1],['#right',1]]){const btn=$(selector);if(!btn)continue;btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture?.(e.pointerId);btn.classList.add('pressed');move(dir)},{passive:false});for(const event of ['pointerup','pointercancel','lostpointercapture'])btn.addEventListener(event,()=>btn.classList.remove('pressed'));btn.addEventListener('contextmenu',e=>e.preventDefault())}}
 window.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){if(!$('#road')||e.repeat)return;e.preventDefault();move(e.key==='ArrowLeft'?-1:1)}});
-async function admin(){app.innerHTML=box(renderTop()+'<h1>'+ico('user')+' Painel dos pais</h1><p id="voiceTurnStatus" class="hint">'+(turnReady===true?'Conexão de voz preparada.':turnReady===false?'TURN não configurado; áudio pode falhar entre redes diferentes.':'Verificando a rede do áudio...')+'</p><p class="sub">Acompanhe o tempo, os acessos e entre nas salas de voz.</p><div class="row"><button id="add">+ Criar perfil infantil</button><button id="notifications" class="ghost">'+ico('bell')+' Ativar notificações</button></div><section id="adminContent" class="grid" style="margin-top:18px"></section><h2 style="margin-top:22px">Jogar</h2><div class="row admin-game-actions"><button id="adminPongSolo" class="success">Pong solo</button><button id="adminPongDuo">Pong em dupla</button><button id="adminSnake">Cobrinha</button><button id="adminOpusCraft" class="success">Jogar OpusCraft</button></div><h2 style="margin-top:22px">Central OpusCraft — Controle ADM</h2><div id="adminMinecraftDashboard" class="minecraft-admin-dashboard"><p>Carregando mundos e jogadores...</p></div><h2 style="margin-top:22px">Monitor da Andarilha</h2><section id="adminNpcAudit" class="panel npc-audit"><p class="sub">Buscando histórico de decisões...</p></section><h2 style="margin-top:22px">Capas dos jogos</h2><p class="sub">Troque a imagem de cada jogo sem mexer no código. Use fotos em JPG, PNG ou WebP.</p><div id="adminCovers" class="admin-covers"></div><h2 style="margin-top:22px">Salas em andamento</h2><div id="adminRooms"></div><h2 style="margin-top:22px">Atividades recentes</h2><div id="events" class="panel"></div>');bindLogout();$('#add').onclick=async()=>{const name=prompt('Nome da criança:');if(!name)return;const password=prompt('PIN de acesso (pelo menos 4 caracteres):');if(!password)return;try{await api('admin/users','POST',{name,password});refreshAdmin()}catch(e){notify(e.message)}};$('#notifications').onclick=setupPush;$('#adminPongSolo').onclick=()=>send({type:'create',game:'pong',solo:true});$('#adminPongDuo').onclick=()=>send({type:'create',game:'pong',solo:false});$('#adminSnake').onclick=snake;$('#adminOpusCraft').onclick=openOpusCraft;npcAuditHistory=[];npcAuditCursor=0;refreshAdmin();refreshGameCovers();refreshMinecraftDashboard();void refreshNpcAudit();clearInterval(adminTimer);adminTimer=setInterval(()=>{if(me?.role==='admin'){refreshAdmin();if(!$('#adminMinecraftDashboard')?.querySelector('input:focus'))refreshMinecraftDashboard();if(!document.hidden)void refreshNpcAudit()}},15000)}
+async function admin(){app.innerHTML=box(renderTop()+'<h1>'+ico('user')+' Painel dos pais</h1><p id="voiceTurnStatus" class="hint">'+(turnReady===true?'Conexão de voz preparada.':turnReady===false?'TURN não configurado; áudio pode falhar entre redes diferentes.':'Verificando a rede do áudio...')+'</p><p class="sub">Acompanhe o tempo, os acessos e entre nas salas de voz.</p><div class="row"><button id="add">+ Criar perfil infantil</button><button id="notifications" class="ghost">'+ico('bell')+' Ativar notificações</button></div><section id="adminContent" class="grid" style="margin-top:18px"></section><h2 style="margin-top:22px">Jogar</h2><div class="row admin-game-actions"><button id="adminPongSolo" class="success">Pong solo</button><button id="adminPongDuo">Pong em dupla</button><button id="adminSnake">Cobrinha</button><button id="adminOpusCraft" class="success">Jogar OpusCraft</button></div><h2 style="margin-top:22px">Central OpusCraft — Controle ADM</h2><div id="adminMinecraftDashboard" class="minecraft-admin-dashboard"><p>Carregando mundos e jogadores...</p></div><h2 style="margin-top:22px">Capas dos jogos</h2><p class="sub">Troque a imagem de cada jogo sem mexer no código. Use fotos em JPG, PNG ou WebP.</p><div id="adminCovers" class="admin-covers"></div><h2 style="margin-top:22px">Salas em andamento</h2><div id="adminRooms"></div><h2 style="margin-top:22px">Atividades recentes</h2><div id="events" class="panel"></div>');bindLogout();$('#add').onclick=async()=>{const name=prompt('Nome da criança:');if(!name)return;const password=prompt('PIN de acesso (pelo menos 4 caracteres):');if(!password)return;try{await api('admin/users','POST',{name,password});refreshAdmin()}catch(e){notify(e.message)}};$('#notifications').onclick=setupPush;$('#adminPongSolo').onclick=()=>send({type:'create',game:'pong',solo:true});$('#adminPongDuo').onclick=()=>send({type:'create',game:'pong',solo:false});$('#adminSnake').onclick=snake;$('#adminOpusCraft').onclick=openOpusCraft;refreshAdmin();refreshGameCovers();refreshMinecraftDashboard();clearInterval(adminTimer);adminTimer=setInterval(()=>{if(me?.role==='admin'){refreshAdmin();if(!$('#adminMinecraftDashboard')?.querySelector('input:focus'))refreshMinecraftDashboard()}},15000)}
 async function refreshAdmin(){if(me?.role!=='admin'||!$('#adminContent'))return;try{const data=await api('admin/overview');$('#adminContent').innerHTML=data.users.map(u=>'<div class="panel child-card"><div class="child-head"><div class="avatar">'+(u.hasPhoto?'<img loading="lazy" alt="Foto de '+esc(u.name)+'" src="/api/photos/'+encodeURIComponent(u.id)+'">':ico('user'))+'</div><div><strong>'+esc(u.name)+'</strong><div class="'+(u.online?'online':'offline')+'">'+(u.online?'● Online':'○ Offline')+'</div></div></div><p class="stats">'+Math.floor(u.usedSeconds/60)+' / '+u.dailyLimit+' minutos</p><div class="meter"><div style="width:'+Math.min(100,(u.usedSeconds/(u.dailyLimit*60||1))*100)+'%"></div></div><div class="actions"><button data-id="'+u.id+'" data-action="kick" class="danger">Deslogar</button><button data-id="'+u.id+'" data-action="enable" class="ghost">'+(u.enabled?'Bloquear':'Liberar')+'</button><button data-id="'+u.id+'" data-action="login" class="ghost">Login '+(u.loginEnabled?'ON':'OFF')+'</button><button data-id="'+u.id+'" data-action="voice" class="ghost">Voz '+(u.voiceEnabled?'ON':'OFF')+'</button><button data-id="'+u.id+'" data-action="limit" class="ghost">'+ico('clock')+' Limite</button></div></div>').join('')||'<div class="panel">Cadastre o primeiro perfil.</div>';
 $('#adminRooms').innerHTML=data.rooms.filter(r=>r.game==='pong').map(r=>'<div class="record"><strong>'+ico('gamepad')+' '+esc(r.code)+'</strong><p class="sub">'+r.players.map(esc).join(' × ')+'</p><div class="row"><button data-room="'+esc(r.code)+'" data-mode="spectator">Assistir ao vivo</button><button data-room="'+esc(r.code)+'" data-mode="player" class="success" '+(r.started||r.players.length>=2?'disabled':'')+'>Jogar junto</button></div></div>').join('')||'<div class="panel muted">Nenhuma sala aberta</div>';
 $('#events').innerHTML=data.events.slice(0,12).map(e=>'<p>• '+esc(e.name)+' — '+esc(e.type)+' <small>'+new Date(e.at).toLocaleString('pt-BR')+'</small></p>').join('')||'Sem atividade recente';
 $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const u=data.users.find(x=>x.id===b.dataset.id);try{if(b.dataset.action==='photo'){await chooseChildPhoto(u);return}if(b.dataset.action==='edit'){const name=prompt('Novo nome:',u.name);if(name===null)return;const password=prompt('Novo PIN (deixe vazio para manter):','');if(password===null)return;await api('admin/users/'+u.id,'POST',{name,...(password?{password}:{})});refreshAdmin();return}if(b.dataset.action==='kick')await api('admin/users/'+u.id+'/kick','POST');if(b.dataset.action==='enable')await api('admin/users/'+u.id,'POST',{enabled:!u.enabled});if(b.dataset.action==='login')await api('admin/users/'+u.id,'POST',{loginEnabled:!u.loginEnabled});if(b.dataset.action==='voice')await api('admin/users/'+u.id,'POST',{voiceEnabled:!u.voiceEnabled});if(b.dataset.action==='limit'){const v=prompt('Limite em minutos por dia (0 a 1440)',String(u.dailyLimit));if(v!==null)await api('admin/users/'+u.id,'POST',{dailyLimit:Number(v)})}refreshAdmin()}catch(e){notify(e.message)}});$('#adminRooms').querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room,mode:b.dataset.mode}));}catch(e){notify(e.message)}}
 
-let npcAuditHistory=[],npcAuditCursor=0,npcAuditBusy=false,npcAuditEnabled=true;
-const NPC_ACTION_LABELS={build:'Construir',explore:'Explorar',hide:'Esconder',observe:'Observar',seek_water:'Buscar água',seek_food:'Buscar comida',rest:'Descansar',warm_up:'Aquecer-se',cool_down:'Refrescar-se',surface:'Emergir para respirar'};
-const NPC_REASON_LABELS={
- placed_block:'Bloco colocado',visitor_in_build_area:'Jogador na área da obra',
- existing_block_preserved:'Bloco existente preservado',blueprint_finished:'Projeto concluído',
- no_plot:'Aguardando terreno',not_started:'Ainda não iniciou',
- water_not_found:'Não encontrou água acessível',walking_to_water:'Caminhando até a água',water_drunk:'Bebeu água',
- food_not_found:'Não encontrou comida',no_food_in_inventory:'Sem comida no inventário',food_eaten:'Comeu alimento do inventário',
- exploring:'Explorando arredores',avoiding_players:'Mantendo distância',observing:'Observando',
- resting:'Descansando',warming_up:'Procurando abrigo contra o frio',cooling_down:'Procurando local fresco',
- trying_to_surface:'Tentando voltar à superfície'
-};
-function appendNpcAudit(item){
- if(!item||!Number.isSafeInteger(Number(item.id))||Number(item.id)<=0)return;
- const id=Number(item.id);
- if(npcAuditHistory.some(e=>Number(e.id)===id))return;
- npcAuditHistory.push(item);
- npcAuditHistory.sort((a,b)=>Number(a.id)-Number(b.id));
- npcAuditHistory=npcAuditHistory.slice(-70);
- npcAuditCursor=Math.max(npcAuditCursor,id);
- renderNpcAudit();
-}
-function renderNpcAudit(){
- const el=$('#adminNpcAudit');if(!el||me?.role!=='admin')return;
- if(!npcAuditEnabled){
-  el.innerHTML='<p class="sub">Histórico MySQL ainda não disponível. Verifique a configuração do banco e a migração.</p>';
-  return;
- }
- const events=npcAuditHistory.slice(-40).reverse();
- el.innerHTML='<div class="npc-audit-head"><div><strong>Atividade da IA</strong><small>Atualização ao vivo • histórico por 30 dias</small></div><span class="npc-audit-live">● Ao vivo</span></div>'+
- (events.length?'<div class="npc-audit-list">'+events.map(e=>{
-  const d=e.details||{},label=NPC_ACTION_LABELS[e.action]||e.action||'Ação';
-  const date=new Date(e.at),at=Number.isNaN(date.getTime())?'':date.toLocaleString('pt-BR');
-  let title='',description='',extra='';
-  if(e.type==='question'){
-   title='Pergunta enviada à Groq';
-   description='Modelo: '+esc(d.model||'não informado')+' • Consulta #'+Number(d.number||0);
-   extra='<details><summary>Ver pergunta e contexto</summary><p>'+esc(d.system||'')+'</p><pre>'+esc(JSON.stringify(d.input||{},null,2))+'</pre></details>';
-  }else if(e.type==='decision'){
-   title='Decisão: '+esc(label);
-   description=(e.source==='groq'?'Resposta da Groq':'Decisão local')+
-    ' • Consulta #'+Number(d.number||0)+(d.error?' • '+esc(d.error):'');
-  }else if(e.type==='step'){
-   title='Execução: '+esc(label);
-   description=esc(NPC_REASON_LABELS[d.reason]||d.reason||'Execução monitorada')+
-    ' • '+Number(d.built||0)+' blocos construídos • passo '+Number(d.step||0);
-  }else{
-   title='Erro da Andarilha';
-   description=esc(d.reason||'Erro não especificado');
-  }
-  return '<article class="npc-audit-entry"><div class="npc-audit-dot '+esc(e.type||'')+'"></div><div class="npc-audit-copy"><div class="npc-audit-title">'+title+'</div><p>'+description+'</p>'+extra+'<small>'+esc(at)+'</small></div></article>';
- }).join('')+'</div>':'<p class="sub">Nenhum evento registrado ainda. Acompanhe a próxima decisão da Andarilha.</p>');
-}
-async function refreshNpcAudit(){
- if(npcAuditBusy||me?.role!=='admin'||!$('#adminNpcAudit')||document.hidden)return;
- npcAuditBusy=true;
- try{
-  const result=await api('admin/opuscraft/npc/events'+(npcAuditCursor?'?after='+npcAuditCursor:''));
-  if(!$('#adminNpcAudit'))return;
-  npcAuditEnabled=!!result.enabled;
-  for(const e of result.events||[])appendNpcAudit(e);
-  renderNpcAudit();
- }catch(e){
-  const el=$('#adminNpcAudit');
-  if(el&&!npcAuditHistory.length)el.innerHTML='<p class="sub">Não foi possível carregar o monitor: '+esc(e.message)+'</p>';
- }finally{npcAuditBusy=false}
-}
 async function refreshMinecraftDashboard(){
  const el=$('#adminMinecraftDashboard');if(!el||me?.role!=='admin')return;
  try{
@@ -369,17 +302,19 @@ async function refreshMinecraftDashboard(){
    '<div class="panel"><strong>Servidor OpusCraft</strong><p>'+(data.ready?'Mundo online':'Iniciando')+'</p></div>'+
    '<div class="panel"><strong>Jogadores</strong><p>'+Number(data.guests||0)+'</p></div>'+
    '<div class="panel"><strong>Último salvamento</strong><p>'+(data.lastSave?new Date(data.lastSave).toLocaleTimeString('pt-BR'):'Aguardando')+'</p></div></div>'+
-   (npc?.needs?'<div class="panel"><h3>Andarilha — Sobrevivência</h3>'+
-    '<p class="sub"><strong>Objetivo próprio:</strong> '+esc(npc.currentGoal||'continuar viva')+'</p>'+
-    '<p class="sub">'+esc(npc.goalReason||'Sem decisão registrada')+'</p>'+
-    '<div class="npc-vitals">'+[
-      ['Saúde',npc.needs.health,20],['Oxigênio',npc.needs.oxygen,100],
-      ['Fome',npc.needs.hunger,100],['Sede',npc.needs.thirst,100],
-      ['Energia',npc.needs.energy,100]
-    ].map(([name,val,max])=>'<div class="npc-vital"><span>'+name+'</span><strong>'+Math.round(Number(val)||0)+'/'+max+'</strong>'+
-      '<div class="npc-vital-track"><i style="width:'+Math.max(0,Math.min(100,100*(Number(val)||0)/Number(max)))+'%"></i></div></div>').join('')+'</div>'+
-    '<p class="sub">Temperatura: '+Number(npc.needs.temperature||0).toFixed(1)+' °C • Mortes: '+Number(npc.deaths||0)+
-    ' • Memórias recentes: '+Number(npc.memoryCount||0)+'</p></div>':'')+
+   (npc?.role==='invisible_host'?'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3>'+
+    '<p class="sub">Andarilha: '+(npc.hidden?'invisível e parada':'preparando servidor')+
+     ' • Sem conexão com serviços de IA</p>'+
+    (npc.worldAttractions?'<p><strong>Atrações prontas:</strong> '+Number(npc.worldAttractions.placedAttractions||0)+
+      ' de '+Number(npc.worldAttractions.totalAttractions||0)+'</p>'+
+      (npc.worldAttractions.building?'<p class="sub">Preparando: '+esc(npc.worldAttractions.building.name)+
+       ' • '+Number(npc.worldAttractions.building.done||0)+'/'+Number(npc.worldAttractions.building.total||0)+' blocos</p>':
+       '<p class="sub">'+esc(npc.worldAttractions.blocked||'Buscando terrenos para as próximas atrações')+'</p>')+
+      (npc.worldAttractions.attractions?.length?'<div class="npc-landmarks">'+
+       npc.worldAttractions.attractions.map(x=>'<p>📍 '+esc(({names:'Letreiro Caique e Cauã',windmill:'Moinho giratório',pinwheels:'Cataventos giratórios',castle:'Castelo',village:'Vila',garden:'Jardim',watchtower:'Torre'}[x.name]||x.name))+
+       ' • X '+Math.round(x.x)+' | Z '+Math.round(x.z)+'</p>').join('')+'</div>':''):
+     '<p class="sub">Aguardando o carregamento do mundo</p>')+
+    '</div>':'')+
    '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+

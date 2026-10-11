@@ -74,13 +74,41 @@ node --test tests/integration.cjs
 
 
 
-## Andarilha: moradora autônoma do servidor da família
-- O avatar do próprio host OpusCraft assume a identidade **Andarilha**. Ele anda por uma área isolada, constrói uma pequena casinha com blocos novos (sem quebrar estruturas existentes) e pode cumprimentar raramente as crianças com frases previamente aprovadas.
-- O cérebro opcional usa a **API da GroqCloud (Groq, com Q)** exclusivamente no processo Node da VPS: decisões limitadas a `build`, `explore`, `hide` e `observe`, atualizadas no máximo a cada quatro minutos. Nenhuma chave, histórico de conversa ou nome de criança é enviado à API. Se a chave estiver ausente ou o serviço falhar, uma rotina local segura mantém a personagem em atividade.
-- Para ativar GroqCloud, crie sua chave em `https://console.groq.com/keys` e configure `GROQ_API_KEY` no arquivo protegido `/etc/gamesforchildren.env` (nunca no Git, navegador ou chat). Opcional: `GROQ_MODEL=openai/gpt-oss-20b`. O modelo padrão GPT-OSS 20B é suportado pela GroqCloud e retorna ações por JSON Schema estrito. Reinicie apenas `games-for-children.service` após atualizar a configuração; sem a chave, a Andarilha continua em modo local.
-- Somente **Administrador**, estando dentro do mundo multiplayer da família, recebe o botão **Ir até ela** em Jogadores / Teleporte. A API `/api/admin/opuscraft/npc/visit` repete a verificação de perfil e da sessão ativa. Crianças não têm acesso ao destino exato por API.
-- O mundo existente continua sendo o mesmo. **Não há reset, regeneração nem exclusão automática do perfil IndexedDB**. Antes de eventual recriação manual, preserve uma cópia do diretório `data/opuscraft/profile` com o serviço parado; esta integração não precisa recriar o mapa.
-- A área de construção é deliberadamente pequena. É um primeiro marco de IA com ações seguras, não um bot com acesso irrestrito aos comandos do jogo. O menu administrativo mostra a personagem quando a sessão multiplayer está ativa.
+## Mundo da família: servidor invisível e aventuras de Caique e Cauã
+
+- A **Andarilha** é apenas a conta interna do host que mantém o mundo online na VPS.
+  Ela fica **imóvel e em modo espectador (invisível)**, sem fome, sede, sobrevivência,
+  construções próprias, diálogos ou qualquer conexão com Groq, Gemini e outras IAs.
+  O mundo **permanece criativo para as crianças**.
+- A VPS recebe um pequeno mecanismo de atrações não-IA: letreiro de blocos com os
+  nomes **CAIQUE** e **CAUÃ** (com til), moinho com pás animadas quando há visitantes, três cataventos giratórios,
+  castelo, vila, jardim e torre de observação.
+- As atrações são construídas **no mesmo mundo**, por lotes limitados, apenas em
+  áreas livres e previamente inspecionadas. O sistema usa tickets temporários
+  de chunks para criar regiões adicionais **sem mover a Andarilha**.
+  Nenhuma área ocupada deve ser substituída; se um bloco desconhecido surgir,
+  a obra pausa. Terreno natural com vegetação densa/árvores também é rejeitado.
+- A localização das atrações concluídas aparece no painel do ADM como **X e Z**.
+  O botão **Ir ao letreiro** é restrito ao ADM já conectado ao multiplayer.
+- Para preservar o mapa, a construção só adiciona blocos em posições vazias ou
+  ocupadas por vegetação leve; **não escava, não apaga construções existentes,
+  não regenera mundos e não altera a semente**.
+- A progressão das atrações está em uma chave local, específica do mundo, no
+  armazenamento do Chromium hospedado na VPS. Os blocos continuam salvos no
+  IndexedDB original do OpusCraft, e a conclusão só é registrada depois de um
+  salvamento bem-sucedido. Um reinício retoma verificando os blocos existentes.
+- As vilas naturais, os aldeões e a fauna do OpusCraft continuam ativos, conforme
+  as regras já existentes. Nenhum serviço externo de geração é necessário.
+- **Proteção conservadora:** sem histórico de origem de cada bloco, nenhuma
+  heurística pode garantir 100% a distinção entre todos os blocos naturais e
+  os colocados por jogadores. Por isso, a implantação só autoriza acrescentar
+  blocos em áreas visualmente livres.
+
+Para inspecionar o mundo na VPS:
+```bash
+curl -sS http://127.0.0.1:4173/__health
+curl -sS http://127.0.0.1:4173/__npc/status | python3 -m json.tool
+```
 
 ## Versões anteriores (arquivadas)
 As integrações MCGalaxy e ClassiCube foram removidas do código de produção. O OpusCraft permanece como único jogo de blocos ativo.

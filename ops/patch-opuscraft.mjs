@@ -209,8 +209,8 @@ patch('src/game/game.ts',
  "    this.mode = 'client';\n    this.joinedWith = me.code;",
  "    this.mode = 'client';\n    if ((window as any).__gfcFamilySession === true) this.resize();\n    this.joinedWith = me.code;");
 patch('src/game/game.ts',
- "    this.guestPoem = null;\n    this.mode = 'single';\n    this.clock.stop();",
- "    this.guestPoem = null;\n    this.mode = 'single';\n    (window as any).__gfcRestoreVideo?.();\n    this.clock.stop();");
+ "    if (!c) return false;\n    this.client = null;\n    this.guestPoem = null;\n    this.mode = 'single';\n    this.clock.stop();",
+ "    if (!c) return false;\n    this.client = null;\n    this.guestPoem = null;\n    this.mode = 'single';\n    (window as any).__gfcRestoreVideo?.();\n    this.clock.stop();");
 
 // Reduce framebuffer pixel count in the family multiplayer: the GPU
 // draws the same voxel geometry but at 70% of desktop resolution (85%

@@ -23,7 +23,7 @@ test('The family world attractions are additive, idempotent and preserve existin
  assert.match(build,/gfc-world-attractions\.ts/);
  assert.match(a,/const OPEN=new Set/);
  assert.match(a,/if\(!OPEN\.has\(current\)\)/);
- assert.match(a,/if\(!OPEN\.has\(nameAt\(xx,yy,zz\)\)\)return false/);
+ assert.match(a,/if\(!OPEN\.has\(nameAt\(xx,yy,zz\)\)\)return null/);
  assert.match(a,/state\.work=\{site:\{kind,x,y,z\},cursor:0\}/);
  assert.match(a,/game\.level\.setBlock\(x,y,z,S\(b\.name\)\)/);
  assert.match(a,/await|\.then\(\(\)=>/);

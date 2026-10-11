@@ -12,11 +12,12 @@ test('Native OpusCraft title, singleplayer and family server in multiplayer',()=
  assert.match(patch,/restoreFromVps/);
  assert.match(patch,/spectator/);
  assert.match(patch,/adventure/);
- // The GamesNavagador play button must join the family world immediately.
- // The upstream title/menu remains available through native OpusCraft pages.
- assert.match(app,/opuscraft\/index\.html\?gfcJoin=1&v=/);
- assert.match(app,/if\(!status\.ready\)/);
- assert.match(app,/gameFrame\.src='\/opuscraft\/index\.html\?gfcJoin=1&v='/);
+ // The catalog launches the native title; the family server is selected in multiplayer.
+ assert.match(app,/opuscraft\/index\.html\?v=/);
+ assert.doesNotMatch(app,/opuscraft\/index\.html\?gfcJoin=1&v=/);
+ assert.doesNotMatch(app,/if\(!status\.ready\)/);
+ assert.match(patch,/await actions\.preflight\(\)/);
+ assert.match(patch,/actions\.prepare\(\)/);
  assert.match(app,/g\?\.mode==='client'&&g\.inWorld&&g\.spawned/);
  assert.match(app,/opuscraftJoinAlert/);
  assert.match(app,/opusPlayersToggle/);

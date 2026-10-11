@@ -34,7 +34,8 @@ patch('src/main.ts',
 patch('src/main.ts',
  "  installScreens(game);",
  `  installScreens(game);
-  if (params.has('gfcJoin')) installGfcRotors(game);
+  (window as any).__gfcFamilyActions = { preflight: checkFamilyRelay, prepare: () => prepareFamilyClient(game) };
+  if (!params.has('gfcHost')) installGfcRotors(game);
   if (!params.has('gfcHost')) {
     let accessLost=false;
     setInterval(async () => {
@@ -58,7 +59,7 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';\nimport { checkFamilyRelay, prepareFamilyClient } from './gfc-family-client';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
@@ -86,25 +87,7 @@ patch('src/main.ts',
     // One server-owned family world, never a LAN search or manual join-code form.
     // The upstream LAN list is intended for ad-hoc browser hosts and may be blocked
     // by production reverse proxies. Always connect directly to our private relay.
-    // Family multiplayer uses a short initial radius so guests never try to
-    // mesh an entire world on entry. Keep individual single-player settings intact.
-    // Two chunks caused visible map cliffs on desktop. Give the player a
-    // practical horizon, while keeping the phone radius inexpensive.
-    const familyOnPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-    game.opts.renderDistance = familyOnPhone ? 3 : 5;
-    game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 3);
-    // Use economical multiplayer defaults on every device, including desktop.
-    // The browser's own GPU still renders the world, but without heavy weather
-    // sprites, clouds, leaf transparency, shadows or decorative particles.
-    // These are not saved to the player's personal single-player settings.
-    game.opts.graphics = 0;
-    game.opts.fancy = false;
-    game.opts.clouds = 0;
-    game.opts.particles = 2;
-    game.opts.entityShadows = false;
-    game.opts.smoothLighting = false;
-    game.opts.maxFps = Math.min(game.opts.maxFps, 60);
+    prepareFamilyClient(game);
     await game.joinWorld({ via: 'relay' }, guestIdentity(game, identity.playerName, identity.joinCode));
   } else if (params.has('seed') || params.has('quick')) {`);
 
@@ -117,16 +100,19 @@ patch('src/gui/screens/multiplayer.ts',
  "  private nameOk(): boolean {",
  `  private async enterFamilyServer(): Promise<void> {
     try {
+      const actions = (window as any).__gfcFamilyActions;
+      if (!actions) throw Error('Menu familiar indisponivel.');
+      await actions.preflight();
       const r = await fetch('/api/opuscraft/identity', { credentials: 'same-origin', cache: 'no-store' });
       if (!r.ok) throw Error('Acesso da familia encerrado. Faca login novamente.');
       const identity = await r.json() as { playerName:string; joinCode:string };
       if (!/^[A-Za-z0-9_]{3,16}$/.test(identity.playerName)) throw Error('Identidade invalida');
       this.closeLists();
-      const onPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-        (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-      this.game.opts.renderDistance = onPhone ? 3 : 5;
+      actions.prepare();
       await this.game.joinWorld({ via: 'relay' }, guestIdentity(this.game, identity.playerName, identity.joinCode));
+      (window as any).__gfcFamilyJoining = false;
     } catch (error) {
+      (window as any).__gfcFamilyJoining = false;
       this.game.setScreen(this);
       window.alert('Nao foi possivel entrar no Servidor da Familia: ' + String(error));
     }
@@ -202,14 +188,14 @@ patch('src/net/transport/webSocket.ts',
 // outward (5 desktop / 3 mobile) without a huge synchronous mesh burst.
 patch('src/game/game.ts',
  "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
- `    this.chunks.renderDistance = login && location.search.includes('gfcJoin') ?
-      Math.min(3,this.opts.renderDistance) : this.opts.renderDistance;
+ `    this.chunks.renderDistance = login && this.mode === 'client' && (window as any).__gfcFamilySession === true ?
+      Math.min(1,this.opts.renderDistance) : this.opts.renderDistance;
     this.chunks.smoothLighting = this.opts.smoothLighting;`);
 patch('src/game/game.ts',
  "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
  `    client?.receive();
     if (this.mode === 'client' && this.inWorld && this.spawned &&
-        location.search.includes('gfcJoin') && this.chunks &&
+        (window as any).__gfcFamilySession === true && this.chunks &&
         this.ticks % 80 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
       this.chunks.renderDistance++;
       this.renderer.renderDistance = this.chunks.renderDistance;
@@ -222,7 +208,7 @@ patch('src/game/game.ts',
 patch('src/game/game.ts',
  "    const dpr = window.devicePixelRatio || 1;",
  `    const native = window.devicePixelRatio || 1;
-    const family = location.search.includes('gfcJoin');
+    const family = (window as any).__gfcFamilySession === true && this.mode === 'client';
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const ratio = family ? (mobile ? 0.82 : 0.70) : 1;
     const maxW = family ? (mobile ? 1200 : 1440) : 8192;
@@ -239,7 +225,7 @@ patch('src/render/renderer.ts',
 // above dense jungle foliage. Solo worlds retain vanilla precipitation.
 patch('src/render/renderer.ts',
  "    if (e.level && e.weather.rain > 0) {",
- "    if (e.level && e.weather.rain > 0 && !location.search.includes('gfcJoin')) {");
+ "    if (e.level && e.weather.rain > 0 && !((window as any).__gfcFamilySession === true && (window as any).__game?.mode === 'client')) {");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 3;",
  "export const CHUNKS_PER_TICK = 3;");

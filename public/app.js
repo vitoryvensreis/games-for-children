@@ -80,14 +80,13 @@ async function openOpusCraft(){
  try{
   const status=await api('opuscraft/status');
   if(!status.available){notify('Os arquivos do OpusCraft ainda não foram instalados.');return}
-  if(!status.ready){notify('O servidor da família está iniciando. Aguarde um pouco e tente novamente.');return}
+  // The title and personal worlds must open even when the VPS family host is offline.
   // O menu e os mundos individuais funcionam mesmo se o servidor familiar estiver reiniciando.
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
   app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft em tela horizontal">'+
-  // Enter the authenticated persistent family world directly. Without gfcJoin
-  // OpusCraft opens its ordinary title screen and NEVER joins the VPS relay.
-  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?gfcJoin=1&v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
+  // Native title first: solo worlds stay playable without the family VPS.
+  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
@@ -103,7 +102,7 @@ async function openOpusCraft(){
   });
   const root=$('#cubeRoot'),overlay=$('#opuscraftRotate');
   const joinAlert=$('#opuscraftJoinAlert');
-  let joinCheckTimer=null,joinTimeout=null,joinSucceeded=false;
+  let joinCheckTimer=null,joinTimeout=null,joinSucceeded=false,joinTracked=false;
   function checkFamilyJoin(){
    if(!gameFrame.isConnected){clearInterval(joinCheckTimer);return}
    try{
@@ -115,6 +114,7 @@ async function openOpusCraft(){
    }catch{}
   }
   function scheduleFamilyJoinCheck(){
+   joinTracked=true;
    joinSucceeded=false;
    clearInterval(joinCheckTimer);clearTimeout(joinTimeout);
    joinCheckTimer=setInterval(checkFamilyJoin,1000);
@@ -132,12 +132,12 @@ async function openOpusCraft(){
   }
   $('#opuscraftJoinRetry').onclick=()=>{
    joinAlert.hidden=true;
-   gameFrame.src='/opuscraft/index.html?gfcJoin=1&v='+
+   clearTimeout(joinTimeout);clearInterval(joinCheckTimer);joinTracked=false;
+   // Reopen the title: joining a family server must remain an explicit choice.
+   gameFrame.src='/opuscraft/index.html?v='+
     encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now();
-   scheduleFamilyJoinCheck();
   };
   $('#opuscraftJoinBack').onclick=()=>$('#opuscraftBack')?.click();
-  scheduleFamilyJoinCheck();
   const playersDock=$('#opusPlayersDock'),playersPanel=$('#opusPlayersPanel'),playersList=$('#opusPlayersList');
   let rosterBusy=false;
   async function showFamilyPlayers(){
@@ -179,8 +179,17 @@ async function openOpusCraft(){
   };
   const modeTimer=setInterval(()=>{
    if(!gameFrame.isConnected){clearInterval(modeTimer);return}
-   let mode='';
-   try{mode=gameFrame.contentWindow?.__game?.mode||''}catch{}
+   let mode='',joining=false;
+   try{
+    const client=gameFrame.contentWindow;
+    mode=client?.__game?.mode||'';
+    joining=client?.__gfcFamilyJoining===true||mode==='client';
+   }catch{}
+   if(joining&&!joinTracked)scheduleFamilyJoinCheck();
+   if(!joining&&joinTracked){
+    joinTracked=false;clearTimeout(joinTimeout);clearInterval(joinCheckTimer);
+    joinAlert.hidden=true;
+   }
    const active=mode==='client';
    playersDock.hidden=!active;
    if(!active)playersPanel.hidden=true;

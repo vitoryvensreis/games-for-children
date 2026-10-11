@@ -7,12 +7,12 @@ import { S } from './world/block';
 
 type Rotor={name:'windmill'|'pinwheels';x:number;y:number;z:number;ready:boolean};
 export function installGfcRotors(game:Game):void{
- if(!location.search.includes('gfcJoin'))return;
+ if(new URLSearchParams(location.search).has('gfcHost'))return;
  let rotors:Rotor[]=[];
  let pending=false;
  const pose=new PoseStack();
  async function load(){
-  if(pending||game.mode!=='client'||!game.inWorld)return;
+  if(pending||(window as any).__gfcFamilySession!==true||game.mode!=='client'||!game.inWorld)return;
   pending=true;
   try{
    const response=await fetch('/api/opuscraft/landmarks',{

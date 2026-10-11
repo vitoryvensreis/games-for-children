@@ -35,7 +35,8 @@ test('Game joins only as authenticated child; no public hosting through app rela
 });
 test('PWA displays OpusCraft with family chat and voice overlay',()=>{
  const app=read('public/app.js'),css=read('public/style.css');
- assert.match(app,/\/opuscraft\/index\.html\?gfcJoin=1&v=/);
+ assert.match(app,/\/opuscraft\/index\.html\?v=/);
+ assert.doesNotMatch(app,/\/opuscraft\/index\.html\?gfcJoin=1&v=/);
  assert.match(app,/api\('opuscraft\/status'\)/);
  assert.match(app,/familyChatInput/);
  assert.match(app,/openOpusCraft/);

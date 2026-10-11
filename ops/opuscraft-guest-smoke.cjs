@@ -127,7 +127,7 @@ server.on('upgrade',(req,socket,head)=>{
    renderDistance:window.__game?.opts?.renderDistance,
    hostViewDistance:window.__game?.client?.info?.viewDistance,
   }));
-  if(status.renderDistance!==5||status.hostViewDistance!==5)
+  if(status.renderDistance!==4||status.hostViewDistance!==4)
    throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
   console.log('OPUSCRAFT_FAMILY_DESKTOP_CHUNK_RADIUS_OK',JSON.stringify({
    client:status.renderDistance,server:status.hostViewDistance}));
@@ -154,6 +154,16 @@ server.on('upgrade',(req,socket,head)=>{
   await page2.setExtraHTTPHeaders({'x-gfc-test-profile':'adult'});
   page2.on('pageerror',e=>errors.push('second page: '+e.message));
   page2.on('console',m=>{if(['error','warning'].includes(m.type()))errors.push('second console '+m.type()+': '+m.text().slice(0,380))});
+  // Regression: the real catalog URL must open the title rather than the map.
+  stage='native-title';
+  await page2.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html',
+    {waitUntil:'domcontentloaded',timeout:85000});
+  await page2.waitForFunction(()=>{
+    const g=window.__game;
+    return !!(g&&g.mode==='single'&&!g.inWorld&&window.__gfcFamilyActions?.preflight);
+  },{timeout:50000,polling:1000});
+  console.log('OPUSCRAFT_NATIVE_TITLE_READY');
+  stage='second-player-join';
   await page2.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?gfcJoin=1',
     {waitUntil:'domcontentloaded',timeout:85000});
   await page2.waitForFunction(()=>{const g=window.__game;return !!(g?.mode==='client'&&g.inWorld&&g.spawned)},{

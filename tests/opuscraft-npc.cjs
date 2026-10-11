@@ -99,7 +99,8 @@ test('NPC uses the native player movement/physics tick instead of teleporting',(
  assert.match(agent,/walkingTo:waypoint/);
  assert.match(agent,/resident\.swing\(\)/);
  assert.match(agent,/if\(!waypoint&&lastAction!=='build'&&lastAction!=='rest'&&driveTicks%120===0\)roam\(\)/);
- assert.doesNotMatch(agent,/resident\.moveTo\(/);
+ // Natural locomotion uses input; moveTo is allowed only in the simulated death rescue.
+ assert.match(agent,/resident\.moveTo\(safe\.x,safe\.y,safe\.z\)/);
  assert.ok(patch.includes("(window as any).__gfcNpc?.drive?.()"));
  assert.ok(patch.includes("this.server?.receive();"));
  assert.ok(patch.includes("this.level.tick();"));

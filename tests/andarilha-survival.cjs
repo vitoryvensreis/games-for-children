@@ -17,7 +17,7 @@ test('urgent needs prioritize life without predefined house, job or story',()=>{
  assert.match(source,/Seu único motivo inicial é continuar viva/);
  assert.doesNotMatch(source,/Dê preferência a construir uma casinha/);
 });
-test('Groq never receives credentials or child identifiers from world context',()=>{
+test('Groq never receives credentials or child identifiers from world context',async()=>{
  const payload=contextForModel({needs:{oxygen:20,hunger:30},currentGoal:'survive',
   memories:[{kind:'air',detail:'Fiquei submersa'}],
   discoveries:[{x:4,z:5,kind:'water'}],playersNearby:2,

@@ -14,6 +14,13 @@ const PROFILE=path.join(ROOT,'data','opuscraft','profile');
 const PORT=Number(process.env.OPUSCRAFT_PORT||4173);
 let browser=null,hostPage=null,relay=null,starting=false,stopping=false,lastSave=null,lastError='',tries=0;
 let npcTimer=null,npcBusy=false,npcPlanTime=0,npcStep=0,npcDecision='build',npcSource='local';
+let npcLastAudit='',npcLastAuditAt=0;
+function publishNpc(type,details){
+ // Parent node server stores in MySQL and broadcasts to authenticated ADM.
+ // Never transfer tokens, raw provider payload, usernames, or chat.
+ if(typeof process.send!=='function'||!process.connected)return;
+ try{process.send({type:'npcAudit',event:{type,action:npcDecision,source:npcSource,details}})}catch{}
+}
 const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
@@ -210,24 +217,29 @@ async function tickNpc(){
    // The Groq query never contains usernames, chat, tokens or family identifiers.
    const input={playersNearby:status.visitors,blocksBuilt:status.built,
     hasVisitors:status.visitors>0};
-   log('NPC_QUESTION',JSON.stringify({
-    number:npcStep+1,model:process.env.GROQ_MODEL||'openai/gpt-oss-20b',
-    system:NPC_SYSTEM_PROMPT,input
-   }));
+   const question={number:npcStep+1,model:process.env.GROQ_MODEL||'openai/gpt-oss-20b',
+    system:NPC_SYSTEM_PROMPT,input};
+   log('NPC_QUESTION',JSON.stringify(question));
+   publishNpc('question',question);
    const plan=await decide(input,npcStep++);
    npcDecision=plan.action;npcSource=plan.source;
-   log('NPC_DECISION',JSON.stringify({
-    number:npcStep,source:plan.source,action:plan.action,
-    configured:plan.configured,error:plan.error||null
-   }));
+   const decision={number:npcStep,configured:plan.configured,error:plan.error||null};
+   log('NPC_DECISION',JSON.stringify({...decision,source:plan.source,action:plan.action}));
+   publishNpc('decision',decision);
   }
   const result=await hostPage.evaluate(action=>window.__gfcNpc?.step?.(action),npcDecision);
   // Each 20-second execution is auditable even if nothing is placed.
-  if(result?.ok)log('NPC_STEP',JSON.stringify({
-   step:result.steps,action:npcDecision,source:npcSource,
-   built:result.built,cursor:result.buildCursor,reason:result.buildReason,
-   visitors:result.visitors,walkingTo:result.walkingTo
-  }));
+  if(result?.ok){
+   const snapshot={step:result.steps,built:result.built,cursor:result.buildCursor,
+    reason:result.buildReason,visitors:result.visitors};
+   log('NPC_STEP',JSON.stringify({...snapshot,action:npcDecision,source:npcSource,walkingTo:result.walkingTo}));
+   // Save meaningful changes, not the noisy repeated 20-second heartbeat.
+   const key=[npcDecision,result.built,result.buildCursor,result.buildReason].join('|');
+   if(key!==npcLastAudit||Date.now()-npcLastAuditAt>120000){
+    npcLastAudit=key;npcLastAuditAt=Date.now();
+    publishNpc('step',snapshot);
+   }
+  }
  }catch(err){log('NPC step failed:',String(err.message).slice(0,150))}
  finally{npcBusy=false}
 }

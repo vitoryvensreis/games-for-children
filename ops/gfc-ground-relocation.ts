@@ -82,7 +82,7 @@ export function installGroundRelocation(
    }
   }
   const [dx,dz]=offsets[choice%offsets.length];
-  const i=Math.floor(choice/offsets.length)%6;
+  const i=Math.floor(choice/offsets.length);
   const offX=dx+(i*18*Math.sign(dx||1)),offZ=dz+(i*18*Math.sign(dz||1));
   const candidate={kind:existing.kind,x:existing.x+offX,z:existing.z+offZ,y:0,elevated:false};
   if(state.completed.some(s=>s!==existing&&Math.hypot(s.x-candidate.x,s.z-candidate.z)<42)){

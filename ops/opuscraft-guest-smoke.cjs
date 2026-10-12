@@ -231,23 +231,12 @@ server.on('upgrade',(req,socket,head)=>{
   const npc=await fetch('http://127.0.0.1:4173/__npc/status').then(r=>r.json());
   if(!npc.ok||npc.name!=='Andarilha'||!npc.hidden||npc.role!=='invisible_host'||npc.brain!=='disabled')
    throw Error('Invisible hosting spectator not ready: '+JSON.stringify(npc));
-  const visit=await fetch('http://127.0.0.1:4173/__npc/visit',{
-   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:adm.name})
-  });
-  const visitResult=await visit.json();
-  if(visit.status!==200||!visitResult.ok)
-   throw Error('Administrator could not visit resident: '+JSON.stringify(visitResult));
-  const badVisit=await fetch('http://127.0.0.1:4173/__npc/visit',{
-   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:kid.name})
-  });
-  if(badVisit.status!==400)throw Error('Child identity was accepted as an administrator by the NPC host');
-  const invalidAttraction=await fetch('http://127.0.0.1:4173/__npc/visit',{
-   method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({from:adm.name,attraction:'nonexistent-world-coordinate'})
-  });
-  if(invalidAttraction.status!==400)
-   throw Error('Arbitrary administrator coordinates were accepted by landmark teleport');
-  console.log('OPUSCRAFT_NPC_ADMIN_VISIT_OK');
+  if(npc.worldId!=='gamesnavagador-family-world-v3'||npc.worldAttractions!==null)
+   throw Error('Expected only clean V3 with no attractions: '+JSON.stringify(npc));
+  const retired=await fetch('http://127.0.0.1:4173/__npc/visit',{method:'POST'});
+  if(retired.status===200)throw Error('Retired landmark visit endpoint still reachable');
+  console.log('OPUSCRAFT_V3_NO_PREBUILT_ATTRACTIONS_OK');
+
 
 
  }catch(err){

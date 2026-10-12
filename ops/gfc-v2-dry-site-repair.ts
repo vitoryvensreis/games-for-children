@@ -201,6 +201,33 @@ export function installGfcDrySiteRepair(game:Game,sites:FamilySite[],
    return;
   }
   if(j.phase==='saveFinal'){
+   // The native V2 blueprint contains STATIC wool spokes, while all players
+   // also render smoothly animated rotor meshes. Retire only exact original
+   // spoke cells; never alter hubs, supports, or user constructions elsewhere.
+   if(j.kind==='windmill'||j.kind==='pinwheels'){
+    const mill=j.kind==='windmill',wool=mill?'white_wool':'red_wool';
+    for(const hubX of (mill?[0]:[-5,0,5])){
+     for(let t=1;t<=(mill?4:2);t++){
+      for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+       const x=j.x+hubX+dx*t,y=j.y+(mill?10:7)+dy*t,z=j.z+(mill?-6:-3);
+       if(old(x,y,z)===wool)game.level.setBlock(x,y,z,S('air'));
+      }
+     }
+    }
+   }
+   // Extra exterior/interior path lights use existing walkable stone/paths.
+   // Only place torches in empty air above a solid support; never overwrite
+   // any user-placed block. No blueprint mutation (legacy verification safe).
+   const lights=j.kind==='castle'?
+    [[-7,-7],[7,-7],[-7,7],[7,7],[-4,0],[4,0]]:
+    j.kind==='village'?
+    [[-1,-8],[1,-8],[-1,8],[1,8],[-8,-1],[-8,1],[8,-1],[8,1]]:[];
+   for(const [dx,dz] of lights){
+    const x=j.x+dx,y=j.y+1,z=j.z+dz;
+    const existing=old(x,y,z),under=old(x,y-1,z);
+    if(existing==='air'&&['stone_bricks','dirt_path','cobblestone','spruce_planks'].includes(under))
+     game.level.setBlock(x,y,z,S('torch'));
+   }
    busy=true;reason='Salvando terreno definitivo de '+j.kind;
    void game.saveWorld().then(()=>{
     const site=sites.find(s=>s.kind===j.kind&&s.x===j.x&&s.z===j.z);

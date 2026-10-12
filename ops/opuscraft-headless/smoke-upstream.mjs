@@ -23,6 +23,7 @@ try{
  const entry=path.join(temp,'headless-entry.ts');
  fs.writeFileSync(entry,`import '${path.join(upstream,'src/world/blocks.ts').replaceAll('\\','/')}';\nimport {World} from '${path.join(upstream,'src/world/world.ts').replaceAll('\\','/')}';
 import {Chunk} from '${path.join(upstream,'src/world/chunk.ts').replaceAll('\\','/')}';
+import {ChunkGenerator} from '${path.join(upstream,'src/world/gen/generator.ts').replaceAll('\\','/')}';
 import {Level} from '${path.join(upstream,'src/game/level.ts').replaceAll('\\','/')}';
 import {HostServer} from '${path.join(upstream,'src/net/server/hostServer.ts').replaceAll('\\','/')}';
 import {encode,decode} from '${path.join(upstream,'src/net/codec.ts').replaceAll('\\','/')}';
@@ -30,25 +31,31 @@ import {offlinePlayerUuid} from '${path.join(upstream,'src/net/offlineUuid.ts').
 import {SB,CB} from '${path.join(upstream,'src/net/protocol.ts').replaceAll('\\','/')}';
 import {savePlayer} from '${path.join(upstream,'src/game/playerData.ts').replaceAll('\\','/')}';
 import {ItemStack} from '${path.join(upstream,'src/item/item.ts').replaceAll('\\','/')}';
-export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack};`);
+export {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack};`);
  const output=path.join(temp,'server.mjs');
  await build({entryPoints:[entry],outfile:output,bundle:true,format:'esm',platform:'node',
   target:'node22',logLevel:'warning',define:{__BUILD_ID__:JSON.stringify('headless-integration-smoke')}});
  // Reject runtime reliance on browser globals instead of adding mock DOM/WebGL.
- const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack}=await import(pathToFileURL(output).href);
+ const {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack}=await import(pathToFileURL(output).href);
  assert.equal(typeof HostServer,'function','HostServer must be loadable without a browser');
  // Boot an independent Node-only dedicated runtime with real upstream
  // HostServer/Level/World, then save and reload a checkpoint.
  const dedicatedDir=path.join(temp,'dedicated-world');
  const runtime=createDedicatedRuntime({
-  engine:{World,Level,Chunk,HostServer,savePlayer},wss:new EventEmitter(),
+  engine:{World,Level,Chunk,ChunkGenerator,HostServer,savePlayer},wss:new EventEmitter(),
   worldDir:dedicatedDir,seed:'family-integration',joinCode:'ABCD1234'
  });
+ // Generate genuine terrain using the unchanged upstream noise/structure engine.
+ const nativeTerrain=runtime.generateChunk(1,1);
+ assert.equal(runtime.world.getChunk(1,1),nativeTerrain);
+ assert.equal(runtime.generateChunk(1,1),nativeTerrain,'Do not overwrite a loaded chunk');
+ const terrainState=runtime.world.getState(16,-63,16);
+ assert.equal(terrainState,nativeTerrain.getState(0,-63,0));
  const dedicatedChunk=new Chunk(0,0,runtime.world.dim.lightDefault);
  runtime.world.chunks.set(dedicatedChunk.key,dedicatedChunk);
  dedicatedChunk.setState(1,64,1,1);
  runtime.save();
- assert.equal(runtime.status().chunks,1);
+ assert.equal(runtime.status().chunks,2);
  runtime.stop();
  const restarted=createDedicatedRuntime({
   engine:{World,Level,Chunk,HostServer,savePlayer},wss:new EventEmitter(),
@@ -56,6 +63,7 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  });
  assert.equal(restarted.restored.source,'primary');
  assert.equal(restarted.world.getState(1,64,1),1);
+ assert.equal(restarted.world.getState(16,-63,16),terrainState);
  restarted.stop();
 
  const world=new World();

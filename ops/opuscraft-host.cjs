@@ -16,7 +16,7 @@ const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1');
- if(req.method!=='GET'&&!(req.method==='POST'&&['/__teleport','/__npc/visit'].includes(url.pathname))){res.writeHead(405).end();return}
+ if(req.method!=='GET'&&!(req.method==='POST'&&['/__teleport','/__npc/visit','/__summon','/__world-control','/__npc/recover'].includes(url.pathname))){res.writeHead(405).end();return}
  if(url.pathname==='/__players'&&req.method==='GET'){
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
    const g=window.__game,srv=g?.server;
@@ -59,6 +59,81 @@ const server=http.createServer((req,res)=>{
    }catch(e){
     res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}));
    }
+  });return;
+ }
+ if(url.pathname==='/__summon'&&req.method==='POST'){
+  let bytes=0,chunks=[];
+  req.on('data',part=>{bytes+=part.length;if(bytes>512){req.destroy();return}chunks.push(part)});
+  req.on('end',async()=>{
+   try{
+    const {from,to}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||'')||
+       !/^KID_[A-Za-z0-9_]{6,16}$/.test(to||''))throw Error('Seleção inválida');
+    if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponível');
+    const result=await hostPage.evaluate(({from,to})=>{
+     const g=window.__game,srv=g?.server;
+     if(!srv||g?.mode!=='host'||!g.inWorld)return {ok:false,error:'Mundo indisponível'};
+     const guests=[...srv.sessions.values()].filter(s=>s.state==='play'&&s.player&&!s.player.removed);
+     const admin=guests.find(s=>s.name===from),child=guests.find(s=>s.name===to);
+     if(!admin||!child)return {ok:false,error:'Os dois jogadores precisam estar conectados'};
+     if(admin.player.level!==child.player.level)return {ok:false,error:'Jogadores em dimensões diferentes'};
+     const p=admin.player;
+     child.player.flying=!!p.flying;
+     child.teleportTo(p.x+2,p.y,p.z+2,p.yaw,p.pitch);
+     return {ok:true};
+    },{from,to});
+    res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(result));
+   }catch(e){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}))}
+  });return;
+ }
+ if(url.pathname==='/__world-control'&&req.method==='POST'){
+  let bytes=0,chunks=[];
+  req.on('data',part=>{bytes+=part.length;if(bytes>512){req.destroy();return}chunks.push(part)});
+  req.on('end',async()=>{
+   try{
+    const {from,time,weather}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||'')||
+       !(['day','night','sunrise','sunset'].includes(time)&&weather===undefined||
+          ['clear','rain'].includes(weather)&&time===undefined))throw Error('Controle inválido');
+    if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponível');
+    const result=await hostPage.evaluate(async ({from,time,weather})=>{
+     const g=window.__game,srv=g?.server;
+     if(!srv||g?.mode!=='host'||!g.inWorld)return {ok:false,error:'Mundo indisponível'};
+     const admin=[...srv.sessions.values()].find(s=>s.name===from&&s.state==='play'&&s.player&&!s.player.removed);
+     if(!admin)return {ok:false,error:'Administrador precisa estar conectado ao mundo'};
+     const lvl=g.level;
+     if(time){
+      const points={day:1000,night:13000,sunrise:23000,sunset:12000};
+      lvl.dayTime=Math.floor(lvl.dayTime/24000)*24000+points[time];
+     }
+     if(weather){
+      lvl.raining=weather==='rain';lvl.thundering=false;
+      lvl.rainTime=weather==='rain'?6000:0;
+      lvl.thunderTime=0;lvl.clearWeatherTime=weather==='clear'?6000:0;
+      lvl.rain=lvl.rainO=weather==='rain'?1:0;
+      lvl.thunder=lvl.thunderO=0;
+     }
+     await g.saveWorld();
+     return {ok:true,time:time||null,weather:weather||null};
+    },{from,time,weather});
+    res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(result));
+   }catch(e){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}))}
+  });return;
+ }
+ if(url.pathname==='/__npc/recover'&&req.method==='POST'){
+  let bytes=0,chunks=[];
+  req.on('data',part=>{bytes+=part.length;if(bytes>256){req.destroy();return}chunks.push(part)});
+  req.on('end',async()=>{
+   try{
+    const {from,kind}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||'')||
+       !['names','windmill','pinwheels','castle','village','garden','watchtower'].includes(kind))
+      throw Error('Dados inválidos');
+    if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponível');
+    const result=await hostPage.evaluate(({from,kind})=>
+      window.__gfcNpc?.recover?.(from,kind)||{ok:false,error:'Atrações indisponíveis'},{from,kind});
+    res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(result));
+   }catch(e){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}))}
   });return;
  }
  if(url.pathname==='/__npc/status'&&req.method==='GET'){

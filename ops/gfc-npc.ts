@@ -52,5 +52,14 @@ export function installGfcNpc(game:Game):void{
   s.teleportTo(p.x,p.y+7,p.z-12,0,0);
   return {ok:true,action:'visit_landmark',attraction:p.kind};
  }
- (window as any).__gfcNpc={drive,status,visit};
+ function recover(name:string,kind:'names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower'){
+  if(!/^ADM_[a-zA-Z0-9_]{6,16}$/.test(name)||!game.spawned||!game.server)
+   return {ok:false,error:'Administrador indisponível'};
+  const session=guests().find(s=>s.name===name);
+  if(!session?.player||session.player.level!==resident.level)
+   return {ok:false,error:'Entre primeiro no mundo da família'};
+  if(!attractions)return {ok:false,error:'As atrações ainda estão carregando'};
+  return attractions.recoverNear(kind,session.player.x,session.player.y,session.player.z);
+ }
+ (window as any).__gfcNpc={drive,status,visit,recover};
 }

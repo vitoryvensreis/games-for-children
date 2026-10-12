@@ -1,13 +1,13 @@
 // Resolution controller for family multiplayer ONLY. Never changes the saved
 // video options, chunk radius, simulation, physics or the authoritative host.
-export type FamilyQualityMode='auto'|'performance'|'balanced'|'quality';
-const MODES=['auto','performance','balanced','quality'] as const;
+export type FamilyQualityMode='original'|'auto'|'performance'|'balanced'|'quality';
+const MODES=['original','auto','performance','balanced','quality'] as const;
 const clamp=(n:number,min:number,max:number)=>Math.min(max,Math.max(min,n));
 const round=(n:number)=>Math.round(n*100)/100;
 export const qualityPreset=(mode:FamilyQualityMode,mobile:boolean):number=>{
  const values=mobile?
-  {auto:0.52,performance:0.44,balanced:0.56,quality:0.68}:
-  {auto:0.55,performance:0.45,balanced:0.60,quality:0.75};
+  {original:1,auto:0.52,performance:0.44,balanced:0.56,quality:0.68}:
+  {original:1,auto:0.55,performance:0.45,balanced:0.60,quality:0.75};
  return values[mode];
 };
 export interface QualityStatus{
@@ -48,7 +48,7 @@ export class FamilyAdaptiveQuality{
   if(this.mode===mode)return true;
   this.mode=mode;this.below=0;this.above=0;this.lastChange=now;
   this.startedAt=now;this.lastSample=now;
-  this.reason=mode==='auto'?'Aguardando estabilização':'Ajuste manual';
+  this.reason=mode==='auto'?'Aguardando estabilização':mode==='original'?'OpusCraft original':'Ajuste manual';
   this.apply(qualityPreset(mode,this.mobile));
   return true;
  }
@@ -59,7 +59,7 @@ export class FamilyAdaptiveQuality{
   this.lastSample=now;
   this.fps=Number.isFinite(fps)?Math.max(0,Math.round(fps)):0;
   this.ready=ready;
-  if(this.mode!=='auto'){this.reason='Ajuste manual';return;}
+  if(this.mode!=='auto'){this.reason=this.mode==='original'?'OpusCraft original':'Ajuste manual';return;}
   if(!ready||hidden||queuedChunks>4||this.fps<1){
    this.below=0;this.above=0;
    this.reason=!ready?'Aguardando mapa':hidden?'Jogo em segundo plano':
@@ -81,7 +81,7 @@ export class FamilyAdaptiveQuality{
  }
  stop():void{this.active=false;this.ready=false;this.reason='Encerrado';}
  private apply(raw:number){
-  const next=round(clamp(raw,this.min,this.max));
+  const next=this.mode==='original'?1:round(clamp(raw,this.min,this.max));
   if(next===this.scale)return;
   this.scale=next;this.adjustments++;
   this.onScaleChange(next);

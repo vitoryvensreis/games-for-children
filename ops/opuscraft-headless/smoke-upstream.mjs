@@ -275,19 +275,19 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  // Reconnect with the actual original loadGuest hook, reading the persisted
  // SavedPlayer; login resumes asynchronously on a later server receive tick.
  hooks.loadGuest=(playerUuid)=>readPlayer(playerDir,playerUuid);
- peerHandler('returning-guest',true);
- messageHandler('returning-guest',encode([hello]));
+ peerHandler('full-login-guest',true);
+ messageHandler('full-login-guest',encode([hello]));
  host.receive();
  for(let i=0;i<5;i++)await Promise.resolve();
  host.receive();
- const returning=host.sessions.get('returning-guest');
+ const returning=host.sessions.get('full-login-guest');
  assert.equal(returning?.state,'play',
   'SavedPlayer must be restored through upstream loadGuest on reconnect');
  assert.equal(returning.player.uuid,uuid);
  assert.equal(returning.player.x,loadedPlayer.x);
  assert.equal(returning.player.food.level,loadedPlayer.food);
  assert.equal(returning.player.inventory.main.length,loadedPlayer.inventory.length);
- peerHandler('returning-guest',false);
+ peerHandler('full-login-guest',false);
  assert.equal(host.guestCount(),0);
  host.close('smoke complete');
  assert.equal(host.closed,true);

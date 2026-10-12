@@ -91,7 +91,7 @@ server.on('upgrade',(req,socket,head)=>{
  await guest.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?mp=join&code='+encodeURIComponent(code),
   {waitUntil:'domcontentloaded',timeout:70000});
  try{
-  await guest.waitForFunction(()=>{const g=window.__game;return g?.mode==='client'&&g.inWorld&&g.spawned},
+  await guest.waitForFunction(()=>{const g=window.__game;return g?.mode==='client'&&g.inWorld&&g.client?.state==='play'&&g.level?.world?.chunks?.size>0},
    {timeout:125000,polling:1000});
  }catch(e){
   const detail=await guest.evaluate(()=>{
@@ -99,7 +99,7 @@ server.on('upgrade',(req,socket,head)=>{
     screen:g?.screen?.constructor?.name,reason:g?.client?.endReason,
     clientState:g?.client?.state,transport:g?.client?.transport?.state};
   }).catch(()=>({}));
-  throw Error('Guest never finished network join: '+JSON.stringify({detail,errors,error:String(e)}));
+  throw Error('Guest never received playable world chunks: '+JSON.stringify({detail,errors,error:String(e)}));
  }
  const pair=await Promise.all([
   host.evaluate(()=>({mode:window.__game.mode,guests:window.__game.server?.guestCount?.()})),

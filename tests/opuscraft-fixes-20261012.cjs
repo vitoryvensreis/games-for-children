@@ -24,7 +24,7 @@ test('World recovery preserves original XY source only after a durable backup an
  assert.match(town,/dryRepair\.tick\(\);return;/);
  assert.match(repair,/j\.phase==='saveCopy'/);
  assert.match(repair,/saveThen\(j,'eraseOld'\)/);
- assert.match(repair,/if\(old\(x,y,z\)!==name\)/);
+ assert.match(repair,/actual!==name && !\(y<=SEA&&\(actual==='water'\|\|actual==='air'\)\)/);
  assert.match(repair,/blockSite\(j,'construção modificada'\)/);
  assert.match(repair,/game\.saveWorld\(\)\.then/);
  assert.match(repair,/const target=Math\.max\(SAFE_Y,site\.y\)/);

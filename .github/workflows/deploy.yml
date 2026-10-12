@@ -30,7 +30,7 @@ jobs:
           node --check ops/opuscraft-headless/world.cjs
           node --check ops/opuscraft-headless/ticker.cjs
           node --check ops/opuscraft-headless/protocol-contract.cjs
-          node --test tests/opuscraft-headless.cjs tests/opuscraft-protocol-contract.cjs tests/opuscraft-ticker.cjs
+          node --test tests/opuscraft-headless.cjs tests/opuscraft-protocol-contract.cjs tests/opuscraft-ticker.cjs tests/opuscraft-ws-transport.cjs
       - name: Build unmodified upstream OpusCraft
         run: bash ops/build-opuscraft.sh
       - name: Verify vanilla client and relay assets

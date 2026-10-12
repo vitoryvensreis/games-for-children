@@ -3,11 +3,16 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
 
-test('OpusCraft game build is the EXACT pinned original, without patched gameplay',()=>{
- const build=read('ops/build-opuscraft.sh');
+test('OpusCraft native gameplay is pinned; only exact trusted HTTPS relay origin is patched',()=>{
+ const build=read('ops/build-opuscraft.sh'),guard=read('ops/patch-opuscraft-trusted-relay.mjs');
  assert.match(build,/bc0c753f730ef15bc8f8acf093d40797700b87ee/);
  assert.match(build,/npm run build -- --base=\/opuscraft\//);
- assert.doesNotMatch(build,/patch-opuscraft|gfc-family|gfc-npc|gfc-rotor|gfc-leaf|gfc-adaptive/);
+ assert.match(build,/patch-opuscraft-trusted-relay\.mjs/);
+ assert.doesNotMatch(build,/patch-opuscraft-mesh|patch-opuscraft-host-cpu|gfc-family|gfc-npc|gfc-rotor|gfc-leaf|gfc-adaptive/);
+ assert.match(guard,/src\/game\/game\.ts/);
+ assert.match(guard,/location\.protocol === 'https:'/);
+ assert.match(guard,/h === 'gamesforchildren\.escotilhaprodutora\.com'/);
+ assert.doesNotMatch(guard,/chunkManager|mesher|simulationDistance|renderDistance|saveWorld/);
 });
 test('VPS only relays messages; the player generates and saves the world locally',()=>{
  const app=read('public/app.js'),server=read('server.cjs'),relay=read('ops/opuscraft-relay-host.cjs');
@@ -16,6 +21,8 @@ test('VPS only relays messages; the player generates and saves the world locally
  assert.doesNotMatch(relay,/puppeteer|chromium|saveWorld|newWorldMeta/);
  assert.match(server,/launchOpusRelay\(\)/);
  assert.match(server,/\['host','guest','list'\]/);
+ assert.match(server,/origin!=='https:\/\/gamesforchildren\.escotilhaprodutora\.com'/);
+ assert.match(server,/const auth=checkSession\(req\)/);
  assert.doesNotMatch(server,/launchOpusHost|opuscraft-host\.cjs|__npc\/status|__teleport|__summon|__world-control/);
  assert.doesNotMatch(server,/\/api\/admin\/opuscraft/);
  assert.match(app,/Open to LAN/);

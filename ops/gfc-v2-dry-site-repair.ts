@@ -128,7 +128,17 @@ export function installGfcDrySiteRepair(game:Game,sites:FamilySite[],
    if(j.cursor>=plan.length){j.cursor=0;j.phase='saveCopy';persist()}
    reason='Elevando '+j.kind;return;
   }
-  if(j.phase==='saveCopy'){saveThen(j,'eraseOld');return}
+  if(j.phase==='saveCopy'){
+   // The browser could crash after persisting the phase but BEFORE IndexedDB
+   // commits the new copy. Restore all expected blocks before saving again.
+   let missing=0;
+   for(const b of plan){
+    const x=j.x+b.x,y=j.y+b.y,z=j.z+b.z;
+    if(old(x,y,z)!==b.name){game.level.setBlock(x,y,z,S(b.name));missing++}
+   }
+   if(missing){reason='Revalidando cópia após possível reinício';return}
+   saveThen(j,'eraseOld');return;
+  }
   if(j.phase==='eraseOld'){
    let writes=0;
    while(j.cursor<plan.length&&writes++<WRITES){

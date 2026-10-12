@@ -224,6 +224,20 @@ patch('src/game/game.ts',
     const maxW = family ? (mobile ? 720 : 900) : 8192;
     const dpr = Math.min(native * ratio, maxW / Math.max(1,window.innerWidth));`);
 
+// Adaptive pixel ratio belongs to family guests only. Solo graphics/options
+// and the dedicated VPS host keep their exact original framebuffer behavior.
+patch('src/game/game.ts',
+ "    const ratio = family ? (mobile ? 0.52 : 0.55) : 1;",
+ "    const ratio = family ? ((window as any).__gfcQuality?.status?.().scale ?? (mobile ? 0.52 : 0.55)) : 1;");
+// Hook AFTER a completed frame, without a separate timer or any extra render.
+// Samples pause during hidden tabs, loading, and heavy chunk streaming.
+patch('src/game/game.ts',
+ "    this.frameTimeMs = performance.now() - t0;",
+ `    this.frameTimeMs = performance.now() - t0;
+    if (this.mode === 'client' && (window as any).__gfcFamilySession === true)
+      (window as any).__gfcQuality?.sample(performance.now(), this.fps,
+        this.inWorld && this.spawned, this.chunks?.pendingGen?.() ?? 0, document.hidden);`);
+
 // Draw rotating 3D sails in the native entity pass, after opaque terrain.
 // This hook is inert in the VPS host and in private single-player worlds.
 patch('src/render/renderer.ts',

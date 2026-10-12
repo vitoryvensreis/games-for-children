@@ -2,10 +2,12 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
 test('V2 resets only the family world identity and leaves V1 stored and backed up',()=>{
- const patch=read('ops/patch-opuscraft.mjs'),deploy=read('ops/deploy-opuscraft-vps.sh');
+ const patch=read('ops/patch-opuscraft.mjs'),deploy=read('ops/deploy-opuscraft-vps.sh'),host=read('ops/opuscraft-host.cjs');
  assert.match(patch,/gamesnavagador-family-world-v2/);
  assert.match(patch,/gamesnavagador-family-planned-2026-v2/);
  assert.match(deploy,/opuscraft-family-v1-pre-v2\.tar\.gz/);
+ assert.match(host,/const PROFILE=path.join\(ROOT,'data','opuscraft','profile-v2'\)/);
+ assert.match(deploy,/opuscraft-v2-profile-latest\.tar\.gz/);
  assert.match(deploy,/test -s backup\/opuscraft-family-v1-pre-v2\.tar\.gz/);
 });
 test('Permanent seven-landmark town is created by clearing and leveling fixed plots',()=>{

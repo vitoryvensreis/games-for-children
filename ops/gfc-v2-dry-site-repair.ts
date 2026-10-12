@@ -113,7 +113,14 @@ export function installGfcDrySiteRepair(game:Game,sites:FamilySite[],
    if(j.cursor===0){
     for(const [coord,name] of source){
      const [x,y,z]=coord.split(',').map(Number);
-     if(old(x,y,z)!==name){blockSite(j,'construção modificada');return}
+     const actual=old(x,y,z);
+     // Water can wash out fragile blocks in submerged attractions.
+     // Only permit genuinely missing cells UNDER the sea surface; all
+     // modifications above sea level or replacements with another block
+     // require manual review rather than erasing the children's work.
+     if(actual!==name && !(y<=SEA&&(actual==='water'||actual==='air'))){
+      blockSite(j,'construção modificada');return;
+     }
     }
    }
    const total=a.w*a.d*a.height;let budget=0;

@@ -24,7 +24,7 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-host.cjs && node --check ops/patch-opuscraft.mjs && node --check ops/patch-opuscraft-mesh.mjs && node --check ops/patch-opuscraft-host-cpu.mjs && node --check ops/opuscraft-cpu-smoke.cjs
-      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs tests/opuscraft-backup-api.cjs tests/legacy-minecraft-retirement.cjs tests/opuscraft-npc.cjs tests/npc-audit.cjs tests/andarilha-survival.cjs tests/opuscraft-v2-town.cjs tests/opuscraft-block-a.cjs tests/opuscraft-block-b.cjs tests/opuscraft-block-c.cjs tests/opuscraft-block-d.cjs tests/opuscraft-dry-landmark-repair.cjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs tests/opuscraft-backup-api.cjs tests/legacy-minecraft-retirement.cjs tests/opuscraft-npc.cjs tests/npc-audit.cjs tests/andarilha-survival.cjs tests/opuscraft-v2-town.cjs tests/opuscraft-block-a.cjs tests/opuscraft-block-b.cjs tests/opuscraft-block-c.cjs tests/opuscraft-block-d.cjs tests/opuscraft-dry-landmark-repair.cjs tests/opuscraft-20261012-user-regressions.cjs
       - name: Build pinned OpusCraft
         run: bash ops/build-opuscraft.sh
       - name: Validate compiled web assets

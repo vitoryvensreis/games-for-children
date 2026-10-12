@@ -88,7 +88,7 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
   hostBreaking:()=>null
  };
  const host=new HostServer(level,transport,hooks,{
-  lanId:'headless-test',joinCode:'smoke-test-code',announce:false
+  lanId:'headless-test',joinCode:'ABCD1234',announce:false
  });
  // Mirror the precise upstream Game.tick ordering:
  // HostServer.receive -> Level.tick -> HostServer.tick.
@@ -119,7 +119,7 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  transport.send=(peer,data)=>outbound.push({peer,data});
  peerHandler('full-login-guest',true);
  const name='FamilyOne',uuid=offlinePlayerUuid(name);
- const hello=[SB.Hello,8,'headless-integration-smoke',name,uuid,4,'smoke-test-code'];
+ const hello=[SB.Hello,8,'headless-integration-smoke',name,uuid,4,'ABCD1234'];
  messageHandler('full-login-guest',encode([hello]));
  host.receive();
  assert.equal(host.sessions.get('full-login-guest')?.state,'play',

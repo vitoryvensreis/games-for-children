@@ -22,3 +22,6 @@ Plano seguinte:
 5. Só então oferecer modo dedicado 24h atrás de feature flag; sem modificar o mundo player-hosted da produção.
 
 **Estado atual:** ainda não há mundo multiplayer 24h funcional. Branch experimental; não publicar automaticamente.
+
+## Integração real adicionada nesta rodada
+O smoke experimental agora instancia as classes reais `World` e `Level` e chama quatro vezes `Level.tick()` num bundle Node. O teste só será considerado aprovado quando o GitHub Actions reportar sucesso; importar os módulos, sozinho, não seria prova suficiente. Não há servidor de mundo ou suporte multiplayer dedicado publicado nesta etapa.

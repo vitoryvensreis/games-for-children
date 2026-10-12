@@ -24,6 +24,7 @@ cp "$REPO_ROOT/ops/gfc-family-client.ts" src/gfc-family-client.ts
  cp "$REPO_ROOT/ops/gfc-leaf-merge.ts" src/render/gfc-leaf-merge.ts
  node "$REPO_ROOT/ops/patch-opuscraft.mjs" "$PWD"
  node "$REPO_ROOT/ops/patch-opuscraft-mesh.mjs" "$PWD"
+ node "$REPO_ROOT/ops/patch-opuscraft-host-cpu.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )
 test -s "$TMP/opuscraft/dist/index.html"

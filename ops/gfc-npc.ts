@@ -37,7 +37,9 @@ export function installGfcNpc(game:Game):void{
     queuedChunks:game.chunks.pendingGen(),
     generatedChunks:game.chunks.stats.gens,
     generatedMs:Math.round(game.chunks.stats.genMs),
-    meshedSections:game.chunks.stats.meshes
+    meshedSections:game.chunks.stats.meshes,
+    simulationOnly:game.chunks.dedicatedHeadlessHost===true,
+    workerMaxConcurrent:game.pool?.maxInflight||0
    },
    worldAttractions:attractions?.status()||null};
  }

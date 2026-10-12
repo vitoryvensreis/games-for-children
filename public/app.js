@@ -68,204 +68,51 @@ async function verifyOpuscraftWebSocket(){
 }
 async function openOpusCraft(){
  if(!me)return login();
- // O bloqueio de orientação só funciona em navegadores que permitem fullscreen.
- // Fazemos a tentativa no gesto de clique, antes de qualquer await.
+ // The host player's browser generates, simulates and saves the world.
+ // This page embeds original upstream OpusCraft and keeps family chat/voice.
  const fullscreen=async()=>{
   try{
-   if(document.documentElement.requestFullscreen&&!document.fullscreenElement)await document.documentElement.requestFullscreen({navigationUI:'hide'});
+   if(document.documentElement.requestFullscreen&&!document.fullscreenElement)
+    await document.documentElement.requestFullscreen({navigationUI:'hide'});
    if(screen.orientation?.lock)await screen.orientation.lock('landscape');
-  }catch(e){console.info('Este navegador pede para girar manualmente:',e?.name||e)}
+  }catch{}
  };
  void fullscreen();
  try{
   const status=await api('opuscraft/status');
-  if(!status.available){notify('Os arquivos do OpusCraft ainda não foram instalados.');return}
-  // The title and personal worlds must open even when the VPS family host is offline.
-  // O menu e os mundos individuais funcionam mesmo se o servidor familiar estiver reiniciando.
+  if(!status.available){notify('O OpusCraft original ainda não foi instalado.');return}
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
-  app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft em tela horizontal">'+
-  // Native title first: solo worlds stay playable without the family VPS.
-  '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now()+'" title="OpusCraft — mundo da família" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
-  '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
-  '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
-  '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div><h3>🎮 Qualidade deste aparelho</h3><label for="opusQualityMode">Perfil gráfico</label><select id="opusQualityMode"><option value="original">Original OpusCraft (padrão)</option><option value="auto">Automático leve</option><option value="performance">Desempenho</option><option value="balanced">Equilibrado</option><option value="quality">Qualidade</option></select><p id="opusQualityStatus" class="sub" role="status">Aguardando entrada no multiplayer...</p><label for="opusViewDistance">Distância de visão (na próxima entrada)</label><select id="opusViewDistance"><option value="3">Leve — 3 chunks (48 blocos)</option><option value="4">Padrão celular — 4 chunks (64 blocos)</option><option value="6">Padrão PC — 6 chunks (96 blocos)</option><option value="8">Máximo do servidor — 8 chunks (128 blocos)</option></select><p class="sub" id="opusViewHelp">Alterar a distância exige sair e entrar novamente no Servidor da Família. No celular o máximo recomendado é 6 chunks. A qualidade original usa a resolução nativa do OpusCraft.</p>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
-  '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
+  app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft original">'+
+   '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+
+    encodeURIComponent(status.clientVersion||'live')+'" title="OpusCraft original" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
+   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
+   '<details class="opuscraft-players" id="opusHowTo"><summary>🎮 Jogar em família</summary>'+
+   '<p><strong>Anfitrião:</strong> Um jogador → abra/crie um mundo → Esc → Open to LAN → Start LAN World. Compartilhe o código.</p>'+
+   '<p><strong>Convidados:</strong> Multiplayer → escolha o mundo, informe seu nome e o código recebido.</p>'+
+   '<p class="sub">O mundo é salvo no navegador do anfitrião, que precisa permanecer no jogo. A VPS só conecta os jogadores. Faça backup no menu original.</p></details>'+
+   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o jogo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
+   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
-   // The launch button remains focused in the parent document on desktops.
-   // Hand input control to the same-origin ClassiCube iframe after its navigation.
    if(window.matchMedia('(pointer:fine)').matches){
     try{gameFrame.contentWindow.focus();gameFrame.contentDocument?.getElementById('gl')?.focus({preventScroll:true})}catch{}
    }
   });
   const root=$('#cubeRoot'),overlay=$('#opuscraftRotate');
-  const joinAlert=$('#opuscraftJoinAlert');
-  let joinCheckTimer=null,joinTimeout=null,joinSucceeded=false,joinTracked=false;
-  function checkFamilyJoin(){
-   if(!gameFrame.isConnected){clearInterval(joinCheckTimer);return}
-   try{
-    const g=gameFrame.contentWindow?.__game;
-    if(g?.mode==='client'&&g.inWorld&&g.spawned){
-     joinSucceeded=true;clearTimeout(joinTimeout);clearInterval(joinCheckTimer);
-     joinAlert.hidden=true;
-    }
-   }catch{}
-  }
-  function scheduleFamilyJoinCheck(){
-   joinTracked=true;
-   joinSucceeded=false;
-   clearInterval(joinCheckTimer);clearTimeout(joinTimeout);
-   joinCheckTimer=setInterval(checkFamilyJoin,1000);
-   joinTimeout=setTimeout(()=>{
-    if(joinSucceeded||!gameFrame.isConnected)return;
-    let reason='';
-    try{const g=gameFrame.contentWindow?.__game;
-     reason=String(g?.client?.endReason||g?.client?.disconnectReason||'').slice(0,140);
-    }catch{}
-    $('#opuscraftJoinMessage').textContent=reason?
-     'O servidor encerrou a conexão: '+reason:
-     'A conexão demorou mais de 45 segundos. O servidor pode estar ocupado; tente novamente.';
-    joinAlert.hidden=false;
-   },45000);
-  }
-  $('#opuscraftJoinRetry').onclick=()=>{
-   joinAlert.hidden=true;
-   clearTimeout(joinTimeout);clearInterval(joinCheckTimer);joinTracked=false;
-   // Reopen the title: joining a family server must remain an explicit choice.
-   gameFrame.src='/opuscraft/index.html?v='+
-    encodeURIComponent(status.clientVersion||'live')+'&t='+Date.now();
-  };
-  $('#opuscraftJoinBack').onclick=()=>$('#opuscraftBack')?.click();
-  const playersDock=$('#opusPlayersDock'),playersPanel=$('#opusPlayersPanel'),playersList=$('#opusPlayersList');
-  let rosterBusy=false;
-  async function showFamilyPlayers(){
-   if(rosterBusy||playersPanel.hidden||playersDock.hidden)return;
-   rosterBusy=true;
-   try{
-    const result=await api('opuscraft/players');
-    if(!playersList.isConnected)return;
-    const meInWorld=result.players.find(p=>p.self);
-    if(!meInWorld){playersList.textContent='Você ainda está entrando no servidor da família.';return}
-    const same=result.players.filter(p=>!p.self&&p.dimension===meInWorld.dimension);
-    playersList.innerHTML=same.length?same.map(p=>'<div class="opus-player"><div><strong>'+esc(p.name)+'</strong><small> X '+p.x+' • Y '+p.y+' • Z '+p.z+'</small></div><button type="button" data-tp="'+esc(p.id)+'">Ir até</button>'+ (me?.role==='admin'&&String(p.id).startsWith('KID_')?'<button type="button" data-summon="'+esc(p.id)+'">Trazer para perto</button>':'')+'</div>').join(''):'Nenhum outro jogador conectado nesta dimensão.';
-    for(const btn of playersList.querySelectorAll('button[data-tp]')){
-     btn.onclick=async()=>{
-      btn.disabled=true;
-      try{await api('opuscraft/teleport','POST',{to:btn.dataset.tp});notify('Teleporte realizado!')}
-      catch(e){notify(e.message)}
-      finally{btn.disabled=false}
-     };
-    }
-    if(me?.role==='admin')for(const btn of playersList.querySelectorAll('button[data-summon]')){
-     btn.onclick=async()=>{
-      btn.disabled=true;
-      try{await api('admin/opuscraft/summon','POST',{to:btn.dataset.summon});notify('Jogador trazido para perto do ADM!')}
-      catch(e){notify(e.message)}
-      finally{btn.disabled=false}
-     };
-    }
-    if(me?.role==='admin'){
-     try{
-      const npc=await api('admin/opuscraft/npc'),m=npc.performance;
-      const display=$('#opusPerfHost');
-      if(display&&m)display.textContent='VPS: '+(m.simulationOnly?'Somente simulação • ':'Iniciando • ')+
-       Number(m.fps||0)+' quadros/s • '+Number(m.frameMs||0)+' ms/quadro • '+
-       Number(m.loadedChunks||0)+' chunks na RAM • '+Number(m.queuedChunks||0)+' pendentes';
-     }catch{}
-    }
-   }catch(e){if(playersList.isConnected)playersList.textContent='Jogadores indisponíveis: '+e.message}
-   finally{rosterBusy=false}
-  }
-  if(me?.role==='admin')playersPanel.querySelectorAll('[data-world-time],[data-world-weather]').forEach(btn=>
-   btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',btn.dataset.worldTime||btn.dataset.worldWeather,btn));
-  const qualityMode=$('#opusQualityMode');
-  qualityMode.onchange=()=>{
-   try{
-    const ctrl=gameFrame.contentWindow?.__gfcQuality;
-    if(!ctrl?.setMode?.(qualityMode.value))throw Error('Entre no Servidor da Família para ajustar');
-    notify('Perfil gráfico: '+qualityMode.options[qualityMode.selectedIndex].text);
-   }catch(e){notify(e.message)}
-  };
-  const viewSelect=$('#opusViewDistance');
-  let viewStored=0;
-  try{viewStored=Number(localStorage.getItem('gfc-family-native-view-distance-v1'))}catch{}
-  const isMobileDevice=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||
-    (matchMedia('(pointer: coarse)').matches&&innerWidth<1100);
-  const maxView=isMobileDevice?6:8;
-  const initialView=Number.isInteger(viewStored)&&viewStored>=3&&viewStored<=maxView?
-    viewStored:isMobileDevice?4:6;
-  viewSelect.value=String(initialView);
-  for(const option of viewSelect.options)option.disabled=Number(option.value)>maxView;
-  viewSelect.onchange=()=>{
-   const chosen=Number(viewSelect.value);
-   if(!Number.isInteger(chosen)||chosen<3||chosen>maxView)return;
-   try{localStorage.setItem('gfc-family-native-view-distance-v1',String(chosen));
-    notify('Visão alterada. Saia e entre de novo no Servidor da Família para aplicar.')}
-   catch{notify('O navegador não permitiu salvar a distância de visão.')}
-  };
-  $('#opusPlayersToggle').onclick=()=>{
-   playersPanel.hidden=!playersPanel.hidden;
-   if(!playersPanel.hidden)void showFamilyPlayers();
-  };
-  const modeTimer=setInterval(()=>{
-   if(!gameFrame.isConnected){clearInterval(modeTimer);return}
-   let mode='',joining=false;
-   try{
-    const client=gameFrame.contentWindow;
-    mode=client?.__game?.mode||'';
-    joining=client?.__gfcFamilyJoining===true||mode==='client';
-   }catch{}
-   if(joining&&!joinTracked)scheduleFamilyJoinCheck();
-   if(!joining&&joinTracked){
-    joinTracked=false;clearTimeout(joinTimeout);clearInterval(joinCheckTimer);
-    joinAlert.hidden=true;
-   }
-   if(me?.role==='admin'&&$('#opusPerfDetails')?.open){
-    const clientPerf=$('#opusPerfClient');
-    if(clientPerf)try{
-     const g=gameFrame.contentWindow?.__game;
-     clientPerf.textContent=g?.mode==='client'?
-      'Seu aparelho: '+Math.round(g.fps||0)+' FPS • '+Number(g.frameTimeMs||0).toFixed(1)+
-      ' ms/quadro • '+Number(g.level?.world?.chunks?.size||0)+' chunks carregados • '+
-      Number(g.chunks?.pendingGen?.()||0)+' pendentes • '+
-      Number(g.chunks?.stats?.meshes||0)+' seções renderizadas':
-      'Entre no Multiplayer para medir seu FPS.';
-    }catch{clientPerf.textContent='Métricas não disponíveis neste navegador.'}
-   }
-   const qualityStatus=$('#opusQualityStatus');
-   if(qualityStatus&&!playersPanel.hidden){
-    try{
-     const quality=gameFrame.contentWindow?.__gfcQuality?.status?.();
-     const g=gameFrame.contentWindow?.__game;
-     if(quality&&g?.mode==='client'){
-      if(qualityMode.value!==quality.mode)qualityMode.value=quality.mode;
-      qualityMode.disabled=false;
-      qualityStatus.textContent='Resolução '+Math.round(quality.scale*100)+'% • '+
-       Math.round(g.fps||0)+'/'+quality.targetFps+' FPS • '+
-       (quality.mode==='auto'?quality.pausedReason:quality.mode==='original'?'Renderização original':'Perfil manual')+
-       ' • Ajustes: '+quality.adjustments+
-       ' • Visão atual: '+Number(g.opts.renderDistance||0)+' chunks';
-     }else{
-      qualityMode.disabled=true;
-      qualityStatus.textContent='Entre no Multiplayer para ativar o ajuste de qualidade.';
-     }
-    }catch{qualityStatus.textContent='Qualidade indisponível neste navegador.'}
-   }
-   const active=mode==='client';
-   playersDock.hidden=!active;
-   if(!active)playersPanel.hidden=true;
-  },1300);
-  const rosterTimer=setInterval(()=>void showFamilyPlayers(),6000);
-
-  const sync=()=>{const portrait=window.innerHeight>window.innerWidth&&window.matchMedia('(pointer: coarse)').matches;root.classList.toggle('needs-landscape',portrait);overlay.hidden=!portrait;};
+  const sync=()=>{const portrait=window.innerHeight>window.innerWidth&&
+   window.matchMedia('(pointer: coarse)').matches;
+   root.classList.toggle('needs-landscape',portrait);overlay.hidden=!portrait};
   sync();window.addEventListener('resize',sync);screen.orientation?.addEventListener?.('change',sync);
   $('#opuscraftTryLandscape').onclick=()=>{void fullscreen();sync()};
   $('#familyChatToggle').onclick=()=>{const panel=$('#familyChatPanel');panel.hidden=!panel.hidden;renderFamilyChat();if(!panel.hidden)$('#familyChatInput').focus()};
   $('#familyChatForm').onsubmit=e=>{e.preventDefault();const input=$('#familyChatInput'),message=input.value.trim();if(message&&send({type:'familyChat',text:message})){input.value='';input.blur()}};
   renderFamilyChat();
-  $('#opuscraftBack').onclick=async()=>{clearTimeout(joinTimeout);clearInterval(joinCheckTimer);clearInterval(modeTimer);clearInterval(rosterTimer);window.removeEventListener('resize',sync);screen.orientation?.removeEventListener?.('change',sync);try{screen.orientation?.unlock?.()}catch{};try{if(document.fullscreenElement)await document.exitFullscreen()}catch{};home()};
+  $('#opuscraftBack').onclick=async()=>{window.removeEventListener('resize',sync);
+   screen.orientation?.removeEventListener?.('change',sync);
+   try{screen.orientation?.unlock?.()}catch{}
+   try{if(document.fullscreenElement)await document.exitFullscreen()}catch{}
+   home()};
  }catch(e){console.warn('OpusCraft:',e);notify('Não foi possível abrir o OpusCraft: '+e.message)}
 }
 function renderFamilyChat(){
@@ -399,55 +246,12 @@ function paint(){if(!$('#road')||!room)return;t++;const horizon=90;const topWidt
 function move(d){if(!room?.started||room.finished)return;const time=performance.now();if(time-lastLaneInput<95)return;lastLaneInput=time;const lane=Math.min(2,Math.max(0,desiredLane+d));if(lane===desiredLane)return;desiredLane=lane;inputSeq++;send({type:'lane',lane,seq:inputSeq});}
 function bindSteering(){for(const [selector,dir] of [['#left',-1],['#right',1]]){const btn=$(selector);if(!btn)continue;btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture?.(e.pointerId);btn.classList.add('pressed');move(dir)},{passive:false});for(const event of ['pointerup','pointercancel','lostpointercapture'])btn.addEventListener(event,()=>btn.classList.remove('pressed'));btn.addEventListener('contextmenu',e=>e.preventDefault())}}
 window.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){if(!$('#road')||e.repeat)return;e.preventDefault();move(e.key==='ArrowLeft'?-1:1)}});
-async function admin(){app.innerHTML=box(renderTop()+'<h1>'+ico('user')+' Painel dos pais</h1><p id="voiceTurnStatus" class="hint">'+(turnReady===true?'Conexão de voz preparada.':turnReady===false?'TURN não configurado; áudio pode falhar entre redes diferentes.':'Verificando a rede do áudio...')+'</p><p class="sub">Acompanhe o tempo, os acessos e entre nas salas de voz.</p><div class="row"><button id="add">+ Criar perfil infantil</button><button id="notifications" class="ghost">'+ico('bell')+' Ativar notificações</button></div><section id="adminContent" class="grid" style="margin-top:18px"></section><h2 style="margin-top:22px">Jogar</h2><div class="row admin-game-actions"><button id="adminPongSolo" class="success">Pong solo</button><button id="adminPongDuo">Pong em dupla</button><button id="adminSnake">Cobrinha</button><button id="adminOpusCraft" class="success">Jogar OpusCraft</button></div><h2 style="margin-top:22px">Central OpusCraft — Controle ADM</h2><div id="adminMinecraftDashboard" class="minecraft-admin-dashboard"><p>Carregando mundos e jogadores...</p></div><h2 style="margin-top:22px">Capas dos jogos</h2><p class="sub">Troque a imagem de cada jogo sem mexer no código. Use fotos em JPG, PNG ou WebP.</p><div id="adminCovers" class="admin-covers"></div><h2 style="margin-top:22px">Salas em andamento</h2><div id="adminRooms"></div><h2 style="margin-top:22px">Atividades recentes</h2><div id="events" class="panel"></div>');bindLogout();$('#add').onclick=async()=>{const name=prompt('Nome da criança:');if(!name)return;const password=prompt('PIN de acesso (pelo menos 4 caracteres):');if(!password)return;try{await api('admin/users','POST',{name,password});refreshAdmin()}catch(e){notify(e.message)}};$('#notifications').onclick=setupPush;$('#adminPongSolo').onclick=()=>send({type:'create',game:'pong',solo:true});$('#adminPongDuo').onclick=()=>send({type:'create',game:'pong',solo:false});$('#adminSnake').onclick=snake;$('#adminOpusCraft').onclick=openOpusCraft;refreshAdmin();refreshGameCovers();refreshMinecraftDashboard();clearInterval(adminTimer);adminTimer=setInterval(()=>{if(me?.role==='admin'){refreshAdmin();if(!$('#adminMinecraftDashboard')?.querySelector('input:focus'))refreshMinecraftDashboard()}},15000)}
+async function admin(){app.innerHTML=box(renderTop()+'<h1>'+ico('user')+' Painel dos pais</h1><p id="voiceTurnStatus" class="hint">'+(turnReady===true?'Conexão de voz preparada.':turnReady===false?'TURN não configurado; áudio pode falhar entre redes diferentes.':'Verificando a rede do áudio...')+'</p><p class="sub">Acompanhe o tempo, os acessos e entre nas salas de voz.</p><div class="row"><button id="add">+ Criar perfil infantil</button><button id="notifications" class="ghost">'+ico('bell')+' Ativar notificações</button></div><section id="adminContent" class="grid" style="margin-top:18px"></section><h2 style="margin-top:22px">Jogar</h2><div class="row admin-game-actions"><button id="adminPongSolo" class="success">Pong solo</button><button id="adminPongDuo">Pong em dupla</button><button id="adminSnake">Cobrinha</button><button id="adminOpusCraft" class="success">Jogar OpusCraft</button></div><h2 style="margin-top:22px">Capas dos jogos</h2><p class="sub">Troque a imagem de cada jogo sem mexer no código. Use fotos em JPG, PNG ou WebP.</p><div id="adminCovers" class="admin-covers"></div><h2 style="margin-top:22px">Salas em andamento</h2><div id="adminRooms"></div><h2 style="margin-top:22px">Atividades recentes</h2><div id="events" class="panel"></div>');bindLogout();$('#add').onclick=async()=>{const name=prompt('Nome da criança:');if(!name)return;const password=prompt('PIN de acesso (pelo menos 4 caracteres):');if(!password)return;try{await api('admin/users','POST',{name,password});refreshAdmin()}catch(e){notify(e.message)}};$('#notifications').onclick=setupPush;$('#adminPongSolo').onclick=()=>send({type:'create',game:'pong',solo:true});$('#adminPongDuo').onclick=()=>send({type:'create',game:'pong',solo:false});$('#adminSnake').onclick=snake;$('#adminOpusCraft').onclick=openOpusCraft;refreshAdmin();refreshGameCovers();clearInterval(adminTimer);adminTimer=setInterval(()=>{if(me?.role==='admin')refreshAdmin()},15000)}
 async function refreshAdmin(){if(me?.role!=='admin'||!$('#adminContent'))return;try{const data=await api('admin/overview');$('#adminContent').innerHTML=data.users.map(u=>'<div class="panel child-card"><div class="child-head"><div class="avatar">'+(u.hasPhoto?'<img loading="lazy" alt="Foto de '+esc(u.name)+'" src="/api/photos/'+encodeURIComponent(u.id)+'">':ico('user'))+'</div><div><strong>'+esc(u.name)+'</strong><div class="'+(u.online?'online':'offline')+'">'+(u.online?'● Online':'○ Offline')+'</div></div></div><p class="stats">'+Math.floor(u.usedSeconds/60)+' / '+u.dailyLimit+' minutos</p><div class="meter"><div style="width:'+Math.min(100,(u.usedSeconds/(u.dailyLimit*60||1))*100)+'%"></div></div><div class="actions"><button data-id="'+u.id+'" data-action="kick" class="danger">Deslogar</button><button data-id="'+u.id+'" data-action="enable" class="ghost">'+(u.enabled?'Bloquear':'Liberar')+'</button><button data-id="'+u.id+'" data-action="login" class="ghost">Login '+(u.loginEnabled?'ON':'OFF')+'</button><button data-id="'+u.id+'" data-action="voice" class="ghost">Voz '+(u.voiceEnabled?'ON':'OFF')+'</button><button data-id="'+u.id+'" data-action="limit" class="ghost">'+ico('clock')+' Limite</button><button data-id="'+u.id+'" data-action="reset-minutes" class="ghost">↺ Zerar minutos</button></div></div>').join('')||'<div class="panel">Cadastre o primeiro perfil.</div>';
 $('#adminRooms').innerHTML=data.rooms.filter(r=>r.game==='pong').map(r=>'<div class="record"><strong>'+ico('gamepad')+' '+esc(r.code)+'</strong><p class="sub">'+r.players.map(esc).join(' × ')+'</p><div class="row"><button data-room="'+esc(r.code)+'" data-mode="spectator">Assistir ao vivo</button><button data-room="'+esc(r.code)+'" data-mode="player" class="success" '+(r.started||r.players.length>=2?'disabled':'')+'>Jogar junto</button></div></div>').join('')||'<div class="panel muted">Nenhuma sala aberta</div>';
 $('#events').innerHTML=data.events.slice(0,12).map(e=>'<p>• '+esc(e.name)+' — '+esc(e.type)+' <small>'+new Date(e.at).toLocaleString('pt-BR')+'</small></p>').join('')||'Sem atividade recente';
 $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const u=data.users.find(x=>x.id===b.dataset.id);try{if(b.dataset.action==='photo'){await chooseChildPhoto(u);return}if(b.dataset.action==='edit'){const name=prompt('Novo nome:',u.name);if(name===null)return;const password=prompt('Novo PIN (deixe vazio para manter):','');if(password===null)return;await api('admin/users/'+u.id,'POST',{name,...(password?{password}:{})});refreshAdmin();return}if(b.dataset.action==='kick')await api('admin/users/'+u.id+'/kick','POST');if(b.dataset.action==='enable')await api('admin/users/'+u.id,'POST',{enabled:!u.enabled});if(b.dataset.action==='login')await api('admin/users/'+u.id,'POST',{loginEnabled:!u.loginEnabled});if(b.dataset.action==='voice')await api('admin/users/'+u.id,'POST',{voiceEnabled:!u.voiceEnabled});if(b.dataset.action==='reset-minutes'){if(confirm('Zerar os minutos de hoje de '+u.name+'? O limite diário será mantido.')){await api('admin/users/'+u.id+'/reset-minutes','POST');notify('Minutos de hoje zerados para '+u.name)}refreshAdmin();return}if(b.dataset.action==='limit'){const v=prompt('Limite em minutos por dia (0 a 1440)',String(u.dailyLimit));if(v!==null)await api('admin/users/'+u.id,'POST',{dailyLimit:Number(v)})}refreshAdmin()}catch(e){notify(e.message)}});$('#adminRooms').querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room,mode:b.dataset.mode}));}catch(e){notify(e.message)}}
 
-async function changeOpusWorld(kind,value,button){
- if(me?.role!=='admin')return;
- if(button)button.disabled=true;
- try{
-  await api('admin/opuscraft/world-control','POST',kind==='time'?{time:value}:{weather:value});
-  notify('Mundo atualizado: '+({day:'Dia',night:'Noite',sunrise:'Amanhecer',sunset:'Pôr do sol',
-   clear:'Tempo limpo',rain:'Chuva'}[value]||value));
- }catch(e){notify(e.message)}
- finally{if(button)button.disabled=false}
-}
-async function refreshMinecraftDashboard(){
- const el=$('#adminMinecraftDashboard');if(!el||me?.role!=='admin')return;
- try{
-  const data=await api('admin/opuscraft/status');
-  const npc=await api('admin/opuscraft/npc').catch(()=>null);
-  if(!el.isConnected)return;
-  el.innerHTML='<div class="minecraft-admin-summary">'+
-   '<div class="panel"><strong>Servidor OpusCraft</strong><p>'+(data.ready?'Mundo online':'Iniciando')+'</p></div>'+
-   '<div class="panel"><strong>Jogadores</strong><p>'+Number(data.guests||0)+'</p></div>'+
-   '<div class="panel"><strong>Último salvamento</strong><p>'+(data.lastSave?new Date(data.lastSave).toLocaleTimeString('pt-BR'):'Aguardando')+'</p></div></div>'+
-   (npc?.role==='invisible_host'?'<div class="panel"><h3>Exploração da Família — V3</h3>'+
-    '<p class="sub">Servidor persistente, sem atrações automáticas. Crie suas próprias construções livremente.</p></div>':'')+
-   (npc?.performance?'<div class="panel"><h3>⚡ Diagnóstico de desempenho — VPS</h3>'+
-     '<p>Host: '+(npc.performance.simulationOnly?'Somente simulação (renderização desativada) • ':'Inicializando modo leve • ')+Number(npc.performance.fps||0)+' quadros/s (sem renderização gráfica) • '+
-       Number(npc.performance.frameMs||0)+' ms por quadro</p>'+
-     '<p>Chunks na memória: '+Number(npc.performance.loadedChunks||0)+
-       ' • Na fila: '+Number(npc.performance.queuedChunks||0)+
-       ' • Gerados nesta execução: '+Number(npc.performance.generatedChunks||0)+
-       ' • Seções de geometria processadas: '+Number(npc.performance.meshedSections||0)+'</p>'+
-     '<p class="sub">FPS do PC/celular: abrir Multiplayer → Jogadores / Teleporte → Diagnóstico.</p></div>':'')+
-   '<div class="panel"><h3>Controle do mundo — ADM</h3>'+
-    '<p class="sub">Entre no Multiplayer como administrador para alterar o horário e o clima. O limite diário das crianças continua no painel acima.</p>'+
-    '<div class="row"><button data-world-time="day">Dia</button><button data-world-time="night">Noite</button><button data-world-time="sunrise">Amanhecer</button><button data-world-time="sunset">Pôr do sol</button><button data-world-weather="clear">Sol</button><button data-world-weather="rain">Chuva</button></div></div>'+
-   '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Mundo e inventários mantidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
-   data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
-   (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+
-   '<div class="panel"><h3>Proteção parental</h3><p>Os botões em cada perfil acima controlam limite diário, bloqueio imediato, desconexão e microfone. O chat escrito fica restrito às contas autenticadas.</p></div>';
-  el.querySelectorAll('button[data-world-time],button[data-world-weather]').forEach(btn=>{
-   btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',
-    btn.dataset.worldTime||btn.dataset.worldWeather,btn);
-  });
- }catch(e){el.textContent='Não foi possível consultar o mundo OpusCraft: '+e.message}
-}
 const GAME_COVER_NAMES={pong:'Pong Neon',snake:'Cobrinha Colorida',minecraft:'OpusCraft'};
 async function refreshGameCovers(){
  const el=$('#adminCovers');

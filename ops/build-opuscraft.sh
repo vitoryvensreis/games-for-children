@@ -12,12 +12,9 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
 (
  cd "$TMP/opuscraft"
  npm ci --no-audit --no-fund
- cp "$REPO_ROOT/ops/gfc-world-backup.ts" src/gfc-world-backup.ts
- cp "$REPO_ROOT/ops/gfc-npc.ts" src/gfc-npc.ts
-cp "$REPO_ROOT/ops/gfc-family-client.ts" src/gfc-family-client.ts
-cp "$REPO_ROOT/ops/gfc-adaptive-quality.ts" src/gfc-adaptive-quality.ts
- node "$REPO_ROOT/ops/patch-opuscraft.mjs" "$PWD"
- node "$REPO_ROOT/ops/patch-opuscraft-host-cpu.mjs" "$PWD"
+ # Build original OpusCraft game logic and graphics; adapt only the exact
+ # trusted GamesNavagador HTTPS origin for authenticated player hosting.
+ node "$REPO_ROOT/ops/patch-opuscraft-trusted-relay.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )
 test -s "$TMP/opuscraft/dist/index.html"

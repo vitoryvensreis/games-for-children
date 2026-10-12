@@ -23,105 +23,34 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-host.cjs && node --check ops/patch-opuscraft.mjs && node --check ops/patch-opuscraft-mesh.mjs && node --check ops/patch-opuscraft-host-cpu.mjs && node --check ops/opuscraft-cpu-smoke.cjs
-      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs tests/opuscraft-backup-api.cjs tests/legacy-minecraft-retirement.cjs tests/npc-audit.cjs tests/opuscraft-block-b.cjs tests/opuscraft-block-c.cjs tests/opuscraft-block-d.cjs tests/opuscraft-v3-clean-world.cjs tests/opuscraft-native-render-v3.cjs
-      - name: Build pinned OpusCraft
+      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-relay-host.cjs && node --check ops/opuscraft-browser-relay-smoke.cjs && node --check ops/opuscraft-browser-host-smoke.cjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-browser-host.cjs
+      - name: Build unmodified upstream OpusCraft
         run: bash ops/build-opuscraft.sh
-      - name: Validate compiled web assets
+      - name: Verify vanilla client and relay assets
         run: |
           test -s public/opuscraft/index.html
+          test -s public/opuscraft/UPSTREAM-COMMIT.txt
           test -s ops/opuscraft-relay.mjs
           grep -q '/opuscraft/assets/' public/opuscraft/index.html
-      - name: Smoke test persistent headless multiplayer host
+      - name: Browser-hosted transport smoke (no VPS Chromium)
         shell: bash
         run: |
           set -euo pipefail
-          OPUSCRAFT_CI_MARKER=yes node ops/opuscraft-host.cjs >/tmp/opuscraft-host.log 2>&1 &
-          HOST_PID=$!
-          trap 'kill "$HOST_PID" 2>/dev/null || true' EXIT
+          node ops/opuscraft-relay-host.cjs >/tmp/opuscraft-relay.log 2>&1 &
+          RELAY_PID=$!
+          trap 'kill "$RELAY_PID" 2>/dev/null || true' EXIT
           ready=0
-          for attempt in $(seq 1 95); do
-            if curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"ready":true' &&
-               curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"lastSave":"20'; then
-              ready=1
-              break
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"mode":"player-hosted"'; then
+              ready=1;break
             fi
-            sleep 2
+            sleep 1
           done
-          if test "$ready" -ne 1; then
-            cat /tmp/opuscraft-host.log
-            exit 1
-          fi
-          echo "Verified VPS-compatible WebGL2 game host, relay, and world save"
-          curl -fsS http://127.0.0.1:4173/__health
-          if ! node ops/opuscraft-guest-smoke.cjs; then
-            echo "::error::Two-player smoke failed: permanent world host logs follow"
-            tail -n 170 /tmp/opuscraft-host.log
-            exit 1
-          fi
-          # V3 must be a brand new host profile with NO attraction builder.
-          status="$(curl -fsS --max-time 6 http://127.0.0.1:4173/__npc/status)"
-          printf '%s' "$status" | node -e '
-            let s="";process.stdin.on("data",x=>s+=x).on("end",()=>{
-              const j=JSON.parse(s);
-              if(!j.ready||j.worldId!=="gamesnavagador-family-world-v3"||
-                 j.worldAttractions!==null)process.exit(1)
-            })
-          '
-          echo "OPUSCRAFT_V3_CLEAN_WORLD_VERIFIED"
-          # CPU mode must keep the real host simulation/network clock running,
-          # while disabling invisible GPU meshes after initial spawn.
-          node ops/opuscraft-cpu-smoke.cjs
-          # Test recovery using the SAME Chromium profile, never a newly generated world.
-          # Save a physical world block at a known world coordinate, then
-          # verify that same block AFTER the Chromium server was terminated.
-          placed="$(curl -fsS --max-time 12 'http://127.0.0.1:4173/__ci/world-block?mode=write')"
-          echo "OPUSCRAFT_WORLD_BLOCK_WRITTEN $placed"
-          block_expect="$(printf '%s' "$placed" | node -e 'let x="";process.stdin.on("data",b=>x+=b).on("end",()=>{const j=JSON.parse(x);if(!j.ok||j.state!==j.actual||!j.state)process.exit(1);process.stdout.write(j.x+"|"+j.z+"|"+j.state)})')"
-          original_id="$(curl -fsS http://127.0.0.1:4173/__debug | node -e '
-            let s="";process.stdin.on("data",b=>s+=b).on("end",()=>{
-              const j=JSON.parse(s);
-              if(!j.world?.id || !j.world?.created)process.exit(2);
-              process.stdout.write(j.world.id+"|"+j.world.created)
-            })
-          ')"
-          echo "OPUSCRAFT_WORLD_BEFORE_RESTART $original_id"
-          kill -TERM "$HOST_PID"
-          wait "$HOST_PID" || true
-          OPUSCRAFT_CI_MARKER=yes node ops/opuscraft-host.cjs >/tmp/opuscraft-restarted.log 2>&1 &
-          HOST_PID=$!
-          recovered=0
-          for attempt in $(seq 1 95); do
-            if curl -fsS --max-time 3 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"ready":true' &&
-               curl -fsS --max-time 3 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"lastSave":"20'; then
-              recovered=1
-              break
-            fi
-            sleep 2
-          done
-          if test "$recovered" -ne 1; then
-            echo "OpusCraft did not restore after restart"
-            cat /tmp/opuscraft-restarted.log
-            exit 1
-          fi
-          restored_id="$(curl -fsS http://127.0.0.1:4173/__debug | node -e '
-            let s="";process.stdin.on("data",b=>s+=b).on("end",()=>{
-              const j=JSON.parse(s);process.stdout.write((j.world?.id||"")+"|"+(j.world?.created||""))
-            })
-          ')"
-          test "$original_id" = "$restored_id" || {
-            echo "World changed after process restart: before=$original_id after=$restored_id"
-            cat /tmp/opuscraft-restarted.log
-            exit 1
-          }
-          marker_x="$(echo "$block_expect" | cut -d'|' -f1)"
-          marker_z="$(echo "$block_expect" | cut -d'|' -f2)"
-          marker_state="$(echo "$block_expect" | cut -d'|' -f3)"
-          loaded="$(curl -fsS --max-time 10 "http://127.0.0.1:4173/__ci/world-block?mode=read&x=$marker_x&z=$marker_z")"
-          actual_state="$(printf '%s' "$loaded" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).state")"
-          test "$actual_state" = "$marker_state" || { echo "Persistent chunk lost: before=$marker_state after=$actual_state"; exit 1; }
-          echo "OPUSCRAFT_WORLD_BLOCK_SURVIVED_RESTART_OK at $marker_x,315,$marker_z state=$actual_state"
-          echo "OPUSCRAFT_WORLD_PERSISTENCE_AFTER_RESTART_OK $restored_id"
+          if test "$ready" -ne 1; then cat /tmp/opuscraft-relay.log; exit 1; fi
+          node ops/opuscraft-browser-relay-smoke.cjs
+          node ops/opuscraft-browser-host-smoke.cjs
+          echo "OPUSCRAFT_NO_DEDICATED_WORLD_HOST_OK"
 
 
   deploy:

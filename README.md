@@ -63,53 +63,66 @@ node --test tests/integration.cjs
 - O sistema salva pequenos volumes em JSON e não é voltado para usuários públicos.
 
 
-## OpusCraft — único Minecraft ativo (mundo familiar criativo), mundos individuais e teleporte (10/2026)
-- Abrir OpusCraft pelo catálogo agora exibe o **menu inicial original**: Um jogador, Multiplayer e Configurações. Não conecta automaticamente à VPS até a família escolher Multiplayer.
-- Em **Um jogador**, o menu nativo permite criar/continuar/renomear/excluir mundos com modos Criativo, Sobrevivência, Aventura, Espectador e Hardcore, semente, dificuldade, geração de estruturas e regras. O mundo local salva automaticamente no IndexedDB do próprio aparelho/navegador.
-- Na seleção de mundos há **Backup na VPS** e **Restaurar da VPS**. São ações manuais e autenticadas, independentes por perfil; o backup não sincroniza automaticamente mundos entre dispositivos. Cada arquivo pode ter até 64 MB, com cota de 400 MB por conta e até três versões por mundo. A restauração cria outra cópia, sem sobrescrever o mundo atual.
-- Em **Multiplayer**, a entrada **Servidor da Familia - Entrar** é fixa e usa identidade da sessão do GamesNavagador. O mundo familiar antigo da VPS permanece com seus blocos e inventários. O menu LAN original continua disponível, mas **outros mundos hospedados permanentemente para cada criança ainda não estão implementados**.
-- No mundo familiar, o overlay **Jogadores / Teleporte** mostra apenas perfis realmente conectados; tocar em Ir até executa teleporte autoritativo pelo host do OpusCraft. Só funciona quando ambos estão no mesmo mundo e dimensão; há intervalo de 6 segundos entre teletransportes.
-- O mundo do servidor continua hospedado 24h na VPS, sem precisar manter um celular ligado. Mundos individuais ficam no aparelho e podem ser copiados manualmente para a VPS.
-- Limites parentais continuam verificados periodicamente no cliente de mundo individual; para o multiplayer a conexão é autenticada e pode ser encerrada pelo ADM. Jogar localmente não fornece segurança antiviolação absoluta contra clientes modificados.
+## OpusCraft original — multiplayer hospedado por um jogador (10/2026)
 
+O cliente é compilado diretamente do upstream `Oppenheimerism/OpusCraft`, fixado
+em `bc0c753f730ef15bc8f8acf093d40797700b87ee`. A física, geração,
+renderização, shaders, menus e salvamento são os originais. **A única exceção
+no código upstream é uma condição de origem**: o anfitrião pode usar o relay
+através do domínio HTTPS exato `gamesforchildren.escotilhaprodutora.com`.
+O gateway Node verifica a sessão e o Origin antes de encaminhar a conexão. A plataforma incorpora o jogo e autentica conexões
+ao relay websocket. A VPS **não executa nem salva um mundo** e não roda Chromium.
 
+### Como jogar em família
 
-## Mundo da família: servidor invisível e aventuras de Caique e Cauã
+1. Um jogador (preferencialmente em PC) entra no GamesNavagador → OpusCraft,
+   escolhe **Um jogador**, cria ou abre um mundo no próprio navegador.
+2. Dentro do mundo, pressiona Esc → **Open to LAN** → **Start LAN World**;
+   anota o código exibido. Mantém o navegador e o mundo abertos.
+3. Os outros jogadores entram no GamesNavagador → OpusCraft → **Multiplayer**,
+   selecionam o mundo anunciado, informam nome e código de entrada.
+4. A VPS apenas repassa pacotes de rede; o anfitrião gera, simula e **salva
+   o mundo no IndexedDB do navegador anfitrião**. Cada convidado renderiza
+   seus chunks e gráficos localmente.
+5. O anfitrião pode criar um **Backup** pelo menu original e exportar um
+   arquivo `.world`. Se trocar de computador ou limpar os dados do navegador,
+   deverá importar o backup para recuperar o mundo.
+6. Se o anfitrião fechar o mundo/aba ou a conexão cair, a sessão multiplayer
+   encerra. Não é um servidor persistente 24h.
 
-- A **Andarilha** é apenas a conta interna do host que mantém o mundo online na VPS.
-  Ela fica **imóvel e em modo espectador (invisível)**, sem fome, sede, sobrevivência,
-  construções próprias, diálogos ou qualquer conexão com Groq, Gemini e outras IAs.
-  O mundo **permanece criativo para as crianças**.
-- A VPS recebe um pequeno mecanismo de atrações não-IA: letreiro de blocos com os
-  nomes **CAIQUE** e **CAUÃ** (com til), moinho com pás animadas quando há visitantes, três cataventos giratórios,
-  castelo, vila, jardim e torre de observação.
-- As atrações são construídas **no mesmo mundo**, por lotes limitados, apenas em
-  áreas livres e previamente inspecionadas. O sistema usa tickets temporários
-  de chunks para criar regiões adicionais **sem mover a Andarilha**.
-  Nenhuma área ocupada deve ser substituída; se um bloco desconhecido surgir,
-  a obra pausa. Terreno natural com vegetação densa/árvores também é rejeitado.
-- A localização das atrações concluídas aparece no painel do ADM como **X e Z**.
-  O botão **Ir ao letreiro** é restrito ao ADM já conectado ao multiplayer.
-- Para preservar o mapa, a construção só adiciona blocos em posições vazias ou
-  ocupadas por vegetação leve; **não escava, não apaga construções existentes,
-  não regenera mundos e não altera a semente**.
-- A progressão das atrações está em uma chave local, específica do mundo, no
-  armazenamento do Chromium hospedado na VPS. Os blocos continuam salvos no
-  IndexedDB original do OpusCraft, e a conclusão só é registrada depois de um
-  salvamento bem-sucedido. Um reinício retoma verificando os blocos existentes.
-- As vilas naturais, os aldeões e a fauna do OpusCraft continuam ativos, conforme
-  as regras já existentes. Nenhum serviço externo de geração é necessário.
-- **Proteção conservadora:** sem histórico de origem de cada bloco, nenhuma
-  heurística pode garantir 100% a distinção entre todos os blocos naturais e
-  os colocados por jogadores. Por isso, a implantação só autoriza acrescentar
-  blocos em áreas visualmente livres.
+### Comunicação e controle parental
 
-Para inspecionar o mundo na VPS:
+A voz WebRTC e o chat familiar pertencem à plataforma, não ao OpusCraft.
+O controle de usuários, limites, bloqueio e voz no painel dos pais continua
+funcionando. Comandos exclusivos de ADM para OpusCraft (tempo, clima, teleporte,
+atrações, NPC e monitor de mundo) foram removidos.
+
+### Integridade e limitações
+
+- O relay aceita apenas contas logadas no GamesNavagador, respeita expiração
+  de sessão e limite parental, só admite **um mundo anfitrião simultâneo**
+  e preserva as restrições nativas do OpusCraft.
+- O relay original continua exigindo que a ligação interna venha de localhost,
+  enquanto o jogo libera exclusivamente o domínio HTTPS do GamesNavagador para
+  abrir a conexão com o gateway autenticado. **Não há porta de hospedagem
+  pública nem proxy aberto.** Outros domínios permanecem bloqueados.
+- OpusCraft original não significa Minecraft oficial. O cliente pode ficar
+  lento em celulares fracos por custo local de WebGL2/chunks, mesmo que a VPS
+  não hospede o mundo. Hospedar em PC costuma ser mais adequado.
+- O perfil antigo de Chromium do mundo V1/V2/V3 é eliminado da VPS **somente
+  após o novo relay passar no health check de produção**, por autorização expressa.
+  Os backups individuais dos usuários na plataforma e os outros jogos são
+  preservados. Mundos locais já salvos em navegadores dos usuários não são
+  apagados remotamente.
+
+### Checagem operacional
+
 ```bash
-curl -sS http://127.0.0.1:4173/__health
-curl -sS http://127.0.0.1:4173/__npc/status | python3 -m json.tool
+curl -fsS http://127.0.0.1:4173/__health
+# Exemplo sem anfitrião conectado:
+# {"ready":true,"mode":"player-hosted","hosting":false,"guests":0,"connections":0}
 ```
 
-## Versões anteriores (arquivadas)
-As integrações MCGalaxy e ClassiCube foram removidas do código de produção. O OpusCraft permanece como único jogo de blocos ativo.
-Dados históricos e construções do servidor antigo não são apagados: caso existam na VPS, os arquivos `.lvl` e a configuração antiga são preservados em `backup/classicube-legacy.tar.gz` antes de qualquer limpeza. Esse backup é independente do mundo e perfil persistentes do OpusCraft em `data/opuscraft/profile`.
+O teste `ops/opuscraft-browser-relay-smoke.cjs` comprova anúncio de mundo e
+comunicação host ↔ convidados, sem Chromium na VPS.
+

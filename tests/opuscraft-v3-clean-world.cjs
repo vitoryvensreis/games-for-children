@@ -9,7 +9,7 @@ test('V3 starts completely untouched family terrain; never install automatic con
  assert.match(patch,/gamesnavagador-exploration-clean-2026-v3/);
  assert.match(npc,/worldAttractions:null/);
  assert.doesNotMatch(patch,/installGfcRotors|__gfcRotorRender|gfc-world-attractions/);
- assert.doesNotMatch(npc,/setBlock\(|installGfcWorldAttractions|landmark|attractions\?\.tick/);
+ assert.doesNotMatch(npc,/setBlock\(|installGfcWorldAttractions|installGfcFamilyTown|attractions\?\.tick/);
  for(const name of noFiles){
   assert.equal(fs.existsSync(path.join(__dirname,'..',name)),false,name+' not retired');
   assert.ok(!build.includes(path.basename(name)),name+' still bundled');

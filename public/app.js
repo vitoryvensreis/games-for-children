@@ -69,7 +69,7 @@ async function verifyOpuscraftWebSocket(){
 async function openOpusCraft(){
  if(!me)return login();
  // The host player's browser generates, simulates and saves the world.
- // This page embeds original upstream OpusCraft and keeps family chat/voice.
+ // This page embeds pristine upstream OpusCraft; the existing top voice bubble remains.
  const fullscreen=async()=>{
   try{
    if(document.documentElement.requestFullscreen&&!document.fullscreenElement)
@@ -87,12 +87,8 @@ async function openOpusCraft(){
    '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+
     encodeURIComponent(status.clientVersion||'live')+'" title="OpusCraft original" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
    '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
-   '<details class="opuscraft-players" id="opusHowTo"><summary>🎮 Jogar em família</summary>'+
-   '<p><strong>Anfitrião:</strong> Um jogador → abra/crie um mundo → Esc → Open to LAN → Start LAN World. Compartilhe o código.</p>'+
-   '<p><strong>Convidados:</strong> Multiplayer → escolha o mundo, informe seu nome e o código recebido.</p>'+
-   '<p class="sub">O mundo é salvo no navegador do anfitrião, que precisa permanecer no jogo. A VPS só conecta os jogadores. Faça backup no menu original.</p></details>'+
    '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o jogo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
+   '</main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
    if(window.matchMedia('(pointer:fine)').matches){
@@ -105,9 +101,6 @@ async function openOpusCraft(){
    root.classList.toggle('needs-landscape',portrait);overlay.hidden=!portrait};
   sync();window.addEventListener('resize',sync);screen.orientation?.addEventListener?.('change',sync);
   $('#opuscraftTryLandscape').onclick=()=>{void fullscreen();sync()};
-  $('#familyChatToggle').onclick=()=>{const panel=$('#familyChatPanel');panel.hidden=!panel.hidden;renderFamilyChat();if(!panel.hidden)$('#familyChatInput').focus()};
-  $('#familyChatForm').onsubmit=e=>{e.preventDefault();const input=$('#familyChatInput'),message=input.value.trim();if(message&&send({type:'familyChat',text:message})){input.value='';input.blur()}};
-  renderFamilyChat();
   $('#opuscraftBack').onclick=async()=>{window.removeEventListener('resize',sync);
    screen.orientation?.removeEventListener?.('change',sync);
    try{screen.orientation?.unlock?.()}catch{}

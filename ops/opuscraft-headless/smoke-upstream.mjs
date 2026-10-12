@@ -88,13 +88,21 @@ export {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerU
    ws.send(Buffer.concat([Buffer.from([0]),Buffer.from(encode([[
     SB.Hello,8,'headless-integration-smoke','NetworkChild',liveUuid,4,'ABCD1234'
    ]]))]));
-   await new Promise(resolve=>setImmediate(resolve));
-   live.host.receive();
-   live.level.tick();
-   live.host.tick();
-   await new Promise(resolve=>setImmediate(resolve));
-   const frames=received.flatMap(bytes=>bytes[0]===0?decode(bytes.subarray(1),16*1024*1024):[]);
-   assert.ok(frames.some(packet=>packet[0]===CB.Login),'Real websocket guest receives native CB.Login');
+   // Network delivery and upstream guest login are asynchronous. Drive the
+   // real server tick until CB.Login arrives, with a bounded timeout.
+   const deadline=Date.now()+5000;
+   let frames=[];
+   while(Date.now()<deadline){
+    await new Promise(resolve=>setTimeout(resolve,10));
+    live.host.receive();
+    live.level.tick();
+    live.host.tick();
+    frames=received.flatMap(bytes=>bytes[0]===0?decode(bytes.subarray(1),16*1024*1024):[]);
+    if(frames.some(packet=>packet[0]===CB.Login))break;
+   }
+   assert.ok(frames.some(packet=>packet[0]===CB.Login),
+    'Real websocket guest must receive native CB.Login; session='+JSON.stringify(
+     [...live.host.sessions.values()].map(session=>session.state)));
    assert.equal(live.host.guestCount(),1);
   }finally{ws.close();live.stop()}
  }finally{await new Promise(resolve=>wss.close(resolve))}

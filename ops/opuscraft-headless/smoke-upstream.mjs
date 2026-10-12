@@ -142,6 +142,18 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  const chunkPackets=outbound.flatMap(({data})=>decode(data,16*1024*1024));
  assert.ok(chunkPackets.some(p=>p[0]===CB.LevelChunk && p[1]===0 && p[2]===5),
   'Original CB.LevelChunk must be transmitted for loaded visible chunks');
+ // After the initial chunk, the server should send only block-state deltas.
+ // Use the same chunk already known to this session (no replacement chunk).
+ outbound.length=0;
+ const oldBlock=world.getState(1,80,81);
+ world.setState(1,80,81,oldBlock===1?2:1);
+ for(let i=0;i<2;i++){host.receive();level.tick();host.tick();}
+ const deltaPackets=outbound.flatMap(({data})=>decode(data,16*1024*1024));
+ assert.ok(deltaPackets.some(p=>p[0]===CB.BlockUpdates),
+  'Editing a visible chunk must produce CB.BlockUpdates');
+ assert.equal(deltaPackets.some(p=>p[0]===CB.LevelChunk),false,
+  'A single block edit should not resend an entire chunk');
+
 
  peerHandler('full-login-guest',false);
  assert.equal(host.guestCount(),0);

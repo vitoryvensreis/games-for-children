@@ -25,9 +25,9 @@ test('VPS only relays messages; the player generates and saves the world locally
  assert.match(server,/const auth=checkSession\(req\)/);
  assert.doesNotMatch(server,/launchOpusHost|opuscraft-host\.cjs|__npc\/status|__teleport|__summon|__world-control/);
  assert.doesNotMatch(server,/\/api\/admin\/opuscraft/);
- assert.match(app,/Open to LAN/);
- assert.match(app,/Start LAN World/);
- assert.match(app,/Multiplayer/);
+ assert.match(app,/function openOpusCraft/);
+ assert.match(app,/opuscraftFrame/);
+ assert.doesNotMatch(app,/opusHowTo|opuscraft-players/);
  assert.doesNotMatch(app,/opusPlayersDock|adminMinecraftDashboard|changeOpusWorld|refreshMinecraftDashboard/);
  assert.doesNotMatch(app,/opuscraft\/players|opuscraft\/teleport|admin\/opuscraft/);
 });

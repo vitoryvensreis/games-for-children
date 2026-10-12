@@ -19,6 +19,9 @@ rollback(){
  sudo -n /usr/bin/systemctl restart games-for-children.service || true
 }
 trap rollback ERR
+# Remove outdated compiled game files before extracting the clean release.
+# Rollback copies in backup/ remain available if activation fails.
+rm -rf -- public/opuscraft
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
 sudo -n /usr/bin/systemctl restart games-for-children.service
@@ -39,14 +42,10 @@ if test "$ready" -ne 1; then
 fi
 echo "OPUSCRAFT_ORIGINAL_PLAYER_RELAY_READY"
 curl -fsS http://127.0.0.1:4173/__health
-# Only after a HEALTHY replacement, retire the old dedicated family server
-# profiles, which the user explicitly authorized wiping. Never touch personal
-# per-child upload backups, profiles for other games or the family voice data.
-for obsolete in data/opuscraft/profile data/opuscraft/profile-v2 data/opuscraft/profile-v3; do
- if test -d "$obsolete"; then rm -rf -- "$obsolete"; fi
-done
-# Old family-world snapshots only. The separate per-user "backups" directory
-# is intentionally kept because it may contain independent personal worlds.
+# Reinstall the vanilla client cleanly: purge ALL previous OpusCraft
+# world data and family-world snapshots only after the healthy replacement.
+# Never remove shared data/state.json, SQL profiles, voice/chat or other games.
+if test -d data/opuscraft; then rm -rf -- data/opuscraft; fi
 rm -f backup/opuscraft-family-v1-pre-v2.tar.gz backup/opuscraft-family-v2-pre-v3.tar.gz \
  backup/opuscraft-profile-latest.tar.gz backup/opuscraft-v2-profile-latest.tar.gz \
  backup/opuscraft-v3-profile-latest.tar.gz

@@ -176,15 +176,6 @@ patch('src/net/transport/webSocket.ts',
   const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
- `    client?.receive();
-    if (this.mode === 'client' && this.inWorld && this.spawned &&
-        (window as any).__gfcFamilySession === true && this.chunks &&
-        this.ticks % 70 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
-      this.chunks.renderDistance++;
-      this.renderer.renderDistance = this.chunks.renderDistance;
-      this.chunks.refreshRadius();
-    }
-    if (!this.inWorld) return client?.sendTick();`);
 // Apply the lower pixel ratio as soon as a real multiplayer connection begins,
 // then restore the exact solo framebuffer and options on returning to the title.
 patch('src/game/game.ts',

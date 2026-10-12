@@ -6,12 +6,14 @@ test('upstream pinned packet ids and version',()=>{
  assert.equal(SB.PlayerAction,4);assert.equal(CB.LevelChunk,3);assert.equal(CB.BlockUpdates,5);
 });
 test('reject mismatched protocol/build and malformed players',()=>{
- const hello=[0,8,'pinned-build','Family_1','c035d1b0-ff29-4135-8f70-81c9bd5a61c3',8];
- assert.equal(checkHello(hello,{buildId:'pinned-build'}).viewDistance,8);
+ const hello=[0,8,'pinned-build','Family_1','c035d1b0-ff29-4135-8f70-81c9bd5a61c3',8,'join-123'];
+ assert.equal(checkHello(hello,{buildId:'pinned-build',joinCode:'join-123'}).viewDistance,8);
  assert.throws(()=>checkHello([...hello.slice(0,1),7,...hello.slice(2)]));
  assert.throws(()=>checkHello(hello,{buildId:'other-build'}));
  assert.throws(()=>checkHello([0,8,'pinned-build','x','uuid-too-short',8]));
- assert.equal(checkHello([...hello.slice(0,5),16]).viewDistance,GUEST_VIEW_DISTANCE);
+ assert.equal(checkHello([...hello.slice(0,5),16,hello[6]]).viewDistance,GUEST_VIEW_DISTANCE);
+ assert.throws(()=>checkHello([...hello.slice(0,6),'bad-code'],{joinCode:'join-123'}));
+ assert.throws(()=>checkHello(hello.slice(0,6)));
 });
 test('visibility sends nearest chunks first and caps radius',()=>{
  const chunks=visibleChunks(10,-10,2);

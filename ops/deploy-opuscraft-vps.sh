@@ -81,6 +81,27 @@ if test "$sign_ready" -ne 1; then
  false
 fi
 echo "OPUSCRAFT_V2_SIGN_SAVED_ON_VPS"
+# A finished village is an actual deliverable, not merely an online process.
+town_complete=0
+for attempt in $(seq 1 600); do
+ status="$(curl -fsS --max-time 5 http://127.0.0.1:4173/__npc/status || true)"
+ if printf '%s' "$status" | grep -q '"mode":"planned_city"' &&
+    printf '%s' "$status" | grep -q '"placedAttractions":7'; then
+  town_complete=1
+  break
+ fi
+ if (( attempt % 60 == 0 )); then
+  echo "V2 town still being built, attempt=$attempt"
+  printf '%s\n' "$status" | head -c 800 || true
+ fi
+ sleep 1
+done
+if test "$town_complete" -ne 1; then
+ echo "Incomplete family town: expected all seven saved attractions"
+ curl -fsS --max-time 4 http://127.0.0.1:4173/__npc/status || true
+ false
+fi
+echo "OPUSCRAFT_V2_SEVEN_LANDMARKS_SAVED_ON_VPS"
 echo "OPUSCRAFT_PERMANENT_WORLD_READY"
 curl -fsS --max-time 3 http://127.0.0.1:4173/__health
 # Retire only obsolete runtime/files after the replacement world passes health checks.

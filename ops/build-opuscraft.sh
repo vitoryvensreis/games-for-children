@@ -21,6 +21,7 @@ cp "$REPO_ROOT/ops/gfc-ground-relocation.ts" src/gfc-ground-relocation.ts
 cp "$REPO_ROOT/ops/gfc-site-care.ts" src/gfc-site-care.ts
 cp "$REPO_ROOT/ops/gfc-rotors.ts" src/gfc-rotors.ts
 cp "$REPO_ROOT/ops/gfc-family-client.ts" src/gfc-family-client.ts
+cp "$REPO_ROOT/ops/gfc-adaptive-quality.ts" src/gfc-adaptive-quality.ts
  cp "$REPO_ROOT/ops/gfc-leaf-merge.ts" src/render/gfc-leaf-merge.ts
  node "$REPO_ROOT/ops/patch-opuscraft.mjs" "$PWD"
  node "$REPO_ROOT/ops/patch-opuscraft-mesh.mjs" "$PWD"

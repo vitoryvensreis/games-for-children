@@ -121,10 +121,10 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.match(patch,/await actions\.preflight\(\)/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/prepareFamilyClient\(game\)/);
- assert.match(family,/game\.opts\.renderDistance = mobile \? 2 : 3/);
+ assert.match(family,/game\.opts\.renderDistance = 2/);
  assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 1\)/);
  assert.match(family,/game\.opts\.graphics = 0/);
- assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, mobile \? 30 : 40\)/);
+ assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, mobile \? 24 : 30\)/);
  assert.match(family,/game\.opts\.particles = 0/);
  assert.match(family,/game\.opts\.entityShadows = false/);
  assert.doesNotMatch(family,/game\.saveOptions\(\)/);
@@ -172,12 +172,12 @@ test('Admin can choose only recorded landmarks, including the current build',()=
 test('Family chunk radius improves desktop horizon without changing solo worlds',()=>{
  const patch=read('ops/patch-opuscraft.mjs');
  const family=read('ops/gfc-family-client.ts');
- assert.match(family,/game\.opts\.renderDistance = mobile \? 2 : 3/);
+ assert.match(family,/game\.opts\.renderDistance = 2/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
- assert.match(patch,/CHUNKS_PER_TICK = 4/);
+ assert.match(patch,/CHUNKS_PER_TICK = 3/);
  assert.match(patch,/this\.chunks\.renderDistance\+\+/);
- assert.match(patch,/this\.ticks % 100 === 0/);
+ assert.match(patch,/this\.ticks % 70 === 0/);
 });
 
 test('Floating structures are migrated with two durable save checkpoints and natural-tree-only clearance',()=>{
@@ -229,9 +229,9 @@ test('Automated attractions are flattened and de-forested at their original X/Z 
 test('Frame budget and rotor animations avoid block-by-block updates during player visits',()=>{
  const patch=read('ops/patch-opuscraft.mjs'),rotors=read('ops/gfc-rotors.ts'),
   host=read('ops/gfc-world-attractions.ts'),server=read('server.cjs');
- assert.match(patch,/const ratio = family \? \(mobile \? 0\.62 : 0\.60\) : 1/);
- assert.match(patch,/Math\.min\(2,this\.opts\.renderDistance\)/);
- assert.match(patch,/export const CHUNKS_PER_TICK = 4/);
+ assert.match(patch,/const ratio = family \? \(mobile \? 0\.52 : 0\.55\) : 1/);
+ assert.match(patch,/Math\.min\(1,this\.opts\.renderDistance\)/);
+ assert.match(patch,/export const CHUNKS_PER_TICK = 3/);
  assert.match(patch,/__gfcRotorRender\?\.\(this,cam\)/);
  assert.match(rotors,/performance\.now\(\)/);
  assert.match(rotors,/pose\.rotZ\(time\+arm\*90\)/);

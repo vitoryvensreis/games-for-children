@@ -55,7 +55,7 @@ patch('src/game/game.ts',
  "    if ((window as any).__gfcDedicatedHost !== true) this.touch.frame(t0);\n    if (this.inWorld && !this.chunks.dedicatedHeadlessHost) this.handleFrameInput();");
 patch('src/game/game.ts',
  "    this.sound.update(this.inWorld ? this.player : null, this.opts);",
- "    if (!this.chunks.dedicatedHeadlessHost) this.sound.update(this.inWorld ? this.player : null, this.opts);");
+ "    if (!this.inWorld || !this.chunks.dedicatedHeadlessHost) this.sound.update(this.inWorld ? this.player : null, this.opts);");
 // All level/spawner/server ticks above this point still run at 20 Hz.
 // Skip purely local HUD, hand, particles and sound, preserve autosave.
 patch('src/game/game.ts',

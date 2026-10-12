@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
+import {HeadlessTicker} from './ticker.cjs';
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -32,7 +33,26 @@ export {World,Level,HostServer};`);
  // Exercise the actual upstream simulation, not merely the TypeScript import.
  assert.equal(typeof level.tick,'function');
  const before=level.gameTime;
- for(let i=0;i<4;i++)level.tick();
- assert.equal(level.gameTime,before+4,'Real Level must advance without browser runtime');
- console.log('OPUSCRAFT_REAL_LEVEL_HEADLESS_NODE_TICK_OK');
+ // Wire the real upstream Level to the bounded Node tick scheduler.
+ let clock=0,serial=0;
+ const pending=new Map();
+ const ticker=new HeadlessTicker({
+  tick:()=>level.tick(),
+  now:()=>clock,
+  schedule:(fn,ms)=>{const id=++serial;pending.set(id,{fn,at:clock+ms});return id},
+  cancel:id=>pending.delete(id)
+ });
+ assert.equal(ticker.start(),true);
+ for(let i=0;i<4;i++){
+  clock+=50;
+  const due=[...pending].find(([,job])=>job.at<=clock);
+  assert.ok(due,'A simulated 50ms tick should be scheduled');
+  pending.delete(due[0]);
+  due[1].fn();
+ }
+ assert.equal(level.gameTime,before+4,'Real Level must advance on bounded Node 20 TPS scheduler');
+ assert.equal(ticker.status().ticks,4);
+ ticker.stop();
+ assert.equal(pending.size,0);
+ console.log('OPUSCRAFT_REAL_LEVEL_HEADLESS_SCHEDULER_OK');
 }finally{fs.rmSync(temp,{recursive:true,force:true})}

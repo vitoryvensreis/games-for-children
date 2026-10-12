@@ -96,6 +96,18 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  assert.equal(recoveredBackup.chunks.length,1);
  assert.throws(()=>readCheckpointWithBackup(firstSnapshot,{expectedSeed:'other-seed',Chunk}),
   /No valid checkpoint available/);
+ // Corrupted-but-parseable primary must never overwrite the known-good backup.
+ const trustedBackup=fs.readFileSync(firstSnapshot+'.bak','utf8');
+ fs.writeFileSync(firstSnapshot,JSON.stringify({
+  version:1,seed:level.seed,gameTime:30,dayTime:30,
+  columns:[{format:1,cx:0,cz:0,sections:999}]
+ }));
+ assert.throws(()=>writeCheckpoint(firstSnapshot,{
+  seed:level.seed,gameTime:40,dayTime:40,chunks:[chunk]
+ }),/Invalid chunk snapshot/);
+ assert.equal(fs.readFileSync(firstSnapshot+'.bak','utf8'),trustedBackup);
+ assert.equal(readCheckpointWithBackup(firstSnapshot,{expectedSeed:level.seed,Chunk}).gameTime,10);
+
 
 
 

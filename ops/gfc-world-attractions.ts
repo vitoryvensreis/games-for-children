@@ -9,7 +9,7 @@ type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower
 type Block={x:number;y:number;z:number;name:string};
 type Site={kind:Kind;x:number;y:number;z:number;elevated?:boolean};
 type Work={site:Site;cursor:number};
-type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[];blockedKinds?:Kind[];siteCare?:SiteCareJob|null;caredSites?:string[];careBlocked?:string[]};
+type State={version:1;searchRevision:number;anchor:{x:number;z:number};completed:Site[];work:Work|null;attempts:number;phase:number;relocation?:any;movedKinds?:Kind[];blockedKinds?:Kind[];siteCare?:SiteCareJob|null;caredSites?:string[];careBlocked?:string[];recoveryHold?:boolean};
 const KINDS:Kind[]=['names','windmill','pinwheels','castle','village','garden','watchtower'];
 const SEARCH_REVISION=3;
 const SAVE_KEY='gfc-family-exploration-landmarks-v1';
@@ -181,21 +181,24 @@ export function installGfcWorldAttractions(game:Game){
       Array.isArray(data.siteCare.foundation)&&data.siteCare.clear.length<=40000&&data.siteCare.foundation.length<=40000?
       data.siteCare:null,
     caredSites:Array.isArray(data.caredSites)?data.caredSites.filter((v:any)=>typeof v==='string').slice(0,20):[],
-    careBlocked:Array.isArray(data.careBlocked)?data.careBlocked.filter((v:any)=>typeof v==='string').slice(0,20):[]};
+    careBlocked:Array.isArray(data.careBlocked)?data.careBlocked.filter((v:any)=>typeof v==='string').slice(0,20):[],
+    recoveryHold:data.recoveryHold===true};
   }
  }catch{}
  const state=saved;
  // If the manifest vanished from an older persistent world, NEVER start
  // new automated construction: physical structures may still exist in chunks.
- let recoveryRequired=state.completed.length===0&&
+ let recoveryRequired=state.recoveryHold===true||state.completed.length===0&&
    (Date.now()-Number(game.meta?.created||Date.now()))>15*60*1000;
+ state.recoveryHold=recoveryRequired;
  const persist=()=>{
   try{
    localStorage.setItem(key,JSON.stringify(state));
    if(state.completed.length) localStorage.setItem(journalKey,JSON.stringify({
     version:1,anchor:state.anchor,completed:state.completed,
     caredSites:state.caredSites||[],careBlocked:state.careBlocked||[],
-    movedKinds:state.movedKinds||[],blockedKinds:state.blockedKinds||[]
+    movedKinds:state.movedKinds||[],blockedKinds:state.blockedKinds||[],
+    recoveryHold:state.recoveryHold===true
    }));
   }catch{}
  };
@@ -476,6 +479,41 @@ export function installGfcWorldAttractions(game:Game){
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),
    pinwheelsAnimated:state.completed.some(s=>s.kind==='pinwheels')};
  }
+ // Re-register a physical landmark ONLY when the administrator is standing nearby
+ // and a large majority of blueprint blocks is physically present in loaded chunks.
+ // This does not construct, erase, teleport, or modify a single block.
+ function recoverNear(kind:Kind,px:number,py:number,pz:number){
+  if(!KINDS.includes(kind))return {ok:false,error:'Tipo de atração inválido'};
+  if(state.completed.some(s=>s.kind===kind))return {ok:true,already:true};
+  const plan=planFor(kind);
+  const samples=[plan[0],plan[Math.floor(plan.length*.15)],
+   plan[Math.floor(plan.length*.4)],plan[Math.floor(plan.length*.7)],
+   plan[plan.length-1]];
+  const centerX=Math.floor(px),centerZ=Math.floor(pz),centerY=Math.floor(py);
+  for(let y=Math.max(32,centerY-32);y<=Math.min(205,centerY+10);y++)
+   for(let x=centerX-14;x<=centerX+14;x++)
+    for(let z=centerZ-14;z<=centerZ+14;z++){
+     if(!game.level.world.isLoaded(x,z))continue;
+     if(samples.some(b=>nameAt(x+b.x,y+b.y,z+b.z)!==b.name))continue;
+     let present=0,examined=0;
+     for(const b of plan){
+      if(!game.level.world.isLoaded(x+b.x,z+b.z)){examined=-1;break;}
+      examined++;
+      if(nameAt(x+b.x,y+b.y,z+b.z)===b.name)present++;
+     }
+     if(examined>0&&present/examined>=0.82){
+      const site={kind,x,y,z,elevated:false};
+      state.completed.push(site);
+      // Keep generator locked while any older building is still unregistered.
+      if(state.completed.length>=KINDS.length){
+       recoveryRequired=false;state.recoveryHold=false;
+      }
+      persist();
+      return {ok:true,site,recognized:present,total:examined,locked:recoveryRequired};
+     }
+    }
+  return {ok:false,error:'Não encontrei essa construção perto do jogador. Aproxime-se do centro e tente novamente.'};
+ }
  function destination(requested?:string){
   // Only actual, completed or active landmarks: never trust client
   // coordinates or arbitrary positions supplied through an API.
@@ -487,5 +525,5 @@ export function installGfcWorldAttractions(game:Game){
   return state.completed.find(s=>s.kind==='names')||
    state.completed.at(-1)||state.work?.site||null;
  }
- return {tick,status,destination};
+ return {tick,status,destination,recoverNear};
 }

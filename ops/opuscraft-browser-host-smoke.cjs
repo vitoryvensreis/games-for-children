@@ -65,12 +65,24 @@ server.on('upgrade',(req,socket,head)=>{
  const code=await host.evaluate(()=>window.__game.lanShare.code);
  console.log('OPUSCRAFT_ORIGINAL_BROWSER_HOST_READY',code);
  stage='guest-browser';
- const guest=await browser.newPage();
+ // Upstream prioritizes BroadcastChannel when two tabs share one browser
+ // profile; use an isolated browser context to force the real VPS WebSocket.
+ const guestContext=await browser.createBrowserContext();
+ const guest=await guestContext.newPage();
  guest.on('pageerror',e=>errors.push('guest: '+e.message));
  await guest.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?mp=join&code='+encodeURIComponent(code),
   {waitUntil:'domcontentloaded',timeout:70000});
- await guest.waitForFunction(()=>{const g=window.__game;return g?.mode==='client'&&g.inWorld&&g.spawned},
-  {timeout:125000,polling:1000});
+ try{
+  await guest.waitForFunction(()=>{const g=window.__game;return g?.mode==='client'&&g.inWorld&&g.spawned},
+   {timeout:125000,polling:1000});
+ }catch(e){
+  const detail=await guest.evaluate(()=>{
+   const g=window.__game;return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,
+    screen:g?.screen?.constructor?.name,reason:g?.client?.endReason,
+    clientState:g?.client?.state,transport:g?.client?.transport?.state};
+  }).catch(()=>({}));
+  throw Error('Guest never finished network join: '+JSON.stringify({detail,errors,error:String(e)}));
+ }
  const pair=await Promise.all([
   host.evaluate(()=>({mode:window.__game.mode,guests:window.__game.server?.guestCount?.()})),
   guest.evaluate(()=>({mode:window.__game.mode,inWorld:window.__game.inWorld,

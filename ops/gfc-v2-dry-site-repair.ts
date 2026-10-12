@@ -92,9 +92,20 @@ export function installGfcDrySiteRepair(game:Game,sites:FamilySite[],
   if(busy)return;
   if(!state.job){if(ticks%20!==0)return;begin()}
   const j=state.job;if(!j)return;
-  const a=bounds(j);
+  let a=bounds(j);
   game.chunks.setTicket('gfc-v2-dry-site-repair',[j.x>>4,j.z>>4,4]);
   if(!loaded(a)){reason='Carregando terreno de '+j.kind;return}
+  // Look beyond the roof at the real surrounding heightmap. Otherwise a
+  // cliff/tree canopy taller than the blueprint leaves a buried courtyard.
+  if(j.phase==='check'&&j.cursor===0){
+   let highest=j.high;
+   for(let x=a.x0;x<=a.x1;x+=3)
+    for(let z=a.z0;z<=a.z1;z+=3)
+     highest=Math.max(highest,game.level.world.heightAt(x,z)+4);
+   if(highest>230){blockSite(j,'montanha alta exige revisão manual');return}
+   j.high=highest;persist();
+   a=bounds(j);
+  }
   const {plan,source,destination}=maps(j);
   // Verify the original blueprint before any writes. If children changed
   // blocks, preserve them and require an explicit manual decision.

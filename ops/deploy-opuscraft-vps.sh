@@ -27,7 +27,18 @@ trap rollback ERR
 # A live snapshot is supplemental; the original persistent profile is never deleted.
 # The browser flushes its world during the permitted service restart.
 if test -d data/opuscraft/profile; then
+ # Immutable recovery point before the ONE-TIME switch to the V2 family town.
+ # The browser profile contains world chunks, inventories, and landmark metadata.
+ # Never wipe the profile; the original V1 world remains in IndexedDB.
+ if ! test -s backup/opuscraft-family-v1-pre-v2.tar.gz; then
+  tar -czf backup/opuscraft-family-v1-pre-v2.tar.gz -C data/opuscraft profile
+  test -s backup/opuscraft-family-v1-pre-v2.tar.gz
+  echo "OPUSCRAFT_FAMILY_V1_ARCHIVED_BEFORE_V2"
+ fi
  tar -czf backup/opuscraft-profile-latest.tar.gz -C data/opuscraft profile
+fi
+if test -d data/opuscraft/profile-v2; then
+ tar -czf backup/opuscraft-v2-profile-latest.tar.gz -C data/opuscraft profile-v2
 fi
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
@@ -48,6 +59,49 @@ if test "$ready" -ne 1; then
  /usr/bin/journalctl --no-pager -u games-for-children.service -n 90 || true
  false
 fi
+# Do not claim that a successful process startup means the constructions
+# exist. Demand a physical post-save landmark in the new world as well.
+sign_ready=0
+for attempt in $(seq 1 360); do
+ status="$(curl -fsS --max-time 5 http://127.0.0.1:4173/__npc/status || true)"
+ if printf '%s' "$status" | grep -q '"version":2' &&
+    printf '%s' "$status" | grep -q '"attractions":\[{"name":"names"'; then
+  sign_ready=1
+  break
+ fi
+ if (( attempt % 45 == 0 )); then
+  echo "Waiting for V2 sign construction, attempt=$attempt"
+  printf '%s\n' "$status" | head -c 800 || true
+ fi
+ sleep 1
+done
+if test "$sign_ready" -ne 1; then
+ echo "The new family world did not save its first sign; rolling back app"
+ curl -fsS --max-time 4 http://127.0.0.1:4173/__npc/status || true
+ false
+fi
+echo "OPUSCRAFT_V2_SIGN_SAVED_ON_VPS"
+# A finished village is an actual deliverable, not merely an online process.
+town_complete=0
+for attempt in $(seq 1 600); do
+ status="$(curl -fsS --max-time 5 http://127.0.0.1:4173/__npc/status || true)"
+ if printf '%s' "$status" | grep -q '"mode":"planned_city"' &&
+    printf '%s' "$status" | grep -q '"placedAttractions":7'; then
+  town_complete=1
+  break
+ fi
+ if (( attempt % 60 == 0 )); then
+  echo "V2 town still being built, attempt=$attempt"
+  printf '%s\n' "$status" | head -c 800 || true
+ fi
+ sleep 1
+done
+if test "$town_complete" -ne 1; then
+ echo "Incomplete family town: expected all seven saved attractions"
+ curl -fsS --max-time 4 http://127.0.0.1:4173/__npc/status || true
+ false
+fi
+echo "OPUSCRAFT_V2_SEVEN_LANDMARKS_SAVED_ON_VPS"
 echo "OPUSCRAFT_PERMANENT_WORLD_READY"
 curl -fsS --max-time 3 http://127.0.0.1:4173/__health
 # Retire only obsolete runtime/files after the replacement world passes health checks.

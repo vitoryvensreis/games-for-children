@@ -9,7 +9,7 @@ const puppeteer=require('puppeteer-core');
 const chromium=require('@sparticuz/chromium');
 const ROOT=path.resolve(__dirname,'..');
 const SITE=path.join(ROOT,'public','opuscraft');
-const PROFILE=path.join(ROOT,'data','opuscraft','profile');
+const PROFILE=path.join(ROOT,'data','opuscraft','profile-v2');
 const PORT=Number(process.env.OPUSCRAFT_PORT||4173);
 let browser=null,hostPage=null,relay=null,starting=false,stopping=false,lastSave=null,lastError='',tries=0;
 const log=(...a)=>console.log('[OpusCraft VPS]',...a);

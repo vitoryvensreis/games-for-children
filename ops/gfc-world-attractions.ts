@@ -4,6 +4,7 @@ import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
 import { installGroundRelocation } from './gfc-ground-relocation';
 import { installGfcSiteCare, type SiteCareJob } from './gfc-site-care';
+import { installGfcFamilyTown } from './gfc-family-town';
 
 type Kind='names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 type Block={x:number;y:number;z:number;name:string};
@@ -144,6 +145,10 @@ export function installGfcWorldAttractions(game:Game){
  // of blocks five times a second and on every admin status request.
  const plans=new Map<Kind,Block[]>(KINDS.map(kind=>[kind,shape(kind)]));
  const planFor=(kind:Kind)=>plans.get(kind)!;
+ // The new family world has fixed lots and a real terrain crew.
+ // Old worlds keep their original blueprints and remain recoverable offline.
+ if(game.meta?.id==='gamesnavagador-family-world-v2')
+  return installGfcFamilyTown(game,planFor);
  // Version 1 wrote the letters on the north side of the sign in the wrong
  // world-X order. Keep the exact previous foreground as a repair whitelist.
  const oldSign=shape('names',true).filter(b=>b.z===-1);

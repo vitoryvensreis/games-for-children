@@ -10,6 +10,7 @@ import {createRequire} from 'node:module';
 import {HeadlessTicker} from './ticker.cjs';
 import {saveColumn,loadColumn} from './native-column-store.cjs';
 import {writeCheckpoint,readCheckpoint,readCheckpointWithBackup} from './native-checkpoint.cjs';
+import {writePlayer,readPlayer} from './native-player-store.cjs';
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -25,12 +26,13 @@ import {HostServer} from '${path.join(upstream,'src/net/server/hostServer.ts').r
 import {encode,decode} from '${path.join(upstream,'src/net/codec.ts').replaceAll('\\','/')}';
 import {offlinePlayerUuid} from '${path.join(upstream,'src/net/offlineUuid.ts').replaceAll('\\','/')}';
 import {SB,CB} from '${path.join(upstream,'src/net/protocol.ts').replaceAll('\\','/')}';
-export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
+import {savePlayer} from '${path.join(upstream,'src/game/playerData.ts').replaceAll('\\','/')}';
+export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer};`);
  const output=path.join(temp,'server.mjs');
  await build({entryPoints:[entry],outfile:output,bundle:true,format:'esm',platform:'node',
   target:'node22',logLevel:'warning',define:{__BUILD_ID__:JSON.stringify('headless-integration-smoke')}});
  // Reject runtime reliance on browser globals instead of adding mock DOM/WebGL.
- const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB}=await import(pathToFileURL(output).href);
+ const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer}=await import(pathToFileURL(output).href);
  assert.equal(typeof HostServer,'function','HostServer must be loadable without a browser');
  const world=new World();
  const level=new Level(world,'24h-seed');
@@ -196,6 +198,17 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
   'The original Hello must create a playable server-side guest; diagnostics='+JSON.stringify({disconnected,session:host.sessions.get('full-login-guest')?.state,outbound:outbound.map(x=>({peer:x.peer,packets:decode(x.data,16*1024*1024)}))}));
  assert.equal(host.guestCount(),1);
  assert.ok(level.playerByUuid(uuid),'Guest player must live in real Level');
+ // Preserve the upstream SavedPlayer payload (including inventory and
+ // survival stats) without creating our own incompatible player schema.
+ const savedPlayer=savePlayer(level.playerByUuid(uuid),world.dim.id);
+ const playerDir=path.join(temp,'players');
+ writePlayer(playerDir,uuid,savedPlayer);
+ const loadedPlayer=readPlayer(playerDir,uuid);
+ assert.deepEqual(loadedPlayer,savedPlayer);
+ assert.ok(Array.isArray(loadedPlayer.inventory));
+ assert.ok(Array.isArray(loadedPlayer.armor));
+ assert.throws(()=>readPlayer(playerDir,'../bad'),/Invalid UUID/);
+
  // sendOut is normally invoked from the server tick; confirm login packet.
  host.tick();
  const packets=outbound.flatMap(({data})=>decode(data,16*1024*1024));

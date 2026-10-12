@@ -155,6 +155,33 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
   'A single block edit should not resend an entire chunk');
 
 
+ // A second real guest must receive the same block mutation, independently.
+ const name2='FamilyTwo',uuid2=offlinePlayerUuid(name2);
+ peerHandler('second-guest',true);
+ messageHandler('second-guest',encode([[SB.Hello,8,'headless-integration-smoke',name2,uuid2,4,'ABCD1234']]));
+ host.receive();
+ assert.equal(host.sessions.get('second-guest')?.state,'play');
+ assert.equal(host.guestCount(),2);
+ const second=host.sessions.get('second-guest');
+ second.pos={x:0,y:80,z:80};
+ outbound.length=0;
+ for(let i=0;i<3;i++){host.receive();level.tick();host.tick();}
+ const packets2=outbound.filter(x=>x.peer==='second-guest').flatMap(x=>decode(x.data,16*1024*1024));
+ assert.ok(packets2.some(p=>p[0]===CB.LevelChunk && p[1]===0 && p[2]===5),
+  'Second player receives the same upstream chunk');
+ outbound.length=0;
+ const blockBefore=world.getState(2,80,81);
+ const blockAfter=blockBefore===1?2:1;
+ world.setState(2,80,81,blockAfter);
+ for(let i=0;i<2;i++){host.receive();level.tick();host.tick();}
+ for(const peer of ['full-login-guest','second-guest']){
+  const received=outbound.filter(x=>x.peer===peer).flatMap(x=>decode(x.data,16*1024*1024));
+  assert.ok(received.some(p=>p[0]===CB.BlockUpdates),
+   'Shared block updates must reach '+peer);
+  assert.equal(received.some(p=>p[0]===CB.LevelChunk),false,
+   'No full chunk resend for '+peer);
+ }
+ peerHandler('second-guest',false);
  peerHandler('full-login-guest',false);
  assert.equal(host.guestCount(),0);
  host.close('smoke complete');

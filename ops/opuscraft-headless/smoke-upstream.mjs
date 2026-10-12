@@ -20,12 +20,15 @@ try{
 import {Chunk} from '${path.join(upstream,'src/world/chunk.ts').replaceAll('\\','/')}';
 import {Level} from '${path.join(upstream,'src/game/level.ts').replaceAll('\\','/')}';
 import {HostServer} from '${path.join(upstream,'src/net/server/hostServer.ts').replaceAll('\\','/')}';
-export {World,Chunk,Level,HostServer};`);
+import {encode,decode} from '${path.join(upstream,'src/net/codec.ts').replaceAll('\\','/')}';
+import {offlinePlayerUuid} from '${path.join(upstream,'src/net/offlineUuid.ts').replaceAll('\\','/')}';
+import {SB,CB} from '${path.join(upstream,'src/net/protocol.ts').replaceAll('\\','/')}';
+export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  const output=path.join(temp,'server.mjs');
  await build({entryPoints:[entry],outfile:output,bundle:true,format:'esm',platform:'node',
   target:'node22',logLevel:'warning',define:{__BUILD_ID__:JSON.stringify('headless-integration-smoke')}});
  // Reject runtime reliance on browser globals instead of adding mock DOM/WebGL.
- const {World,Chunk,Level,HostServer}=await import(pathToFileURL(output).href);
+ const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB}=await import(pathToFileURL(output).href);
  assert.equal(typeof HostServer,'function','HostServer must be loadable without a browser');
  const world=new World();
  const level=new Level(world,'24h-seed');
@@ -109,10 +112,28 @@ export {World,Chunk,Level,HostServer};`);
  assert.equal(host.sessions.get('integration-guest').state,'login');
  peerHandler('integration-guest',false);
  assert.equal(host.guestCount(),0);
+ // Send an authentic byte-encoded upstream Hello through the transport.
+ // This probes real packet decoding, the join-code check and player creation.
+ const outbound=[];
+ transport.send=(peer,data)=>outbound.push({peer,data});
+ peerHandler('full-login-guest',true);
+ const name='FamilyOne',uuid=offlinePlayerUuid(name);
+ const hello=[SB.Hello,8,'headless-integration-smoke',name,uuid,4,'smoke-test-code'];
+ messageHandler('full-login-guest',encode([hello]));
  host.receive();
+ assert.equal(host.sessions.get('full-login-guest')?.state,'play',
+  'The original Hello must create a playable server-side guest');
+ assert.equal(host.guestCount(),1);
+ assert.ok(level.playerByUuid(uuid),'Guest player must live in real Level');
+ // sendOut is normally invoked from the server tick; confirm login packet.
+ host.tick();
+ const packets=outbound.flatMap(({data})=>decode(data,16*1024*1024));
+ assert.ok(packets.some(p=>p[0]===CB.Login),'Guest must receive original CB.Login');
+ peerHandler('full-login-guest',false);
+ assert.equal(host.guestCount(),0);
  host.close('smoke complete');
  assert.equal(host.closed,true);
  assert.equal(transportClosed,1);
  assert.equal(pending.size,0);
- console.log('OPUSCRAFT_REAL_LEVEL_HOSTSERVER_LIFECYCLE_OK');
+ console.log('OPUSCRAFT_REAL_HOSTSERVER_LOGIN_PACKET_OK');
 }finally{fs.rmSync(temp,{recursive:true,force:true})}

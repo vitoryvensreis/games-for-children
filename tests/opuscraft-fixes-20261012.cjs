@@ -32,7 +32,7 @@ test('World recovery preserves original XY source only after a durable backup an
 });
 test('Stationary voxel blades are not overlaid with animated blades until original wool is retired',()=>{
  const rotors=read('ops/gfc-rotors.ts'),repair=read('ops/gfc-v2-dry-site-repair.ts');
- assert.match(rotors,/blockOf\(game\.level\.getState\(legacy\.x,legacy\.y,legacy\.z\)\)\.name===legacy\.name\)continue/);
+ assert.match(rotors,/if\(!game\.level\.world\.isLoaded\(xx,legacyZ\)\|\|/);
  assert.match(rotors,/white_wool/);
  assert.match(rotors,/red_wool/);
  assert.match(repair,/j\.kind==='windmill'\|\|j\.kind==='pinwheels'/);

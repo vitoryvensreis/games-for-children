@@ -5,6 +5,7 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const {HeadlessTicker}=require('./ticker.cjs');
+const {createChunkDemand}=require('./chunk-demand.cjs');
 const {createWebSocketTransport}=require('./ws-transport.cjs');
 const {readCheckpointWithBackup,writeCheckpoint}=require('./native-checkpoint.cjs');
 const {readPlayer,writePlayer}=require('./native-player-store.cjs');
@@ -40,6 +41,7 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
   if(existing)return existing;
   return world.addChunk(generator.generate(cx,cz));
  }
+ const demand=createChunkDemand({isLoaded:(x,z)=>!!world.getChunk(x,z),generate:generateChunk});
  const transport=createWebSocketTransport(wss,{authenticate});
  const hooks={
   spawnPoint:()=>[0,80,0],hostName:()=>hostName,worldName:()=>worldName,
@@ -58,16 +60,27 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
   writeCheckpoint(checkpoint,{seed,gameTime:level.gameTime,dayTime:level.dayTime,
    chunks:[...world.chunks.values()]});
  }
+ let tickIndex=0;
  const ticker=new HeadlessTicker({tick:()=>{
-  host.receive();level.tick();host.tick();
+  host.receive();
+  // Queue only around authenticated, playable guests; generate at most one
+  // column every 10 ticks, keeping the exploration backlog bounded.
+  if(++tickIndex%10===0){
+   for(const session of host.sessions.values()){
+    if(session.state==='play'&&session.player)
+     demand.requestAround(session.player.x,session.player.z,1);
+   }
+   demand.pump();
+  }
+  level.tick();host.tick();
  },save,onError:err=>{process.stderr.write('[OpusCraft] '+String(err)+'\n')}});
  let stopped=false;
  return {
-  world,level,host,transport,ticker,restored,generateChunk,
+  world,level,host,transport,ticker,restored,generateChunk,demand,
   start:()=>ticker.start(),
   stop:()=>{if(stopped)return false;stopped=true;ticker.stop();host.close();transport.close();return true},
   save,
-  status:()=>({...ticker.status(),guests:host.guestCount(),chunks:world.chunks.size,checkpoint:restored?.source??'new'})
+  status:()=>({...ticker.status(),guests:host.guestCount(),chunks:world.chunks.size,pendingChunks:demand.stats().pending,checkpoint:restored?.source??'new'})
  };
 }
 module.exports={createDedicatedRuntime};

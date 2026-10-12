@@ -26,6 +26,18 @@ function writeCheckpoint(file,{seed,gameTime,dayTime,chunks}){
  const tmp=file+'.'+process.pid+'.'+crypto.randomBytes(6).toString('hex')+'.tmp';
  try{
   fs.writeFileSync(tmp,JSON.stringify(manifest),{mode:0o600,flag:'wx'});
+  // Keep the last complete checkpoint before replacing the current one.
+  // Never rotate an invalid current checkpoint over a good backup.
+  if(fs.existsSync(file)){
+   const prior=fs.readFileSync(file,'utf8');
+   JSON.parse(prior);
+   const backup=file+'.bak';
+   const backupTmp=backup+'.'+process.pid+'.'+crypto.randomBytes(6).toString('hex')+'.tmp';
+   try{
+    fs.writeFileSync(backupTmp,prior,{mode:0o600,flag:'wx'});
+    fs.renameSync(backupTmp,backup);
+   }finally{try{fs.unlinkSync(backupTmp)}catch(e){if(e.code!=='ENOENT')throw e}}
+  }
   fs.renameSync(tmp,file);
  }finally{try{fs.unlinkSync(tmp)}catch(e){if(e.code!=='ENOENT')throw e}}
  return {chunks:columns.length,gameTime};
@@ -47,4 +59,14 @@ function readCheckpoint(file,{expectedSeed,Chunk}){
  });
  return {seed:data.seed,gameTime:data.gameTime,dayTime:data.dayTime,chunks};
 }
-module.exports={writeCheckpoint,readCheckpoint};
+function readCheckpointWithBackup(file,options){
+ try{return {...readCheckpoint(file,options),source:'primary'}}
+ catch(primaryError){
+  try{return {...readCheckpoint(file+'.bak',options),source:'backup'}}
+  catch(backupError){
+   throw new AggregateError([primaryError,backupError],
+    'No valid checkpoint available; refusing to reset world');
+  }
+ }
+}
+module.exports={writeCheckpoint,readCheckpoint,readCheckpointWithBackup};

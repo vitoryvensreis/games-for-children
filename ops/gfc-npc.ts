@@ -30,6 +30,15 @@ export function installGfcNpc(game:Game):void{
   return {ok:true,ready:game.spawned&&game.mode==='host',name:'Andarilha',
    role:'invisible_host',action:'idle',brain:'disabled',configured:false,
    hidden,visitors:guests().length,
+   performance:{
+    fps:Math.round(game.fps||0),
+    frameMs:Math.round((game.frameTimeMs||0)*10)/10,
+    loadedChunks:game.level.world.chunks.size,
+    queuedChunks:game.chunks.pendingGen(),
+    generatedChunks:game.chunks.stats.gens,
+    generatedMs:Math.round(game.chunks.stats.genMs),
+    meshedSections:game.chunks.stats.meshes
+   },
    worldAttractions:attractions?.status()||null};
  }
  function visit(name:string,attraction?:string){

@@ -53,6 +53,36 @@ export {World,Level,HostServer};`);
  assert.equal(level.gameTime,before+4,'Real Level must advance on bounded Node 20 TPS scheduler');
  assert.equal(ticker.status().ticks,4);
  ticker.stop();
+ // Exercise upstream HostServer's lifecycle against a no-browser Transport.
+ // Deliberately do not advertise this as playable: without initialized chunks
+ // and a real player the original host tick/guest login cannot run yet.
+ let messageHandler=null,peerHandler=null,transportClosed=0;
+ const transport={
+  send:()=>{},
+  onMessage:fn=>{messageHandler=fn},
+  onPeer:fn=>{peerHandler=fn},
+  disconnect:()=>{},
+  close:()=>{transportClosed++},
+  address:()=>null
+ };
+ const hooks={
+  spawnPoint:()=>[0,80,0],
+  hostName:()=> 'DedicatedHost',
+  worldName:()=> 'FamilyWorld',
+  chat:()=>{},
+  setTicket:()=>{},
+  hostBreaking:()=>null
+ };
+ const host=new HostServer(level,transport,hooks,{
+  lanId:'headless-test',joinCode:'smoke-test-code',announce:false
+ });
+ assert.equal(typeof messageHandler,'function');
+ assert.equal(typeof peerHandler,'function');
+ assert.equal(host.guestCount(),0);
+ host.receive();
+ host.close('smoke complete');
+ assert.equal(host.closed,true);
+ assert.equal(transportClosed,1);
  assert.equal(pending.size,0);
- console.log('OPUSCRAFT_REAL_LEVEL_HEADLESS_SCHEDULER_OK');
+ console.log('OPUSCRAFT_REAL_LEVEL_HOSTSERVER_LIFECYCLE_OK');
 }finally{fs.rmSync(temp,{recursive:true,force:true})}

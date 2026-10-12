@@ -1,6 +1,7 @@
 // Family-only graphics limits. Called when a player explicitly joins multiplayer;
 // personal single-player worlds keep their own options and IndexedDB data.
 import type { Game } from './game/game';
+import { FamilyAdaptiveQuality } from './gfc-adaptive-quality';
 
 export function prepareFamilyClient(game: Game): void {
   // Per-session overrides. Revert without changing a child's saved solo options.
@@ -10,7 +11,14 @@ export function prepareFamilyClient(game: Game): void {
     particles:game.opts.particles,entityShadows:game.opts.entityShadows,
     smoothLighting:game.opts.smoothLighting,maxFps:game.opts.maxFps
   };
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
+  const quality=new FamilyAdaptiveQuality(mobile,Math.min(game.opts.maxFps,mobile?24:30),
+    ()=>{if((window as any).__gfcFamilySession===true&&game.mode==='client')game.resize()});
+  (window as any).__gfcQuality=quality;
   (window as any).__gfcRestoreVideo=()=>{
+    quality.stop();
+    if((window as any).__gfcQuality===quality)delete (window as any).__gfcQuality;
     Object.assign(game.opts,previous);
     (window as any).__gfcFamilySession=false;
     (window as any).__gfcFamilyJoining=false;
@@ -18,8 +26,6 @@ export function prepareFamilyClient(game: Game): void {
   };
   (window as any).__gfcFamilySession = true;
   (window as any).__gfcFamilyJoining = true;
-  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
   game.opts.renderDistance = 2;
   game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 1);
   game.opts.graphics = 0;

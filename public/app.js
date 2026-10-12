@@ -90,7 +90,7 @@ async function openOpusCraft(){
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div><div id="opusRecoverPanel"></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div><h3>🎮 Qualidade deste aparelho</h3><label for="opusQualityMode">Perfil gráfico</label><select id="opusQualityMode"><option value="auto">Automático (recomendado)</option><option value="performance">Desempenho</option><option value="balanced">Equilibrado</option><option value="quality">Qualidade</option></select><p id="opusQualityStatus" class="sub" role="status">Aguardando entrada no multiplayer...</p>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div><div id="opusRecoverPanel"></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -197,6 +197,14 @@ async function openOpusCraft(){
   });
   if(me?.role==='admin')playersPanel.querySelectorAll('[data-world-time],[data-world-weather]').forEach(btn=>
    btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',btn.dataset.worldTime||btn.dataset.worldWeather,btn));
+  const qualityMode=$('#opusQualityMode');
+  qualityMode.onchange=()=>{
+   try{
+    const ctrl=gameFrame.contentWindow?.__gfcQuality;
+    if(!ctrl?.setMode?.(qualityMode.value))throw Error('Entre no Servidor da Família para ajustar');
+    notify('Perfil gráfico: '+qualityMode.options[qualityMode.selectedIndex].text);
+   }catch(e){notify(e.message)}
+  };
   $('#opusPlayersToggle').onclick=()=>{
    playersPanel.hidden=!playersPanel.hidden;
    if(!playersPanel.hidden)void showFamilyPlayers();
@@ -225,6 +233,24 @@ async function openOpusCraft(){
       Number(g.chunks?.stats?.meshes||0)+' seções renderizadas':
       'Entre no Multiplayer para medir seu FPS.';
     }catch{clientPerf.textContent='Métricas não disponíveis neste navegador.'}
+   }
+   const qualityStatus=$('#opusQualityStatus');
+   if(qualityStatus&&!playersPanel.hidden){
+    try{
+     const quality=gameFrame.contentWindow?.__gfcQuality?.status?.();
+     const g=gameFrame.contentWindow?.__game;
+     if(quality&&g?.mode==='client'){
+      if(qualityMode.value!==quality.mode)qualityMode.value=quality.mode;
+      qualityMode.disabled=false;
+      qualityStatus.textContent='Resolução '+Math.round(quality.scale*100)+'% • '+
+       Math.round(g.fps||0)+'/'+quality.targetFps+' FPS • '+
+       (quality.mode==='auto'?quality.pausedReason:'Perfil manual')+
+       ' • Ajustes: '+quality.adjustments;
+     }else{
+      qualityMode.disabled=true;
+      qualityStatus.textContent='Entre no Multiplayer para ativar o ajuste de qualidade.';
+     }
+    }catch{qualityStatus.textContent='Qualidade indisponível neste navegador.'}
    }
    const active=mode==='client';
    playersDock.hidden=!active;

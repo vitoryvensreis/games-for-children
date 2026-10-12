@@ -127,7 +127,7 @@ server.on('upgrade',(req,socket,head)=>{
    renderDistance:window.__game?.opts?.renderDistance,
    hostViewDistance:window.__game?.client?.info?.viewDistance,
   }));
-  if(status.renderDistance!==2||status.hostViewDistance!==2)
+  if(status.renderDistance!==3||status.hostViewDistance!==3)
    throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
   // Real desktop framebuffers react to per-device quality; the VPS/world
   // geometry/chunk radius must not change. The default remains automatic.

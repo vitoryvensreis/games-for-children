@@ -3,7 +3,7 @@
 import type { Game } from './game/game';
 import type { Renderer, Camera } from './render/renderer';
 import { PoseStack } from './render/entityRenderer';
-import { S } from './world/block';
+import { S, blockOf } from './world/block';
 
 type Rotor={name:'windmill'|'pinwheels';x:number;y:number;z:number;ready:boolean};
 export function installGfcRotors(game:Game):void{
@@ -37,12 +37,33 @@ export function installGfcRotors(game:Game):void{
   const time=performance.now()*0.00013*360;
   for(const rotor of rotors){
    if(Math.hypot(rotor.x-cam.x,rotor.z-cam.z)>88)continue;
+   // Previously saved V2 buildings may still contain the voxel blades.
+   // Do not draw an extra animated set on top of those. Once the protected
+   // world repair removes and saves the old wool blades, animation appears.
    const hubs=rotor.name==='windmill'?[0]:[-5,0,5];
    const centerY=rotor.y+(rotor.name==='windmill'?10.5:7.5);
    const centerZ=rotor.z+(rotor.name==='windmill'?-5.6:-2.6);
    const length=rotor.name==='windmill'?4.0:2.0;
    const material=S(rotor.name==='windmill'?'white_wool':'red_wool');
    for(const dx of hubs){
+    // Chunks not yet streamed to the client are NOT evidence that the
+    // old static spokes were removed. Hide the animated version until
+    // this hub's source chunk is loaded and all of its old arms are gone.
+    const legacyX=rotor.x+dx+1,legacyY=rotor.y+(rotor.name==='windmill'?10:7);
+    const legacyZ=rotor.z+(rotor.name==='windmill'?-6:-3);
+    if(!game.level.world.isLoaded(legacyX,legacyZ))continue;
+    const wool=rotor.name==='windmill'?'white_wool':'red_wool';
+    const oldArms=rotor.name==='windmill'?4:2;
+    let legacyPresent=false;
+    for(let t=1;t<=oldArms&&!legacyPresent;t++)
+      for(const [xoff,yoff] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const xx=rotor.x+dx+xoff*t,yy=legacyY+yoff*t;
+        if(!game.level.world.isLoaded(xx,legacyZ)||
+           blockOf(game.level.getState(xx,yy,legacyZ)).name===wool){
+          legacyPresent=true;break;
+        }
+      }
+    if(legacyPresent)continue;
     for(let arm=0;arm<4;arm++){
      pose.reset();
      pose.translate(rotor.x+dx+0.5-cam.x,centerY-cam.y,centerZ-cam.z);

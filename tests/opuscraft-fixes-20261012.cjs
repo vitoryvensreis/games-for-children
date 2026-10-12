@@ -1,0 +1,53 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
+test('Reset daily usage is admin-only and preserves previous days and configured limit',()=>{
+ const server=read('server.cjs'),ui=read('public/app.js');
+ assert.match(server,/if\(u\.role!=='admin'\)return json\(res,403/);
+ assert.match(server,/\/reset-minutes\$\/\)/);
+ assert.match(server,/req\.method==='POST'/);
+ assert.match(server,/session\.daily\[key\]=0/);
+ assert.match(server,/session\.lastTick=started/);
+ assert.match(server,/const key=localDay\(now\(\)\)/);
+ assert.match(server,/track\(child,'minutos do dia zerados pelo ADM'\)/);
+ assert.doesNotMatch(server,/session\.daily=\{\}/);
+ assert.match(ui,/data-action="reset-minutes"/);
+ assert.match(ui,/confirm\('Zerar os minutos de hoje/);
+ assert.match(ui,/admin\/users\/'\+u\.id\+'\/reset-minutes'/);
+});
+test('World recovery preserves original XY source only after a durable backup and never silently overwrites player modifications',()=>{
+ const repair=read('ops/gfc-v2-dry-site-repair.ts');
+ const town=read('ops/gfc-family-town.ts');
+ assert.match(town,/Fix submersed attractions FIRST/);
+ assert.match(town,/dryRepair\.tick\(\);return;/);
+ assert.match(repair,/j\.phase==='saveCopy'/);
+ assert.match(repair,/saveThen\(j,'eraseOld'\)/);
+ assert.match(repair,/actual!==name && !\(y<=SEA&&\(actual==='water'\|\|actual==='air'\)\)/);
+ assert.match(repair,/blockSite\(j,'construção modificada'\)/);
+ assert.match(repair,/game\.saveWorld\(\)\.then/);
+ assert.match(repair,/const target=Math\.max\(SAFE_Y,site\.y\)/);
+ assert.match(repair,/if\(!game\.inWorld\|\|!game\.spawned\|\|!game\.server\|\|!empty\(\)\)/);
+});
+test('Stationary voxel blades are not overlaid with animated blades until original wool is retired',()=>{
+ const rotors=read('ops/gfc-rotors.ts'),repair=read('ops/gfc-v2-dry-site-repair.ts');
+ assert.match(rotors,/if\(!game\.level\.world\.isLoaded\(xx,legacyZ\)\|\|/);
+ assert.match(rotors,/white_wool/);
+ assert.match(rotors,/red_wool/);
+ assert.match(repair,/j\.kind==='windmill'\|\|j\.kind==='pinwheels'/);
+ assert.match(repair,/if\(old\(x,y,z\)===wool\)game\.level\.setBlock\(x,y,z,S\('air'\)\)/);
+ assert.match(repair,/\[\[-7,-7\],\[7,-7\]/);
+ assert.match(repair,/S\('torch'\)/);
+});
+test('Increasing view distance is opt-in, bounded by device, and independent of image quality',()=>{
+ const client=read('ops/gfc-family-client.ts'),ui=read('public/app.js');
+ const smoke=read('ops/opuscraft-guest-smoke.cjs');
+ assert.match(client,/game\.opts\.renderDistance=Math\.max\(2,Math\.min\(mobile\?3:5,requested\)\)/);
+ assert.match(client,/gfc-family-view-distance/);
+ assert.match(client,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 1\)/);
+ assert.match(ui,/id="opusViewDistance"/);
+ assert.match(ui,/option\.disabled=Number\(option\.value\)>maxView/);
+ assert.match(ui,/Saia e entre de novo no Servidor da Família/);
+ assert.match(smoke,/status\.renderDistance!==3\|\|status\.hostViewDistance!==3/);
+});

@@ -453,6 +453,21 @@ if(coverEdit&&req.method==='POST'){
 
 if(pathname==='/api/admin/overview'&&req.method==='GET')return json(res,200,{users:state.users.filter(x=>x.role==='child').map(userInfo),events:state.events.slice(0,50),games:state.games.slice(-30).reverse(),rooms:[...rooms.values()].map(r=>({code:r.code,game:r.game,players:[...r.players].map(id=>state.users.find(u=>u.id===id)?.name),started:r.started,finished:r.finished}))});
 if(pathname==='/api/admin/users'&&req.method==='POST'){const b=await readBody(req);const name=String(b.name||'').trim().slice(0,32),pass=String(b.password||'');if(name.length<2||pass.length<4||pass.length>100||state.users.some(u=>u.name.toLowerCase()===name.toLowerCase()))return json(res,400,{error:'Nome ou PIN inválido/duplicado'});const child={id:uuid(),name,role:'child',pass:password(pass),enabled:true,loginEnabled:true,dailyLimit:60,version:0,voiceEnabled:true};state.users.push(child);save();return json(res,201,{user:userInfo(child)})}
+// Reset only today's usage for one child. Sessions stay valid; their
+// accounting clock starts afresh so elapsed time is not charged twice.
+const resetMinutes=pathname.match(/^\/api\/admin\/users\/([a-f0-9-]+)\/reset-minutes$/);
+if(resetMinutes&&req.method==='POST'){
+ const child=state.users.find(x=>x.id===resetMinutes[1]&&x.role==='child');
+ if(!child)return json(res,404,{error:'Perfil infantil não encontrado'});
+ const key=localDay(now()),started=now();
+ for(const session of state.sessions.filter(x=>x.userId===child.id)){
+  session.daily??={};
+  session.daily[key]=0;
+  session.lastTick=started;
+ }
+ track(child,'minutos do dia zerados pelo ADM');
+ report();return json(res,200,{ok:true,user:userInfo(child)});
+}
 const m=pathname.match(/^\/api\/admin\/users\/([a-f0-9-]+)(?:\/(kick))?$/);
 if(m&&req.method==='POST'){const child=state.users.find(x=>x.id===m[1]&&x.role==='child');if(!child)return json(res,404,{error:'Não encontrado'});if(m[2]==='kick'){child.version++;for(const a of state.sessions.filter(a=>a.userId===child.id&&!a.revoked))end(a);track(child,'desconectado pelo ADM');report();return json(res,200,{ok:true})}
 const b=await readBody(req);

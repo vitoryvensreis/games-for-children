@@ -130,6 +130,19 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  host.tick();
  const packets=outbound.flatMap(({data})=>decode(data,16*1024*1024));
  assert.ok(packets.some(p=>p[0]===CB.Login),'Guest must receive original CB.Login');
+ // A generated upstream Chunk, not just a login screen: prepare the spawn
+ // chunk and prove CB.LevelChunk reaches the authenticated guest.
+ const spawnChunk=new Chunk(0,5,world.dim.lightDefault);
+ world.chunks.set(spawnChunk.key,spawnChunk);
+ spawnChunk.lightMerged=true;
+ const oldChunkPos=host.sessions.get('full-login-guest').pos;
+ host.sessions.get('full-login-guest').pos={x:0,y:80,z:80};
+ outbound.length=0;
+ for(let i=0;i<3;i++){host.receive();level.tick();host.tick();}
+ const chunkPackets=outbound.flatMap(({data})=>decode(data,16*1024*1024));
+ assert.ok(chunkPackets.some(p=>p[0]===CB.LevelChunk && p[1]===0 && p[2]===5),
+  'Original CB.LevelChunk must be transmitted for loaded visible chunks');
+
  peerHandler('full-login-guest',false);
  assert.equal(host.guestCount(),0);
  host.close('smoke complete');

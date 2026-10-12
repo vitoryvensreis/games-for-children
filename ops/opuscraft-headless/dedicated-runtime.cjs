@@ -9,11 +9,12 @@ const {createWebSocketTransport}=require('./ws-transport.cjs');
 const {readCheckpointWithBackup,writeCheckpoint}=require('./native-checkpoint.cjs');
 const {readPlayer,writePlayer}=require('./native-player-store.cjs');
 function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Family Server',worldName='Family World',authenticate}){
- if(!engine?.World||!engine?.Level||!engine?.Chunk||!engine?.HostServer||!engine?.savePlayer)
+ if(!engine?.World||!engine?.Level||!engine?.Chunk||!engine?.HostServer||!engine?.savePlayer||!engine?.ChunkGenerator)
   throw Error('Original upstream world, level, host and player serializer required');
  if(!worldDir||typeof seed!=='string'||!seed||typeof joinCode!=='string'||!joinCode)
   throw Error('World directory, seed and join code required');
- const {World,Level,Chunk,HostServer,savePlayer}=engine;
+ const {World,Level,Chunk,HostServer,savePlayer,ChunkGenerator}=engine;
+ const generator=new ChunkGenerator(seed);
  const checkpoint=path.join(worldDir,'world.json');
  const playerDir=path.join(worldDir,'players');
  const world=new World();
@@ -29,6 +30,15 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
   }
   level.gameTime=restored.gameTime;
   level.dayTime=restored.dayTime;
+ }
+ // Uses the original OpusCraft terrain pipeline, including its pending writes,
+ // instead of fabricating empty spawn chunks. Initial generation is opt-in
+ // until off-thread scheduling and world metadata persistence are finished.
+ function generateChunk(cx,cz){
+  if(!Number.isInteger(cx)||!Number.isInteger(cz))throw Error('Invalid chunk coordinates');
+  const existing=world.getChunk(cx,cz);
+  if(existing)return existing;
+  return world.addChunk(generator.generate(cx,cz));
  }
  const transport=createWebSocketTransport(wss,{authenticate});
  const hooks={
@@ -53,7 +63,7 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
  },save,onError:err=>{process.stderr.write('[OpusCraft] '+String(err)+'\n')}});
  let stopped=false;
  return {
-  world,level,host,transport,ticker,restored,
+  world,level,host,transport,ticker,restored,generateChunk,
   start:()=>ticker.start(),
   stop:()=>{if(stopped)return false;stopped=true;ticker.stop();host.close();transport.close();return true},
   save,

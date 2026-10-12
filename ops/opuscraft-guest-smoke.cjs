@@ -127,18 +127,18 @@ server.on('upgrade',(req,socket,head)=>{
    renderDistance:window.__game?.opts?.renderDistance,
    hostViewDistance:window.__game?.client?.info?.viewDistance,
   }));
-  if(status.renderDistance!==3||status.hostViewDistance!==3)
-   throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
+  if(status.renderDistance!==6||status.hostViewDistance!==6)
+   throw Error('Desktop family client did not negotiate 6 native chunks: '+JSON.stringify(status));
   // Real desktop framebuffers react to per-device quality; the VPS/world
-  // geometry/chunk radius must not change. The default remains automatic.
+  // geometry/chunk radius must not change. Native rendering is the default.
   const desktopQuality=await page.evaluate(()=>{
    const q=window.__gfcQuality,g=window.__game;
    const before=g.canvas.width,rd=g.opts.renderDistance;
-   if(!q||q.status().mode!=='auto'||q.status().mobile)throw Error('Desktop auto quality not initialized');
-   if(!q.setMode('quality'))throw Error('Desktop quality override unavailable');
+   if(!q||q.status().mode!=='original'||q.status().mobile)throw Error('Desktop native quality not initialized');
+   if(!q.setMode('performance'))throw Error('Desktop performance override unavailable');
    const qualityWidth=g.canvas.width;
-   if(qualityWidth<=before)throw Error('Quality selection did not increase desktop framebuffer');
-   q.setMode('auto');
+   if(qualityWidth>=before)throw Error('Performance selection did not reduce native desktop framebuffer');
+   q.setMode('original');
    if(g.opts.renderDistance!==rd||g.canvas.width!==before)throw Error('Quality changed world radius or failed restoration');
    return {before,qualityWidth,restored:g.canvas.width,scale:q.status().scale};
   });
@@ -188,14 +188,14 @@ server.on('upgrade',(req,socket,head)=>{
   });
   const mobileQuality=await page2.evaluate(()=>{
    const q=window.__gfcQuality,g=window.__game;
-   if(!q||!q.status().mobile||q.status().mode!=='auto')throw Error('Mobile auto quality not initialized');
+   if(!q||!q.status().mobile||q.status().mode!=='original')throw Error('Mobile native quality not initialized');
    const initial=g.canvas.width,rd=g.opts.renderDistance;
    q.setMode('performance');
    const performanceWidth=g.canvas.width;
    q.setMode('quality');
    const qualityWidth=g.canvas.width;
-   if(!(performanceWidth<initial&&initial<qualityWidth))throw Error('Mobile presets did not change framebuffer correctly');
-   q.setMode('auto');
+   if(!(performanceWidth<qualityWidth&&qualityWidth<initial))throw Error('Mobile presets did not decrease native framebuffer correctly');
+   q.setMode('original');
    if(g.canvas.width!==initial||g.opts.renderDistance!==rd)throw Error('Mobile solo-safe quality restoration failed');
    return {initial,performanceWidth,qualityWidth,restored:g.canvas.width};
   });

@@ -58,6 +58,39 @@ test('Only a signed-in administrator can teleport to the landmark',()=>{
  assert.match(ui,/visitFamilyLandmark\(name,button\)/);
  assert.match(ui,/api\('admin\/opuscraft\/npc\/visit','POST'/);
 });
+test('Landmark registry survives host spawn shift, preserves a last-good journal and freezes risky re-generation',()=>{
+ const a=read('ops/gfc-world-attractions.ts'),npc=read('ops/gfc-npc.ts');
+ assert.match(a,/const journalKey=key\+':completed-snapshot'/);
+ assert.match(a,/snapshot\.completed\.length>/);
+ assert.doesNotMatch(a,/Math\.abs\(data\.anchor\.x-anchor\.x\)<5/);
+ assert.match(a,/let recoveryRequired=state\.recoveryHold===true/);
+ assert.match(a,/if\(recoveryRequired\)\{blocked=/);
+ assert.match(a,/localStorage\.setItem\(journalKey/);
+ assert.match(a,/function recoverNear\(kind:Kind,px:number,py:number,pz:number\)/);
+ assert.match(a,/present\/examined>=0\.82/);
+ assert.match(a,/recoveryRequired=false;state\.recoveryHold=false/);
+ assert.match(npc,/attractions\.recoverNear\(kind,session\.player\.x,session\.player\.y,session\.player\.z\)/);
+ assert.match(npc,/\^ADM_/);
+});
+test('Only ADM can summon a family child or set the world's clock and weather',()=>{
+ const api=read('server.cjs'),host=read('ops/opuscraft-host.cjs'),ui=read('public/app.js');
+ for(const endpoint of ['summon','world-control','npc/recover']){
+  assert.ok(api.includes("pathname==='/api/admin/opuscraft/"+endpoint+"'"),endpoint);
+  assert.ok(host.includes("url.pathname==='/__"+endpoint+"'"),endpoint);
+ }
+ assert.match(api,/if\(u\.role!=='admin'\)return json\(res,403/);
+ assert.match(api,/opusName\(u\)/);
+ assert.match(api,/v\.role==='child'&&v\.enabled/);
+ assert.match(api,/admin\.dimension!==child\.dimension/);
+ assert.match(host,/child\.teleportTo\(p\.x\+2,p\.y,p\.z\+2,p\.yaw,p\.pitch\)/);
+ assert.match(host,/lvl\.dayTime=/);
+ assert.match(host,/lvl\.raining=weather==='rain'/);
+ assert.match(host,/await g\.saveWorld\(\)/);
+ assert.match(ui,/data-summon/);
+ assert.match(ui,/api\('admin\/opuscraft\/summon','POST'/);
+ assert.match(ui,/api\('admin\/opuscraft\/world-control','POST'/);
+ assert.match(ui,/api\('admin\/opuscraft\/npc\/recover','POST'/);
+});
 test('Headless VPS persists exactly the same original IndexedDB family world',()=>{
  const host=read('ops/opuscraft-host.cjs'),build=read('ops/build-opuscraft.sh');
  assert.match(host,/userDataDir:PROFILE/);

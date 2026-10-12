@@ -102,6 +102,13 @@ export {World,Chunk,Level,HostServer};`);
  assert.equal(typeof messageHandler,'function');
  assert.equal(typeof peerHandler,'function');
  assert.equal(host.guestCount(),0);
+ // Simulate an upstream transport peer and verify server-side login session
+ // allocation, then clean disconnect. A full game login is a later milestone.
+ peerHandler('integration-guest',true);
+ assert.equal(host.sessions.size,1);
+ assert.equal(host.sessions.get('integration-guest').state,'login');
+ peerHandler('integration-guest',false);
+ assert.equal(host.guestCount(),0);
  host.receive();
  host.close('smoke complete');
  assert.equal(host.closed,true);

@@ -3,7 +3,7 @@
 import type { Game } from './game/game';
 import type { Renderer, Camera } from './render/renderer';
 import { PoseStack } from './render/entityRenderer';
-import { S } from './world/block';
+import { S, blockOf } from './world/block';
 
 type Rotor={name:'windmill'|'pinwheels';x:number;y:number;z:number;ready:boolean};
 export function installGfcRotors(game:Game):void{
@@ -37,6 +37,13 @@ export function installGfcRotors(game:Game):void{
   const time=performance.now()*0.00013*360;
   for(const rotor of rotors){
    if(Math.hypot(rotor.x-cam.x,rotor.z-cam.z)>88)continue;
+   // Previously saved V2 buildings may still contain the voxel blades.
+   // Do not draw an extra animated set on top of those. Once the protected
+   // world repair removes and saves the old wool blades, animation appears.
+   const legacy=rotor.name==='windmill'?
+     {x:rotor.x+1,y:rotor.y+10,z:rotor.z-6,name:'white_wool'}:
+     {x:rotor.x-4,y:rotor.y+7,z:rotor.z-3,name:'red_wool'};
+   if(blockOf(game.level.getState(legacy.x,legacy.y,legacy.z)).name===legacy.name)continue;
    const hubs=rotor.name==='windmill'?[0]:[-5,0,5];
    const centerY=rotor.y+(rotor.name==='windmill'?10.5:7.5);
    const centerZ=rotor.z+(rotor.name==='windmill'?-5.6:-2.6);

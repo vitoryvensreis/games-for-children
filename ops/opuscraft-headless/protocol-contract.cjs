@@ -16,18 +16,21 @@ const SB=Object.freeze({Hello:0,KeepAlive:1,MovePlayer:2,AcceptTeleportation:3,P
  Resync:20,SignUpdate:40,Pong:60});
 const CB=Object.freeze({Login:0,Disconnect:1,KeepAlive:2,LevelChunk:3,ForgetLevelChunk:4,
  BlockUpdates:5,BlockEntityData:6,BlockDestruction:7,SetTime:8,Weather:9});
-function checkHello(value,{buildId}={}){
- if(!Array.isArray(value)||value.length!==6||value[0]!==SB.Hello)
-  throw Error('Expected upstream SB.Hello tuple [id,protocol,build,name,uuid,viewDistance]');
- const [,version,build,name,uuid,viewDistance]=value;
+function checkHello(value,{buildId,joinCode}={}){
+ // Original SB.Hello includes the access code in field 6.
+ if(!Array.isArray(value)||value.length!==7||value[0]!==SB.Hello)
+  throw Error('Expected [id,protocol,build,name,uuid,viewDistance,joinCode]');
+ const [,version,build,name,uuid,viewDistance,code]=value;
  if(version!==PROTOCOL_VERSION)throw Error('Protocol version mismatch');
- if(typeof build!=='string'||!build||build.length>128||(buildId&&build!==buildId))
+ if(typeof build!=='string'||!build||build.length>64||(buildId&&build!==buildId))
   throw Error('Client build mismatch');
- if(typeof name!=='string'||!/^[A-Za-z0-9_]{3,16}$/.test(name))
-  throw Error('Invalid player name');
- if(typeof uuid!=='string'||uuid.length>128||uuid.length<8)throw Error('Invalid UUID');
+ if(typeof name!=='string'||name.length>64)throw Error('Invalid player name');
+ if(typeof uuid!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid))
+  throw Error('Invalid UUID');
  if(!Number.isInteger(viewDistance)||viewDistance<2||viewDistance>32)
   throw Error('Invalid view distance');
+ if(typeof code!=='string'||code.length>32||(joinCode!==undefined&&code!==joinCode))
+  throw Error('Invalid world join code');
  return {version,build,name,uuid,viewDistance:Math.min(viewDistance,GUEST_VIEW_DISTANCE)};
 }
 function visibleChunks(cx,cz,radius=GUEST_VIEW_DISTANCE){

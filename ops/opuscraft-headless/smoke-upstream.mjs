@@ -17,19 +17,29 @@ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'opuscraft-node-smoke-'));
 try{
  const entry=path.join(temp,'headless-entry.ts');
  fs.writeFileSync(entry,`import '${path.join(upstream,'src/world/blocks.ts').replaceAll('\\','/')}';\nimport {World} from '${path.join(upstream,'src/world/world.ts').replaceAll('\\','/')}';
+import {Chunk} from '${path.join(upstream,'src/world/chunk.ts').replaceAll('\\','/')}';
 import {Level} from '${path.join(upstream,'src/game/level.ts').replaceAll('\\','/')}';
 import {HostServer} from '${path.join(upstream,'src/net/server/hostServer.ts').replaceAll('\\','/')}';
-export {World,Level,HostServer};`);
+export {World,Chunk,Level,HostServer};`);
  const output=path.join(temp,'server.mjs');
  await build({entryPoints:[entry],outfile:output,bundle:true,format:'esm',platform:'node',
   target:'node22',logLevel:'warning',define:{__BUILD_ID__:JSON.stringify('headless-integration-smoke')}});
  // Reject runtime reliance on browser globals instead of adding mock DOM/WebGL.
- const {World,Level,HostServer}=await import(pathToFileURL(output).href);
+ const {World,Chunk,Level,HostServer}=await import(pathToFileURL(output).href);
  assert.equal(typeof HostServer,'function','HostServer must be loadable without a browser');
  const world=new World();
  const level=new Level(world,'24h-seed');
  assert.equal(level.world,world);
  assert.equal(level.seed,'24h-seed');
+ // Test genuine upstream chunk storage and block-state mutation (not a mock).
+ const chunk=new Chunk(0,0,world.dim.lightDefault);
+ world.chunks.set(chunk.key,chunk);
+ assert.equal(world.getChunk(0,0),chunk);
+ assert.equal(world.getState(1,64,1),0);
+ const previous=world.setState(1,64,1,1);
+ assert.equal(previous,0);
+ assert.equal(world.getState(1,64,1),1);
+
  // Exercise the actual upstream simulation, not merely the TypeScript import.
  assert.equal(typeof level.tick,'function');
  const before=level.gameTime;

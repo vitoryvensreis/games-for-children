@@ -15,7 +15,7 @@ const {build}=requireUpstream('esbuild');
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'opuscraft-node-smoke-'));
 try{
  const entry=path.join(temp,'headless-entry.ts');
- fs.writeFileSync(entry,`import {World} from '${path.join(upstream,'src/world/world.ts').replaceAll('\\','/')}';
+ fs.writeFileSync(entry,`import '${path.join(upstream,'src/world/blocks.ts').replaceAll('\\','/')}';\nimport {World} from '${path.join(upstream,'src/world/world.ts').replaceAll('\\','/')}';
 import {Level} from '${path.join(upstream,'src/game/level.ts').replaceAll('\\','/')}';
 import {HostServer} from '${path.join(upstream,'src/net/server/hostServer.ts').replaceAll('\\','/')}';
 export {World,Level,HostServer};`);

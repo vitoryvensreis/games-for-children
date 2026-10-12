@@ -72,7 +72,7 @@ test('Landmark registry survives host spawn shift, preserves a last-good journal
  assert.match(npc,/attractions\.recoverNear\(kind,session\.player\.x,session\.player\.y,session\.player\.z\)/);
  assert.match(npc,/\^ADM_/);
 });
-test('Only ADM can summon a family child or set the world's clock and weather',()=>{
+test('Only ADM can summon a family child or set world time and weather',()=>{
  const api=read('server.cjs'),host=read('ops/opuscraft-host.cjs'),ui=read('public/app.js');
  for(const endpoint of ['summon','world-control','npc/recover']){
   assert.ok(api.includes("pathname==='/api/admin/opuscraft/"+endpoint+"'"),endpoint);

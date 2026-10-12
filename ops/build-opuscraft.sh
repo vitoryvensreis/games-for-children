@@ -13,7 +13,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  cd "$TMP/opuscraft"
  npm ci --no-audit --no-fund
  # esbuild is an isolated smoke-test bundler, not an upstream runtime dependency.
- npm install --no-save --no-package-lock --no-audit --no-fund esbuild@0.25.12
+ npm install --no-save --no-package-lock --no-audit --no-fund esbuild@0.28.2
  # Branch-only headless integration smoke: real upstream engine in Node without Chromium.
  node "$REPO_ROOT/ops/opuscraft-headless/smoke-upstream.mjs" "$PWD"
  # Build original OpusCraft game logic and graphics; adapt only the exact

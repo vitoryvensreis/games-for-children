@@ -5,7 +5,7 @@ const chromium=require('@sparticuz/chromium');
 const {WebSocket,WebSocketServer}=require('ws');
 const PORT=4182,ROOT=path.resolve(__dirname,'../public/opuscraft');
 const errors=[],sockets=new Set(),wss=new WebSocketServer({noServer:true,perMessageDeflate:false});
-let browser,stage='init';
+let browser,guestBrowser,stage='init';
 const watchdog=setTimeout(()=>{
  console.error('OPUSCRAFT_BROWSER_HOST_TIMEOUT',stage,errors.slice(-12));process.exit(3);
 },260000);
@@ -54,12 +54,18 @@ server.on('upgrade',(req,socket,head)=>{
    '--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling',
    '--window-size=480,320'],defaultViewport:{width:480,height:320},protocolTimeout:180000
  });
- // Create isolated guest target before the host starts world generation.
- // On small GitHub runners, opening a brand-new Chromium target while the
- // world is meshing can stall Chrome's CDP Target.createTarget for minutes.
- stage='preallocate-client-targets';
- const guestContext=await browser.createBrowserContext();
- const guest=await guestContext.newPage();
+ // A second incognito context in the same Lambda Chromium binary can hang
+ // CDP Target.createTarget even BEFORE world generation. Two separate browser
+ // processes model different devices and avoid that unsupported target path.
+ stage='launch-independent-guest-browser';
+ guestBrowser=await puppeteer.launch({
+  executablePath:await chromium.executablePath(),headless:true,
+  args:[...chromium.args,'--enable-webgl','--enable-unsafe-swiftshader',
+   '--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling',
+   '--window-size=480,320'],defaultViewport:{width:480,height:320},protocolTimeout:120000
+ });
+ stage='preallocate-independent-guest';
+ const guest=await guestBrowser.newPage();
  guest.on('pageerror',e=>errors.push('guest: '+e.message));
  stage='host-browser';
  const host=await browser.newPage();
@@ -120,6 +126,7 @@ server.on('upgrade',(req,socket,head)=>{
 })().catch(e=>{console.error(e,errors.slice(-12));process.exitCode=1}).finally(async()=>{
  clearTimeout(watchdog);
  for(const ws of sockets)try{ws.terminate()}catch{}
+ if(guestBrowser)await guestBrowser.close().catch(()=>{});
  if(browser)await browser.close().catch(()=>{});
  await new Promise(resolve=>server.close(resolve));
 });

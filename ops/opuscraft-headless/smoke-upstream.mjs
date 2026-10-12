@@ -58,7 +58,7 @@ export {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerU
  assert.equal(runtime.status().chunks,2);
  runtime.stop();
  const restarted=createDedicatedRuntime({
-  engine:{World,Level,Chunk,HostServer,savePlayer},wss:new EventEmitter(),
+  engine:{World,Level,Chunk,ChunkGenerator,HostServer,savePlayer},wss:new EventEmitter(),
   worldDir:dedicatedDir,seed:'family-integration',joinCode:'ABCD1234'
  });
  assert.equal(restarted.restored.source,'primary');

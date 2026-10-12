@@ -271,7 +271,7 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  // Allow the original Level to prune disconnected player entities before
  // their UUID can be used for a new login.
  level.tick();
- assert.equal(level.playerByUuid(uuid),undefined,'Disconnected player must leave Level');
+ assert.equal(level.playerByUuid(uuid),null,'Disconnected player must leave Level');
  // Reconnect with the actual original loadGuest hook, reading the persisted
  // SavedPlayer; login resumes asynchronously on a later server receive tick.
  hooks.loadGuest=(playerUuid)=>readPlayer(playerDir,playerUuid);

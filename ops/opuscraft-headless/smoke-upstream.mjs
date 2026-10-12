@@ -70,11 +70,12 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  // Deliberately do not advertise this as playable: without initialized chunks
  // and a real player the original host tick/guest login cannot run yet.
  let messageHandler=null,peerHandler=null,transportClosed=0;
+ const disconnected=[];
  const transport={
   send:()=>{},
   onMessage:fn=>{messageHandler=fn},
   onPeer:fn=>{peerHandler=fn},
-  disconnect:()=>{},
+  disconnect:(peer)=>{disconnected.push({peer,reason:'transport disconnect'})},
   close:()=>{transportClosed++},
   address:()=>null
  };
@@ -122,7 +123,7 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  messageHandler('full-login-guest',encode([hello]));
  host.receive();
  assert.equal(host.sessions.get('full-login-guest')?.state,'play',
-  'The original Hello must create a playable server-side guest');
+  'The original Hello must create a playable server-side guest; diagnostics='+JSON.stringify({disconnected,session:host.sessions.get('full-login-guest')?.state,outbound:outbound.map(x=>({peer:x.peer,packets:decode(x.data,16*1024*1024)}))}));
  assert.equal(host.guestCount(),1);
  assert.ok(level.playerByUuid(uuid),'Guest player must live in real Level');
  // sendOut is normally invoked from the server tick; confirm login packet.

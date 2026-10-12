@@ -11,6 +11,8 @@ import {HeadlessTicker} from './ticker.cjs';
 import {saveColumn,loadColumn} from './native-column-store.cjs';
 import {writeCheckpoint,readCheckpoint,readCheckpointWithBackup} from './native-checkpoint.cjs';
 import {writePlayer,readPlayer} from './native-player-store.cjs';
+import {createDedicatedRuntime} from './dedicated-runtime.cjs';
+import {EventEmitter} from 'node:events';
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -35,6 +37,27 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  // Reject runtime reliance on browser globals instead of adding mock DOM/WebGL.
  const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack}=await import(pathToFileURL(output).href);
  assert.equal(typeof HostServer,'function','HostServer must be loadable without a browser');
+ // Boot an independent Node-only dedicated runtime with real upstream
+ // HostServer/Level/World, then save and reload a checkpoint.
+ const dedicatedDir=path.join(temp,'dedicated-world');
+ const runtime=createDedicatedRuntime({
+  engine:{World,Level,Chunk,HostServer,savePlayer},wss:new EventEmitter(),
+  worldDir:dedicatedDir,seed:'family-integration',joinCode:'ABCD1234'
+ });
+ const dedicatedChunk=new Chunk(0,0,runtime.world.dim.lightDefault);
+ runtime.world.chunks.set(dedicatedChunk.key,dedicatedChunk);
+ dedicatedChunk.setState(1,64,1,1);
+ runtime.save();
+ assert.equal(runtime.status().chunks,1);
+ runtime.stop();
+ const restarted=createDedicatedRuntime({
+  engine:{World,Level,Chunk,HostServer,savePlayer},wss:new EventEmitter(),
+  worldDir:dedicatedDir,seed:'family-integration',joinCode:'ABCD1234'
+ });
+ assert.equal(restarted.restored.source,'primary');
+ assert.equal(restarted.world.getState(1,64,1),1);
+ restarted.stop();
+
  const world=new World();
  const level=new Level(world,'24h-seed');
  assert.equal(level.world,world);

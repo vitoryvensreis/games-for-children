@@ -143,11 +143,12 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
     const x=a.x0+Math.floor(col/a.d),z=a.z0+col%a.d,y=job.y-1-down;
     const current=nameAt(x,y,z);
     if(down===0){if(current!=='grass_block'){game.level.setBlock(x,y,z,S('grass_block'));changed++}continue}
-    // Fill visible voids until natural bedrock/stone/dirt supports this pad.
-    // Do not fill or simulate the entire underground cave network.
-    if(current==='air'||current==='water'||current==='lava'){
-     game.level.setBlock(x,y,z,S('stone'));changed++;
+    // Fill only until the first real natural supporting block. Skip deep caves.
+    if(current!=='air'&&current!=='water'&&current!=='lava'){
+     job.cursor=(col+1)*depth;
+     continue;
     }
+    game.level.setBlock(x,y,z,S('stone'));changed++;
    }
    reason='Criando fundação plana: '+Math.floor(100*job.cursor/total)+'%';
    if(job.cursor>=total)changePhase(job,'build');
@@ -180,6 +181,6 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
   const site=requested?state.completed.find(s=>s.kind===requested):state.completed[0];
   return site?{kind:site.kind,x:site.x,y:site.y,z:site.z}:null;
  }
- function recoverNear(){return {ok:false,error:'Novo mundo planejado: os registros são automáticos'};}
+ function recoverNear(_kind:FamilyKind,_px:number,_py:number,_pz:number){return {ok:false,error:'Novo mundo planejado: os registros são automáticos'};}
  return {tick,status,destination,recoverNear};
 }

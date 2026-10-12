@@ -41,12 +41,12 @@ test('Auto drops only after repeated low FPS; recovers more slowly after sustain
 test('Streaming, hidden tabs and load do not trigger false downscaling',async()=>{
  const {FamilyAdaptiveQuality}=await load();
  const changes=[],c=new FamilyAdaptiveQuality(true,24,x=>changes.push(x));
- for(let i=0;i<12;i++)c.sample(10000+i*3000,5,true?15:0);
+ for(let i=0;i<12;i++)c.sample(10000+i*3000,5,true,15,false);
  assert.equal(c.status().scale,0.52);
  assert.match(c.status().pausedReason,/chunks/);
- for(let i=0;i<6;i++)c.sample(48000+i*3000,4,0,true);
+ for(let i=0;i<6;i++)c.sample(48000+i*3000,4,true,0,true);
  assert.equal(c.status().scale,0.52);
- for(let i=0;i<6;i++)c.sample(70000+i*3000,3,0,false,false);
+ for(let i=0;i<6;i++)c.sample(70000+i*3000,3,false,0,false);
  assert.equal(c.status().scale,0.52);
  assert.equal(changes.length,0);
 });

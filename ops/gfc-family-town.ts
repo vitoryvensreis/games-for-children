@@ -111,18 +111,17 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
   // Never preload chunks while constructing buildings or with visitors online.
   if(!state.job&&state.completed.length===TOWN.length){
    release();
-   if(!warmup)warmup=installGfcChunkWarmup(game,origin,state.completed);
-   warmup.tick();
-   // The existing persistent V2 world has older landmark elevations. Run a
-   // checkpointed, protected repair only after the native cache is ready.
-   const w=warmup.status();
-   if(w.savedWindows>=w.totalWindows){
-    if(!dryRepair)dryRepair=installGfcDrySiteRepair(game,state.completed,planFor,()=>{
-     savedCount=state.completed.length;persist();
-    });
-    dryRepair.tick();
+   // Fix submersed attractions FIRST. The optional cache must never delay
+   // correcting buildings below sea level, and neither writes while kids play.
+   if(!dryRepair)dryRepair=installGfcDrySiteRepair(game,state.completed,planFor,()=>{
+    savedCount=state.completed.length;persist();
+   });
+   const maintenance=dryRepair.status();
+   if(maintenance.completed+maintenance.blocked<maintenance.total){
+    dryRepair.tick();return;
    }
-   return;
+   if(!warmup)warmup=installGfcChunkWarmup(game,origin,state.completed);
+   warmup.tick();return;
   }
   if(!state.job)newJob();
   const job=state.job;if(!job)return;

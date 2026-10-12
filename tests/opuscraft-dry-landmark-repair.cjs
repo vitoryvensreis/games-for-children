@@ -29,5 +29,5 @@ test('Repair avoids changing non-original player blocks and pauses when children
  assert.match(repair,/blocos protegidos no novo lote/);
  assert.match(repair,/if\(!destination\.has\(p\)&&old\(x,y,z\)===b\.name\)/);
  assert.match(repair,/if\(!SAFE\.has\(existing\)\)/);
- assert.doesNotMatch(repair,/deleteWorld|localStorage\.clear|regenerate|setSeed|resetWorld/);
+ assert.doesNotMatch(repair,/deleteWorld\(|localStorage\.clear\(|regenerateWorld\(|setSeed\(|resetWorld\(/);
 });

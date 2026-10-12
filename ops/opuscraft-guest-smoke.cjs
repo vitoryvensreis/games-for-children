@@ -129,6 +129,20 @@ server.on('upgrade',(req,socket,head)=>{
   }));
   if(status.renderDistance!==2||status.hostViewDistance!==2)
    throw Error('Desktop family client still restricted to two-chunk horizon: '+JSON.stringify(status));
+  // Real desktop framebuffers react to per-device quality; the VPS/world
+  // geometry/chunk radius must not change. The default remains automatic.
+  const desktopQuality=await page.evaluate(()=>{
+   const q=window.__gfcQuality,g=window.__game;
+   const before=g.canvas.width,rd=g.opts.renderDistance;
+   if(!q||q.status().mode!=='auto'||q.status().mobile)throw Error('Desktop auto quality not initialized');
+   if(!q.setMode('quality'))throw Error('Desktop quality override unavailable');
+   const qualityWidth=g.canvas.width;
+   if(qualityWidth<=before)throw Error('Quality selection did not increase desktop framebuffer');
+   q.setMode('auto');
+   if(g.opts.renderDistance!==rd||g.canvas.width!==before)throw Error('Quality changed world radius or failed restoration');
+   return {before,qualityWidth,restored:g.canvas.width,scale:q.status().scale};
+  });
+  console.log('OPUSCRAFT_DESKTOP_ADAPTIVE_QUALITY_OK',JSON.stringify(desktopQuality));
   console.log('OPUSCRAFT_FAMILY_DESKTOP_CHUNK_RADIUS_OK',JSON.stringify({
    client:status.renderDistance,server:status.hostViewDistance}));
   const stats=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json());
@@ -151,6 +165,9 @@ server.on('upgrade',(req,socket,head)=>{
   console.log('OPUSCRAFT_FIRST_GUEST_RENDER_PAUSED_FOR_SECOND_JOIN');
 
   const page2=await browser.newPage();guestPage2=page2;
+  // Exercise the same multiplayer on a simulated touch iPhone viewport.
+  await page2.setViewport({width:390,height:700,isMobile:true,hasTouch:true,deviceScaleFactor:2});
+  await page2.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1');
   await page2.setExtraHTTPHeaders({'x-gfc-test-profile':'adult'});
   page2.on('pageerror',e=>errors.push('second page: '+e.message));
   page2.on('console',m=>{if(['error','warning'].includes(m.type()))errors.push('second console '+m.type()+': '+m.text().slice(0,380))});
@@ -169,6 +186,20 @@ server.on('upgrade',(req,socket,head)=>{
   await page2.waitForFunction(()=>{const g=window.__game;return !!(g?.mode==='client'&&g.inWorld&&g.spawned)},{
    timeout:105000,polling:1000
   });
+  const mobileQuality=await page2.evaluate(()=>{
+   const q=window.__gfcQuality,g=window.__game;
+   if(!q||!q.status().mobile||q.status().mode!=='auto')throw Error('Mobile auto quality not initialized');
+   const initial=g.canvas.width,rd=g.opts.renderDistance;
+   q.setMode('performance');
+   const performanceWidth=g.canvas.width;
+   q.setMode('quality');
+   const qualityWidth=g.canvas.width;
+   if(!(performanceWidth<initial&&initial<qualityWidth))throw Error('Mobile presets did not change framebuffer correctly');
+   q.setMode('auto');
+   if(g.canvas.width!==initial||g.opts.renderDistance!==rd)throw Error('Mobile solo-safe quality restoration failed');
+   return {initial,performanceWidth,qualityWidth,restored:g.canvas.width};
+  });
+  console.log('OPUSCRAFT_MOBILE_ADAPTIVE_QUALITY_OK',JSON.stringify(mobileQuality));
   const readyPlayers=await fetch('http://127.0.0.1:4173/__players').then(r=>r.json());
   const kid=readyPlayers.players?.find(p=>p.name==='KID_TESTPLAYER');
   const adm=readyPlayers.players?.find(p=>p.name==='ADM_TESTPLAYER');

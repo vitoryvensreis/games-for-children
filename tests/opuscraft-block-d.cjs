@@ -23,6 +23,29 @@ test('Mobile and desktop presets stay within bounded safe resolutions',async()=>
   assert.equal(c.setMode('auto',20000),false);
  }
 });
+test('Native OpusCraft mode restores full resolution independently on desktop and mobile',async()=>{
+ const {FamilyAdaptiveQuality,qualityPreset}=await load();
+ for(const mobile of [false,true]){
+  const updates=[],q=new FamilyAdaptiveQuality(mobile,60,s=>updates.push(s));
+  assert.equal(qualityPreset('original',mobile),1);
+  assert.equal(q.setMode('original',1000),true);
+  assert.equal(q.status().mode,'original');
+  assert.equal(q.status().scale,1);
+  for(let i=0;i<20;i++)q.sample(1500+i*3000,2,true,0,false);
+  assert.equal(q.status().scale,1,'original must not downscale on transient FPS drops');
+  q.setMode('performance',75000);
+  assert.ok(q.status().scale<1);
+  q.setMode('original',80000);
+  assert.equal(q.status().scale,1);
+  assert.ok(updates.includes(1));
+ }
+ const client=read('ops/gfc-family-client.ts'),patch=read('ops/patch-opuscraft.mjs');
+ assert.match(client,/quality\.setMode\('original'\)/);
+ assert.match(client,/gfc-family-native-view-distance-v1/);
+ assert.doesNotMatch(patch,/CHUNKS_PER_TICK = 3/);
+ assert.doesNotMatch(patch,/this\.ticks % 70 === 0/);
+});
+
 test('Auto drops only after repeated low FPS; recovers more slowly after sustained high FPS',async()=>{
  const {FamilyAdaptiveQuality}=await load();
  const changes=[],c=new FamilyAdaptiveQuality(false,30,x=>changes.push(x));

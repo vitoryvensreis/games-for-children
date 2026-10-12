@@ -37,6 +37,9 @@ if test -d data/opuscraft/profile; then
  fi
  tar -czf backup/opuscraft-profile-latest.tar.gz -C data/opuscraft profile
 fi
+if test -d data/opuscraft/profile-v2; then
+ tar -czf backup/opuscraft-v2-profile-latest.tar.gz -C data/opuscraft profile-v2
+fi
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
 sudo -n /usr/bin/systemctl restart games-for-children.service

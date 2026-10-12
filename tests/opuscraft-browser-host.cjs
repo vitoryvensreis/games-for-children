@@ -41,7 +41,7 @@ test('Family text and WebRTC voice remain enabled, but not Minecraft ADM control
  assert.match(app,/toggleVoice/);
  assert.match(app,/Zerar minutos/);
 });
-test('Cleanup only removes old family host; keeps user backups and other game profiles',()=>{
+test('Clean reinstall purges OpusCraft world data but preserves other game profiles',()=>{
  const deploy=read('ops/deploy-opuscraft-vps.sh');
  assert.match(deploy,/OPUSCRAFT_ORIGINAL_PLAYER_RELAY_READY/);
  assert.match(deploy,/data\/opuscraft\/profile-v3/);

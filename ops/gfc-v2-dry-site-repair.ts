@@ -4,7 +4,7 @@
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
 import type { FamilySite, FamilyBlock } from './gfc-family-town';
-const SEA=63, SAFE_Y=72, PAD=8, LOW=34, SCAN=1450, WRITES=240;
+const SEA=63, SAFE_Y=SEA+9, PAD=8, LOW=34, SCAN=1450, WRITES=240;
 type Phase='check'|'copy'|'saveCopy'|'eraseOld'|'clear'|'foundation'|'saveFinal';
 type Job={kind:FamilySite['kind'];x:number;z:number;oldY:number;y:number;high:number;
  phase:Phase;cursor:number};

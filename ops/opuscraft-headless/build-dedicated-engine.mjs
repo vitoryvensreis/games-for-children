@@ -18,6 +18,7 @@ try {
  fs.writeFileSync(entry,[
   `import ${imp('world/blocks.ts')};`,
   `export {World} from ${imp('world/world.ts')};`,
+  `export {ChunkGenerator} from ${imp('world/gen/generator.ts')};`,
   `export {Chunk} from ${imp('world/chunk.ts')};`,
   `export {Level} from ${imp('game/level.ts')};`,
   `export {HostServer} from ${imp('net/server/hostServer.ts')};`,

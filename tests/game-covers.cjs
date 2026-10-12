@@ -69,7 +69,6 @@ test('Game covers: default images, admin replace/reset, access control, persiste
 test('Catalog and admin expose three game covers and OpusCraft listing',()=>{
  const app=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
  const css=fs.readFileSync(path.join(__dirname,'../public/style.css'),'utf8');
- const host=fs.readFileSync(path.join(__dirname,'../ops/opuscraft-host.cjs'),'utf8');
  for(const slug of ['pong','snake','minecraft']){
   assert.ok(css.includes("url('/api/game-covers/"+slug+"')"),slug+' illustration is set in CSS');
  }

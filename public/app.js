@@ -174,7 +174,7 @@ async function openOpusCraft(){
       const hostPerf=$('#opusPerfHost');
       if(hostPerf&&npc.performance){
        const m=npc.performance,cache=npc.worldAttractions?.prewarm;
-       hostPerf.textContent='VPS: '+Number(m.fps||0)+' quadros/s (host oculto) • '+
+       hostPerf.textContent='VPS: '+(m.simulationOnly?'Somente simulação • ':'Iniciando otimização • ')+Number(m.fps||0)+' quadros/s (host oculto) • '+
         Number(m.frameMs||0)+' ms/quadro • '+Number(m.loadedChunks||0)+' chunks na RAM • '+
         Number(m.queuedChunks||0)+' pendentes • '+Number(m.generatedChunks||0)+' gerados nesta sessão'+
         (cache?' • Cache '+Number(cache.savedWindows||0)+'/'+Number(cache.totalWindows||0)+' áreas':'');
@@ -467,7 +467,7 @@ async function refreshMinecraftDashboard(){
      '<p class="sub">Aguardando o carregamento do mundo</p>')+
     '</div>':'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3><p class="sub">O mundo está hospedado, mas a consulta das atrações não respondeu. Aguarde ou atualize a página antes de visitar as construções.</p></div>')+
    (npc?.performance?'<div class="panel"><h3>⚡ Diagnóstico de desempenho — VPS</h3>'+
-     '<p>Host: '+Number(npc.performance.fps||0)+' quadros/s (sem renderização gráfica) • '+
+     '<p>Host: '+(npc.performance.simulationOnly?'Somente simulação (renderização desativada) • ':'Inicializando modo leve • ')+Number(npc.performance.fps||0)+' quadros/s (sem renderização gráfica) • '+
        Number(npc.performance.frameMs||0)+' ms por quadro</p>'+
      '<p>Chunks na memória: '+Number(npc.performance.loadedChunks||0)+
        ' • Na fila: '+Number(npc.performance.queuedChunks||0)+

@@ -84,6 +84,34 @@ jobs:
             tail -n 100 /tmp/opuscraft-host.log
             exit 1
           fi
+          # Every attraction must finish in the same persistent town before
+          # approving this one-time world switch for real children.
+          all_ready=0
+          for attempt in $(seq 1 420); do
+            status="$(curl -fsS --max-time 6 http://127.0.0.1:4173/__npc/status || true)"
+            if printf '%s' "$status" | node -e '
+              let body="";process.stdin.on("data",d=>body+=d).on("end",()=>{
+                try{
+                  const a=JSON.parse(body).worldAttractions;
+                  const names=new Set((a?.attractions||[]).map(x=>x.name));
+                  process.exit(a?.version===2&&a.placedAttractions===7&&
+                    ["names","castle","village","windmill","pinwheels","garden","watchtower"]
+                      .every(x=>names.has(x))?0:1);
+                }catch{process.exit(1)}
+              })
+            '; then
+              echo "OPUSCRAFT_V2_SEVEN_LANDMARKS_SAVED"
+              all_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if test "$all_ready" -ne 1; then
+            echo "::error::Not all seven attractions finished in the V2 world"
+            curl -fsS http://127.0.0.1:4173/__npc/status || true
+            tail -n 100 /tmp/opuscraft-host.log
+            exit 1
+          fi
           # Test recovery using the SAME Chromium profile, never a newly generated world.
           # Save a physical world block at a known world coordinate, then
           # verify that same block AFTER the Chromium server was terminated.

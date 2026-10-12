@@ -4,7 +4,7 @@
 // this module never opens a public port or changes the production relay.
 const crypto=require('node:crypto');
 const MAX_BYTES=2*1024*1024;
-function createWebSocketTransport(wss,{authenticate=()=>true}={}){
+function createWebSocketTransport(wss,{authenticate=()=>true,opuscraftGuestFrames=false}={}){
  if(!wss||typeof wss.on!=='function')throw Error('WebSocketServer required');
  const peers=new Map();
  let message=()=>{},change=()=>{},closed=false;
@@ -19,7 +19,12 @@ function createWebSocketTransport(wss,{authenticate=()=>true}={}){
    if(!isBinary){ws.close(1003,'Binary protocol only');return}
    const bytes=Buffer.isBuffer(raw)?raw:Buffer.from(raw);
    if(bytes.length>MAX_BYTES){ws.close(1009,'Packet too large');return}
-   message(id,new Uint8Array(bytes));
+   // Upstream WebSocketGuestTransport uses byte 0 as RAW (0) or DEFLATED (1).
+   // Guests always send RAW. Reject compressed/unknown frames from guests.
+   if(opuscraftGuestFrames){
+    if(bytes[0]!==0||bytes.length<2){ws.close(1003,'Invalid OpusCraft frame');return}
+    message(id,new Uint8Array(bytes.subarray(1)));
+   }else message(id,new Uint8Array(bytes));
   });
   ws.on('close',()=>{if(peers.delete(id))change(id,false)});
   ws.on('error',()=>{if(peers.delete(id))change(id,false)});
@@ -33,7 +38,7 @@ function createWebSocketTransport(wss,{authenticate=()=>true}={}){
    if(!ws||ws.readyState!==1)return;
    if(!(bytes instanceof Uint8Array)||bytes.byteLength>MAX_BYTES)
     throw Error('Invalid outbound packet');
-   ws.send(bytes,{binary:true});
+   ws.send(opuscraftGuestFrames?Buffer.concat([Buffer.from([0]),Buffer.from(bytes)]):bytes,{binary:true});
   },
   disconnect:id=>{const ws=peers.get(id);if(ws){peers.delete(id);change(id,false);ws.close(1000,'Disconnected')}},
   close:()=>{if(closed)return;closed=true;wss.off('connection',onConnection);

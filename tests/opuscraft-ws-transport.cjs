@@ -38,3 +38,21 @@ test('Node ws bridge rejects unauthorized and text messages',()=>{
  assert.equal(auth.closed,true);
  transport.close();
 });
+
+test('browser guest RAW framing matches original upstream websocket transport',()=>{
+ const server=new EventEmitter();
+ const transport=createWebSocketTransport(server,{opuscraftGuestFrames:true});
+ const received=[],changes=[];
+ transport.onPeer((id,connected)=>changes.push([id,connected]));
+ transport.onMessage((id,data)=>received.push([...data]));
+ const socket=new Socket();
+ server.emit('connection',socket,{});
+ const id=changes[0][0];
+ socket.emit('message',Buffer.from([0,9,8,7]),true);
+ assert.deepEqual(received,[[9,8,7]]);
+ transport.send(id,new Uint8Array([6,5]));
+ assert.deepEqual([...socket.sent[0].data],[0,6,5]);
+ socket.emit('message',Buffer.from([1,1,2]),true);
+ assert.equal(socket.closed,true,'compressed guest messages must be refused');
+ transport.close();
+});

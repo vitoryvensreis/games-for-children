@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {HeadlessTicker} from './ticker.cjs';
 import {saveColumn,loadColumn} from './native-column-store.cjs';
-import {writeCheckpoint,readCheckpoint} from './native-checkpoint.cjs';
+import {writeCheckpoint,readCheckpoint,readCheckpointWithBackup} from './native-checkpoint.cjs';
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -82,6 +82,21 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  assert.throws(()=>readCheckpoint(manifest,{expectedSeed:'wrong-world',Chunk}),/Incompatible or corrupt checkpoint/);
  fs.writeFileSync(corrupted,JSON.stringify({version:1,seed:'24h-seed',gameTime:0,dayTime:0,columns:[{format:1,cx:0,cz:0,sections:999}]}));
  assert.throws(()=>readCheckpoint(corrupted,{expectedSeed:'24h-seed',Chunk}));
+ // Two successive atomic saves retain the previous known-good generation.
+ // If latest is corrupted, restore backup; do not auto-write over it.
+ const firstSnapshot=path.join(temp,'rotating-world.json');
+ writeCheckpoint(firstSnapshot,{seed:level.seed,gameTime:10,dayTime:10,chunks:[chunk]});
+ writeCheckpoint(firstSnapshot,{seed:level.seed,gameTime:20,dayTime:20,chunks:[chunk,other]});
+ assert.equal(readCheckpoint(firstSnapshot,{expectedSeed:level.seed,Chunk}).gameTime,20);
+ assert.equal(readCheckpoint(firstSnapshot+'.bak',{expectedSeed:level.seed,Chunk}).gameTime,10);
+ fs.writeFileSync(firstSnapshot,'{invalid json');
+ const recoveredBackup=readCheckpointWithBackup(firstSnapshot,{expectedSeed:level.seed,Chunk});
+ assert.equal(recoveredBackup.source,'backup');
+ assert.equal(recoveredBackup.gameTime,10);
+ assert.equal(recoveredBackup.chunks.length,1);
+ assert.throws(()=>readCheckpointWithBackup(firstSnapshot,{expectedSeed:'other-seed',Chunk}),
+  /No valid checkpoint available/);
+
 
 
 

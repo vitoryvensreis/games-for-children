@@ -483,6 +483,11 @@ async function refreshMinecraftDashboard(){
        ' • '+esc(npc.worldAttractions.terrainCare.reason||'Verificando solo')+'</p>':'')+
       (npc.worldAttractions.registryRecoveryRequired?
        '<p class="sub"><strong>Registro das atrações em recuperação.</strong> Nenhuma construção nova será gerada automaticamente para proteger as existentes. Entre no mundo, aproxime-se de uma atração e use Reconhecer construção no painel Jogadores / Teleporte.</p>':'')+
+      (npc.worldAttractions.drySiteRepair?'<p class="sub"><strong>Correção do terreno e da água:</strong> '+
+       Number(npc.worldAttractions.drySiteRepair.completed||0)+'/'+
+       Number(npc.worldAttractions.drySiteRepair.total||7)+' áreas revisadas • '+
+       Number(npc.worldAttractions.drySiteRepair.blocked||0)+' protegidas (revisão manual) • '+
+       esc(npc.worldAttractions.drySiteRepair.reason||'Aguardando')+'</p>':'')+
       (npc.worldAttractions.prewarm?'<p class="sub"><strong>Cache dos chunks (V2):</strong> '+
        Number(npc.worldAttractions.prewarm.savedWindows||0)+'/'+
        Number(npc.worldAttractions.prewarm.totalWindows||0)+' áreas preparadas • '+

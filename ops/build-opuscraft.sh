@@ -15,6 +15,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  cp "$REPO_ROOT/ops/gfc-world-backup.ts" src/gfc-world-backup.ts
  cp "$REPO_ROOT/ops/gfc-npc.ts" src/gfc-npc.ts
 cp "$REPO_ROOT/ops/gfc-world-attractions.ts" src/gfc-world-attractions.ts
+cp "$REPO_ROOT/ops/gfc-family-town.ts" src/gfc-family-town.ts
 cp "$REPO_ROOT/ops/gfc-ground-relocation.ts" src/gfc-ground-relocation.ts
 cp "$REPO_ROOT/ops/gfc-site-care.ts" src/gfc-site-care.ts
 cp "$REPO_ROOT/ops/gfc-rotors.ts" src/gfc-rotors.ts

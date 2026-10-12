@@ -191,7 +191,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
   return {role:'landmark_builder',hiddenHost:true,aiEnabled:false,
    version:2,mode:'planned_city',placedAttractions:state.completed.length,
    totalAttractions:TOWN.length,
-   attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z,ready:true})),
+   attractions:state.completed.map(s=>({name:s.kind,x:s.x,y:s.y,z:s.z,ready:s.y>=72})),
    building:w?{name:w.kind,x:w.x,y:w.y,z:w.z,
     done:w.phase==='build'?w.cursor:0,total:planFor(w.kind).length,phase:w.phase}:null,
    blocked:reason,searches:0,surveyed:0,rejected:0,waiting:0,
@@ -203,7 +203,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
  }
  function destination(requested?:string){
   const site=requested?state.completed.find(s=>s.kind===requested):state.completed[0];
-  return site?{kind:site.kind,x:site.x,y:site.y,z:site.z}:null;
+  return site&&site.y>=72?{kind:site.kind,x:site.x,y:site.y,z:site.z}:null;
  }
  function recoverNear(_kind:FamilyKind,_px:number,_py:number,_pz:number){return {ok:false,error:'Novo mundo planejado: os registros são automáticos'};}
  return {tick,status,destination,recoverNear};

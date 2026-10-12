@@ -9,6 +9,7 @@ import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {HeadlessTicker} from './ticker.cjs';
 import {saveColumn,loadColumn} from './native-column-store.cjs';
+import {writeCheckpoint,readCheckpoint} from './native-checkpoint.cjs';
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -70,6 +71,18 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  const corrupted=path.join(temp,'corrupt.json');
  fs.writeFileSync(corrupted,JSON.stringify({format:1,cx:0,cz:0,sections:999}));
  assert.throws(()=>loadColumn(corrupted,Chunk),/Invalid chunk snapshot/);
+ // A checkpoint captures all loaded native chunks and the level's clock
+ // as one atomic manifest, with strict seed and corruption validation.
+ const manifest=path.join(temp,'world-checkpoint.json');
+ writeCheckpoint(manifest,{seed:level.seed,gameTime:level.gameTime,dayTime:level.dayTime,chunks:[chunk,other]});
+ const restoredWorld=readCheckpoint(manifest,{expectedSeed:'24h-seed',Chunk});
+ assert.equal(restoredWorld.chunks.length,2);
+ assert.equal(restoredWorld.gameTime,level.gameTime);
+ assert.equal(restoredWorld.chunks.find(c=>c.cx===-2).getState(4,70,9),1);
+ assert.throws(()=>readCheckpoint(manifest,{expectedSeed:'wrong-world',Chunk}),/Incompatible or corrupt checkpoint/);
+ fs.writeFileSync(corrupted,JSON.stringify({version:1,seed:'24h-seed',gameTime:0,dayTime:0,columns:[{format:1,cx:0,cz:0,sections:999}]}));
+ assert.throws(()=>readCheckpoint(corrupted,{expectedSeed:'24h-seed',Chunk}));
+
 
 
 

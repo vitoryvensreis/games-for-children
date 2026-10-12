@@ -66,8 +66,11 @@ node --test tests/integration.cjs
 ## OpusCraft original — multiplayer hospedado por um jogador (10/2026)
 
 O cliente é compilado diretamente do upstream `Oppenheimerism/OpusCraft`, fixado
-em `bc0c753f730ef15bc8f8acf093d40797700b87ee`, **sem modificar o código do jogo**.
-A única personalização é o aplicativo que incorpora o jogo e autentica conexões
+em `bc0c753f730ef15bc8f8acf093d40797700b87ee`. A física, geração,
+renderização, shaders, menus e salvamento são os originais. **A única exceção
+no código upstream é uma condição de origem**: o anfitrião pode usar o relay
+através do domínio HTTPS exato `gamesforchildren.escotilhaprodutora.com`.
+O gateway Node verifica a sessão e o Origin antes de encaminhar a conexão. A plataforma incorpora o jogo e autentica conexões
 ao relay websocket. A VPS **não executa nem salva um mundo** e não roda Chromium.
 
 ### Como jogar em família
@@ -99,9 +102,10 @@ atrações, NPC e monitor de mundo) foram removidos.
 - O relay aceita apenas contas logadas no GamesNavagador, respeita expiração
   de sessão e limite parental, só admite **um mundo anfitrião simultâneo**
   e preserva as restrições nativas do OpusCraft.
-- A restrição de hospedagem por localhost do relay original permanece. Somente
-  o gateway autenticado da plataforma faz a conexão interna localhost para
-  anfitriões autorizados; **não há porta de hospedagem pública nem proxy aberto**.
+- O relay original continua exigindo que a ligação interna venha de localhost,
+  enquanto o jogo libera exclusivamente o domínio HTTPS do GamesNavagador para
+  abrir a conexão com o gateway autenticado. **Não há porta de hospedagem
+  pública nem proxy aberto.** Outros domínios permanecem bloqueados.
 - OpusCraft original não significa Minecraft oficial. O cliente pode ficar
   lento em celulares fracos por custo local de WebGL2/chunks, mesmo que a VPS
   não hospede o mundo. Hospedar em PC costuma ser mais adequado.

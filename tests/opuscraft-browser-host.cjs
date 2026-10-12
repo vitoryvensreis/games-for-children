@@ -47,6 +47,5 @@ test('Clean reinstall purges OpusCraft world data but preserves other game profi
  assert.match(deploy,/rm -rf -- data\/opuscraft/);
  assert.match(deploy,/OPUSCRAFT_DEPLOY_HEALTH_OK/);
  assert.doesNotMatch(deploy,/rm -rf data\/state\.json/);
- assert.doesNotMatch(deploy,/rm -rf data\/state\.json/);
  assert.match(deploy,/trap rollback ERR/);
 });

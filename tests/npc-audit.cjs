@@ -6,7 +6,8 @@ test('The former AI monitor has been removed from the family interface',()=>{
  assert.doesNotMatch(ui,/Monitor da Andarilha|Andarilha — Sobrevivência|Pergunta enviada à Groq/);
  assert.doesNotMatch(ui,/refreshNpcAudit\(\)|function renderNpcAudit\(/);
  assert.doesNotMatch(host,/publishNpc\(|NPC_QUESTION|NPC_DECISION|NPC_STEP|decide\(/);
- assert.match(ui,/Aventuras de Caique e Cauã/);
+ assert.match(ui,/Exploração da Família — V3/);
+ assert.doesNotMatch(ui,/Construções do mapa|opusLandmarksList/);
 });
 test('Old audit records remain archived but cannot trigger provider requests',()=>{
  const schema=read('database/migrations/002_npc_audit.sql');

@@ -156,24 +156,16 @@ patch('src/gui/screens/menus.ts',
 patch('src/gui/screens/menus.ts',
  "      hardcore ? false : this.cheats,",
  "      hardcore ? false : this.mode === 'spectator' || this.cheats,");
-// Render the first nearby chunks immediately and continue streaming terrain afterward.
-// This avoids waiting for a full 5x5 region on slow iPhones or busy VPS instances.
 // Only the VPS host has an NPC driver. Run it after keyboard input is read,
 // immediately before native player physics, so guests see real walking frames.
 patch('src/game/game.ts',
  "      this.server?.receive();\n      this.level.tick();",
  "      this.server?.receive();\n      (window as any).__gfcNpc?.drive?.();\n      this.level.tick();");
-patch('src/game/game.ts',
- "this.chunks.isReady(this.player.x, this.player.z, LOADING_RADIUS, vd ?",
- "this.chunks.isReady(this.player.x, this.player.z, this.mode === 'client' ? 1 : LOADING_RADIUS, vd ?");
 // Small iPhones and the software-rendered VPS may need extra time to finish
 // receiving terrain. Keep the session alive instead of ejecting the child mid-load.
 patch('src/net/config.ts',
  "export const TIMEOUT_TICKS = 30 * 20;",
  "export const TIMEOUT_TICKS = 120 * 20;");
-patch('src/net/config.ts',
- "export const CHUNKS_PER_TICK = 6;",
- "export const CHUNKS_PER_TICK = 3;");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");
@@ -184,24 +176,6 @@ patch('src/net/transport/webSocket.ts',
   const endpoint = role === 'host' ? '/__mp' : '/ws?opus=1';
   const separator = endpoint.includes('?') ? '&' : '?';
   return (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + endpoint + separator + 'role=' + role;`);
-// Prioritize the nearby 3-chunk terrain while the world joins, then stream
-// outward (5 desktop / 3 mobile) without a huge synchronous mesh burst.
-patch('src/game/game.ts',
- "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
- `    this.chunks.renderDistance = login && this.mode === 'client' && (window as any).__gfcFamilySession === true ?
-      Math.min(1,this.opts.renderDistance) : this.opts.renderDistance;
-    this.chunks.smoothLighting = this.opts.smoothLighting;`);
-patch('src/game/game.ts',
- "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
- `    client?.receive();
-    if (this.mode === 'client' && this.inWorld && this.spawned &&
-        (window as any).__gfcFamilySession === true && this.chunks &&
-        this.ticks % 70 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
-      this.chunks.renderDistance++;
-      this.renderer.renderDistance = this.chunks.renderDistance;
-      this.chunks.refreshRadius();
-    }
-    if (!this.inWorld) return client?.sendTick();`);
 // Apply the lower pixel ratio as soon as a real multiplayer connection begins,
 // then restore the exact solo framebuffer and options on returning to the title.
 patch('src/game/game.ts',
@@ -211,20 +185,19 @@ patch('src/game/game.ts',
  "    if (!c) return false;\n    this.client = null;\n    this.guestPoem = null;\n    this.mode = 'single';\n    this.clock.stop();",
  "    if (!c) return false;\n    this.client = null;\n    this.guestPoem = null;\n    this.mode = 'single';\n    (window as any).__gfcRestoreVideo?.();\n    this.clock.stop();");
 
-// Reduce framebuffer pixel count in the family multiplayer: the GPU
-// draws the same voxel geometry but at 70% of desktop resolution (85%
-// mobile) and CSS upscales it. Does not change anyone's solo settings.
+// Native OpusCraft framebuffer by default. Optional family performance modes
+// can downscale without touching world geometry or singleplayer settings.
 patch('src/game/game.ts',
  "    const dpr = window.devicePixelRatio || 1;",
  `    const native = window.devicePixelRatio || 1;
     const family = (window as any).__gfcFamilySession === true && this.mode === 'client';
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const ratio = family ? (mobile ? 0.52 : 0.55) : 1;
-    const maxW = family ? (mobile ? 720 : 900) : 8192;
+    const maxW = family && (window as any).__gfcQuality?.status?.().mode !== 'original' ? (mobile ? 720 : 900) : 8192;
     const dpr = Math.min(native * ratio, maxW / Math.max(1,window.innerWidth));`);
 
-// Adaptive pixel ratio belongs to family guests only. Solo graphics/options
-// and the dedicated VPS host keep their exact original framebuffer behavior.
+// Family guests default to exact native 1x DPR. Explicit optional presets
+// alone enable dynamic resolution; solo and the host retain native behavior.
 patch('src/game/game.ts',
  "    const ratio = family ? (mobile ? 0.52 : 0.55) : 1;",
  "    const ratio = family ? ((window as any).__gfcQuality?.status?.().scale ?? (mobile ? 0.52 : 0.55)) : 1;");
@@ -237,12 +210,6 @@ patch('src/game/game.ts',
       (window as any).__gfcQuality?.sample(performance.now(), this.fps,
         this.inWorld && this.spawned, this.chunks?.pendingGen?.() ?? 0, document.hidden);`);
 
-// The family multiplayer can rain in the simulation (weather and crops
-// still behave normally), without drawing thousands of fullscreen streaks
-// above dense jungle foliage. Solo worlds retain vanilla precipitation.
-patch('src/render/renderer.ts',
- "    if (e.level && e.weather.rain > 0) {",
- "    if (e.level && e.weather.rain > 0 && !((window as any).__gfcFamilySession === true && (window as any).__game?.mode === 'client')) {");
 
 // Static files are mounted behind the authenticated GamesNavagador iframe.
 console.log('OpusCraft family host / guest integration applied');

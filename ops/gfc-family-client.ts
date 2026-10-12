@@ -13,8 +13,11 @@ export function prepareFamilyClient(game: Game): void {
   };
   const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
     (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-  const quality=new FamilyAdaptiveQuality(mobile,Math.min(game.opts.maxFps,mobile?24:30),
+  const quality=new FamilyAdaptiveQuality(mobile,Math.min(game.opts.maxFps,mobile?60:60),
     ()=>{if((window as any).__gfcFamilySession===true&&game.mode==='client')game.resize()});
+  // Full native OpusCraft graphics are now the default. Lighter profiles remain
+  // optional if the actual device cannot sustain the original resolution.
+  quality.setMode('original');
   (window as any).__gfcQuality=quality;
   (window as any).__gfcRestoreVideo=()=>{
     quality.stop();
@@ -26,22 +29,17 @@ export function prepareFamilyClient(game: Game): void {
   };
   (window as any).__gfcFamilySession = true;
   (window as any).__gfcFamilyJoining = true;
-  // This setting is an opt-in for the NEXT family join: the host negotiates
-  // the chunk view radius at login, so changing it mid-session has no effect.
-  // Keep a safe device-specific default and a bounded larger view for PCs.
-  let requested=mobile?2:3;
-  try{const stored=Number(localStorage.getItem('gfc-family-view-distance'));
-   if(Number.isInteger(stored)&&stored>=2&&stored<=5)requested=stored;
+  // The relay supports up to eight native OpusCraft chunks in multiplayer.
+  // Keep a sensible first-join distance; allow closer native max on capable PCs.
+  // Use a new key so obsolete 2-chunk preferences cannot silently persist.
+  let requested=mobile?4:6;
+  try{
+    const stored=Number(localStorage.getItem('gfc-family-native-view-distance-v1'));
+    if(Number.isInteger(stored)&&stored>=3&&stored<=(mobile?6:8))requested=stored;
   }catch{}
-  game.opts.renderDistance=Math.max(2,Math.min(mobile?3:5,requested));
-  game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 1);
-  game.opts.graphics = 0;
-  game.opts.fancy = false;
-  game.opts.clouds = 0;
-  game.opts.particles = 0;
-  game.opts.entityShadows = false;
-  game.opts.smoothLighting = false;
-  game.opts.maxFps = Math.min(game.opts.maxFps, mobile ? 24 : 30);
+  game.opts.renderDistance=Math.max(3,Math.min(mobile?6:8,requested));
+  // All other graphics, fog, textures, animations and FPS use the native
+  // game options. Do not force fast leaves, remove clouds or cut frame rate.
 }
 
 // Test exactly the authenticated public relay route, not the unrelated lobby WS.

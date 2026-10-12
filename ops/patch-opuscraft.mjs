@@ -35,7 +35,6 @@ patch('src/main.ts',
  "  installScreens(game);",
  `  installScreens(game);
   (window as any).__gfcFamilyActions = { preflight: checkFamilyRelay, prepare: () => prepareFamilyClient(game) };
-  if (!params.has('gfcHost')) installGfcRotors(game);
   if (!params.has('gfcHost')) {
     let accessLost=false;
     setInterval(async () => {
@@ -59,15 +58,15 @@ patch('src/main.ts',
   }`);
 patch('src/main.ts',
  "import { getWorldMeta } from './storage/worldStore';",
- "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { installGfcRotors } from './gfc-rotors';\nimport { checkFamilyRelay, prepareFamilyClient } from './gfc-family-client';");
+ "import { getWorldMeta, saveWorldMeta, setWorldNamespace } from './storage/worldStore';\nimport { installGfcNpc } from './gfc-npc';\nimport { checkFamilyRelay, prepareFamilyClient } from './gfc-family-client';");
 patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
     // VPS-owned persistent IndexedDB profile, reused across automatic restarts.
-    const id = 'gamesnavagador-family-world-v2';
+    const id = 'gamesnavagador-family-world-v3';
     let meta = await getWorldMeta(id);
     if (!meta) {
-      meta = newWorldMeta(id, 'Vila de Caique e Cauã', 'gamesnavagador-family-planned-2026-v2', 'creative', 'peaceful', false, true);
+      meta = newWorldMeta(id, 'Mundo da Familia - Exploracao', 'gamesnavagador-exploration-clean-2026-v3', 'creative', 'peaceful', false, true);
       await saveWorldMeta(meta);
     }
     game.opts.renderDistance = 2; // Dedicated host simulates chunks; it does not need far-field graphics.
@@ -237,12 +236,6 @@ patch('src/game/game.ts',
     if (this.mode === 'client' && (window as any).__gfcFamilySession === true)
       (window as any).__gfcQuality?.sample(performance.now(), this.fps,
         this.inWorld && this.spawned, this.chunks?.pendingGen?.() ?? 0, document.hidden);`);
-
-// Draw rotating 3D sails in the native entity pass, after opaque terrain.
-// This hook is inert in the VPS host and in private single-player worlds.
-patch('src/render/renderer.ts',
- "    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });",
- "    this.entities.render(b, level, cam, partial, this.frustum, opts ?? { shadows: true, drawPlayer: false, distanceScale: 1 });\n    (window as any).__gfcRotorRender?.(this,cam);");
 
 // The family multiplayer can rain in the simulation (weather and crops
 // still behave normally), without drawing thousands of fullscreen streaks

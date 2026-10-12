@@ -29,8 +29,11 @@ export class FamilyAdaptiveQuality{
  private reason='Aguardando entrada no mundo';
  private adjustments=0;
  private active=true;
- constructor(readonly mobile:boolean,readonly targetFps:number,
-  private readonly onScaleChange:(scale:number)=>void){
+ readonly mobile:boolean;
+ readonly targetFps:number;
+ private readonly onScaleChange:(scale:number)=>void;
+ constructor(mobile:boolean,targetFps:number,onScaleChange:(scale:number)=>void){
+  this.mobile=mobile;this.targetFps=targetFps;this.onScaleChange=onScaleChange;
   this.min=mobile?0.42:0.43;
   this.max=mobile?0.68:0.75;
   this.scale=qualityPreset('auto',mobile);

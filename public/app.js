@@ -28,7 +28,7 @@ if(m.type==='voiceReady'&&voiceStream)maybeCall({id:m.id,name:m.name});
 if(m.type==='signal')handleSignal(m);
 };socket.onerror=()=>{if(ws!==socket)return;const label=$('#connectionStatus');if(label)label.textContent='Falha na conexão em tempo real'};socket.onclose=()=>{if(ws!==socket)return;for(const id of [...connections.keys()])hangupPeer(id);updateVoiceDock();const label=$('#connectionStatus');if(label)label.textContent='Reconectando...';if(me){clearTimeout(wsRetry);wsRetry=setTimeout(()=>{if(me)connect()},2500)}}}
 function renderLobby(rooms){const el=$('#availableRooms');if(!el)return;rooms=rooms.filter(r=>r.game==='pong');el.innerHTML=rooms.length?rooms.map(r=>'<div class="lobby-room"><div><strong>'+esc(r.host)+'</strong><span> criou Pong Neon</span></div><button data-room="'+esc(r.code)+'">Entrar</button></div>').join(''):'<p class="hint">Nenhuma partida aguardando. Crie uma e convide um amigo!</p>';el.querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room}))}
-function home(){pongCanvasObserver?.disconnect();pongCanvasObserver=null;ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card game-card--cover card-pong"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card game-card--cover card-snake"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card game-card--cover card-minecraft"><span class="art">'+ico('gamepad')+'</span><h2>OpusCraft</h2><p class="sub">Explore o mundo familiar permanente com animais, construções e inventário — OpusCraft.</p><button id="openOpusCraft" class="success">Jogar OpusCraft</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openOpusCraft').onclick=openOpusCraft;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
+function home(){pongCanvasObserver?.disconnect();pongCanvasObserver=null;ensureVoiceDock();stopSnake();cancelAnimationFrame(pongRaf);pongPadDirection=0;if(!me)return login();if(me.role==='admin')return admin();room=null;cancelAnimationFrame(drawId);app.innerHTML=box(renderTop()+'<p id="connectionStatus" class="hint">'+(ws?.readyState===1?'Conectado':'Conectando...')+'</p><h1>Escolha sua aventura</h1><div class="grid"><div class="game-card game-card--cover card-pong"><span class="art">'+ico('gamepad')+'</span><h2>Pong Neon</h2><p class="sub">Controle sua raquete e não deixe a bola passar.</p><div class="row"><button data-game="pong" data-solo="true">Sozinho</button><button class="success" data-game="pong" data-solo="false">Em dupla</button></div></div><div class="game-card game-card--cover card-snake"><span class="art">'+ico('star')+'</span><h2>Cobrinha Colorida</h2><p class="sub">Pegue as estrelas e cresça!</p><button id="snakeSolo">Jogar sozinho</button></div><div class="game-card game-card--cover card-minecraft"><span class="art">'+ico('gamepad')+'</span><h2>OpusCraft</h2><p class="sub">Explore e construa em um mundo familiar permanente — OpusCraft.</p><button id="openOpusCraft" class="success">Jogar OpusCraft</button></div></div><section class="panel" style="margin-top:18px"><h2>Partidas de Pong disponíveis</h2><div id="availableRooms">Procurando partidas...</div><details><summary>Entrar pelo código</summary><div class="row"><input id="code" maxlength="6" placeholder="Código"><button id="join">Entrar</button></div></details></section>');bindLogout();app.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>send({type:'create',game:b.dataset.game,solo:b.dataset.solo==='true'}));$('#snakeSolo').onclick=snake;$('#openOpusCraft').onclick=openOpusCraft;$('#join').onclick=()=>send({type:'join',code:$('#code').value.toUpperCase()});send({type:'lobby'})}
 
 async function verifyOpuscraftWebSocket(){
  // Probe the exact public WebSocket route. A normal game-lobby socket replies
@@ -90,7 +90,7 @@ async function openOpusCraft(){
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div><h3>🎮 Qualidade deste aparelho</h3><label for="opusQualityMode">Perfil gráfico</label><select id="opusQualityMode"><option value="auto">Automático (recomendado)</option><option value="performance">Desempenho</option><option value="balanced">Equilibrado</option><option value="quality">Qualidade</option></select><p id="opusQualityStatus" class="sub" role="status">Aguardando entrada no multiplayer...</p><label for="opusViewDistance">Distância de visão (na próxima entrada)</label><select id="opusViewDistance"><option value="2">Leve — 2 chunks (32 blocos)</option><option value="3">Equilibrada — 3 chunks (48 blocos)</option><option value="4">Longe — 4 chunks (64 blocos)</option><option value="5">Muito longe — 5 chunks (80 blocos, mais pesado)</option></select><p class="sub" id="opusViewHelp">Alterar a distância exige sair e entrar novamente no Servidor da Família. No celular o máximo é 3 chunks.</p>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div><div id="opusRecoverPanel"></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div><h3>🎮 Qualidade deste aparelho</h3><label for="opusQualityMode">Perfil gráfico</label><select id="opusQualityMode"><option value="auto">Automático (recomendado)</option><option value="performance">Desempenho</option><option value="balanced">Equilibrado</option><option value="quality">Qualidade</option></select><p id="opusQualityStatus" class="sub" role="status">Aguardando entrada no multiplayer...</p><label for="opusViewDistance">Distância de visão (na próxima entrada)</label><select id="opusViewDistance"><option value="2">Leve — 2 chunks (32 blocos)</option><option value="3">Equilibrada — 3 chunks (48 blocos)</option><option value="4">Longe — 4 chunks (64 blocos)</option><option value="5">Muito longe — 5 chunks (80 blocos, mais pesado)</option></select><p class="sub" id="opusViewHelp">Alterar a distância exige sair e entrar novamente no Servidor da Família. No celular o máximo é 3 chunks.</p>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -166,35 +166,18 @@ async function openOpusCraft(){
       finally{btn.disabled=false}
      };
     }
-    const landmarkList=$('#opusLandmarksList');
-    if(landmarkList){
+    if(me?.role==='admin'){
      try{
-      const npc=await api('admin/opuscraft/npc');
-      if(landmarkList.isConnected)landmarkList.innerHTML=familyLandmarkButtons(npc.worldAttractions);
-      const hostPerf=$('#opusPerfHost');
-      if(hostPerf&&npc.performance){
-       const m=npc.performance,cache=npc.worldAttractions?.prewarm;
-       hostPerf.textContent='VPS: '+(m.simulationOnly?'Somente simulação • ':'Iniciando otimização • ')+Number(m.fps||0)+' quadros/s (host oculto) • '+
-        Number(m.frameMs||0)+' ms/quadro • '+Number(m.loadedChunks||0)+' chunks na RAM • '+
-        Number(m.queuedChunks||0)+' pendentes • '+Number(m.generatedChunks||0)+' gerados nesta sessão'+
-        (cache?' • Cache '+Number(cache.savedWindows||0)+'/'+Number(cache.totalWindows||0)+' áreas':'');
-      }
-      const recover=$('#opusRecoverPanel');
-      if(recover)recover.innerHTML=npc.worldAttractions?.registryRecoveryRequired?
-       '<p>O registro antigo das atrações precisa ser recuperado. Aproxime-se da construção e escolha qual reconhecer.</p>'+
-       '<div class="row"><select id="opusRecoverKind">'+familyKindOptions()+'</select><button id="opusRecoverHere" type="button">Reconhecer esta construção</button></div>':'';
-      const recoverButton=$('#opusRecoverHere');
-      if(recoverButton)recoverButton.onclick=()=>void recoverFamilyLandmark($('#opusRecoverKind')?.value,recoverButton);
-     }catch(e){if(landmarkList.isConnected)landmarkList.textContent='Atrações indisponíveis: '+e.message}
+      const npc=await api('admin/opuscraft/npc'),m=npc.performance;
+      const display=$('#opusPerfHost');
+      if(display&&m)display.textContent='VPS: '+(m.simulationOnly?'Somente simulação • ':'Iniciando • ')+
+       Number(m.fps||0)+' quadros/s • '+Number(m.frameMs||0)+' ms/quadro • '+
+       Number(m.loadedChunks||0)+' chunks na RAM • '+Number(m.queuedChunks||0)+' pendentes';
+     }catch{}
     }
    }catch(e){if(playersList.isConnected)playersList.textContent='Jogadores indisponíveis: '+e.message}
    finally{rosterBusy=false}
   }
-  const landmarksDock=$('#opusLandmarksList');
-  if(landmarksDock)landmarksDock.addEventListener('click',e=>{
-   const btn=e.target.closest('button[data-landmark]');
-   if(btn)void visitFamilyLandmark(btn.dataset.landmark,btn);
-  });
   if(me?.role==='admin')playersPanel.querySelectorAll('[data-world-time],[data-world-weather]').forEach(btn=>
    btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',btn.dataset.worldTime||btn.dataset.worldWeather,btn));
   const qualityMode=$('#opusQualityMode');
@@ -422,12 +405,6 @@ $('#adminRooms').innerHTML=data.rooms.filter(r=>r.game==='pong').map(r=>'<div cl
 $('#events').innerHTML=data.events.slice(0,12).map(e=>'<p>• '+esc(e.name)+' — '+esc(e.type)+' <small>'+new Date(e.at).toLocaleString('pt-BR')+'</small></p>').join('')||'Sem atividade recente';
 $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{const u=data.users.find(x=>x.id===b.dataset.id);try{if(b.dataset.action==='photo'){await chooseChildPhoto(u);return}if(b.dataset.action==='edit'){const name=prompt('Novo nome:',u.name);if(name===null)return;const password=prompt('Novo PIN (deixe vazio para manter):','');if(password===null)return;await api('admin/users/'+u.id,'POST',{name,...(password?{password}:{})});refreshAdmin();return}if(b.dataset.action==='kick')await api('admin/users/'+u.id+'/kick','POST');if(b.dataset.action==='enable')await api('admin/users/'+u.id,'POST',{enabled:!u.enabled});if(b.dataset.action==='login')await api('admin/users/'+u.id,'POST',{loginEnabled:!u.loginEnabled});if(b.dataset.action==='voice')await api('admin/users/'+u.id,'POST',{voiceEnabled:!u.voiceEnabled});if(b.dataset.action==='reset-minutes'){if(confirm('Zerar os minutos de hoje de '+u.name+'? O limite diário será mantido.')){await api('admin/users/'+u.id+'/reset-minutes','POST');notify('Minutos de hoje zerados para '+u.name)}refreshAdmin();return}if(b.dataset.action==='limit'){const v=prompt('Limite em minutos por dia (0 a 1440)',String(u.dailyLimit));if(v!==null)await api('admin/users/'+u.id,'POST',{dailyLimit:Number(v)})}refreshAdmin()}catch(e){notify(e.message)}});$('#adminRooms').querySelectorAll('button').forEach(b=>b.onclick=()=>send({type:'join',code:b.dataset.room,mode:b.dataset.mode}));}catch(e){notify(e.message)}}
 
-const FAMILY_LANDMARK_NAMES={names:'Letreiro Caique e Cauã',windmill:'Moinho giratório',
- pinwheels:'Cataventos giratórios',castle:'Castelo',village:'Vila',garden:'Jardim',watchtower:'Torre'};
-function familyKindOptions(){
- return Object.entries(FAMILY_LANDMARK_NAMES).map(([id,label])=>
-  '<option value="'+esc(id)+'">'+esc(label)+'</option>').join('');
-}
 async function changeOpusWorld(kind,value,button){
  if(me?.role!=='admin')return;
  if(button)button.disabled=true;
@@ -435,38 +412,6 @@ async function changeOpusWorld(kind,value,button){
   await api('admin/opuscraft/world-control','POST',kind==='time'?{time:value}:{weather:value});
   notify('Mundo atualizado: '+({day:'Dia',night:'Noite',sunrise:'Amanhecer',sunset:'Pôr do sol',
    clear:'Tempo limpo',rain:'Chuva'}[value]||value));
- }catch(e){notify(e.message)}
- finally{if(button)button.disabled=false}
-}
-async function recoverFamilyLandmark(kind,button){
- if(me?.role!=='admin'||!FAMILY_LANDMARK_NAMES[kind])return;
- if(button)button.disabled=true;
- try{
-  const result=await api('admin/opuscraft/npc/recover','POST',{kind});
-  notify(result.already?'Atração já estava registrada':
-   'Registro encontrado e preservado! '+FAMILY_LANDMARK_NAMES[kind]);
-  if($('#adminMinecraftDashboard'))void refreshMinecraftDashboard();
- }catch(e){notify(e.message)}
- finally{if(button)button.disabled=false}
-}
-function familyLandmarkButtons(state){
- if(!state)return '<p>O mundo ainda está iniciando.</p>';
- const done=Array.isArray(state.attractions)?state.attractions:[];
- const all=[...done];
- if(state.building&&!done.some(p=>p.name===state.building.name))
-  all.push({name:state.building.name,x:state.building.x,z:state.building.z,underConstruction:true});
- if(!all.length)return '<p>As primeiras atrações estão sendo preparadas.</p>';
- return all.map(x=>'<div class="opus-player"><div><strong>📍 '+
-  esc(FAMILY_LANDMARK_NAMES[x.name]||x.name)+'</strong><small>X '+Math.round(x.x)+
-  ' • Z '+Math.round(x.z)+(x.underConstruction?' • Em construção':x.ready===false?' • Aguardando terreno seco':' • Pronta')+
-  '</small></div><button type="button" data-landmark="'+esc(x.name)+'" '+(x.ready===false||x.underConstruction?'disabled title="Aguardando correção do terreno"':'')+'>Ir até</button></div>').join('');
-}
-async function visitFamilyLandmark(name,button){
- if(me?.role!=='admin')return;
- if(button)button.disabled=true;
- try{
-  const result=await api('admin/opuscraft/npc/visit','POST',{attraction:name});
-  notify(result.action==='waiting_for_landmark'?'Ponto de encontro alcançado.':'Teleporte para '+(FAMILY_LANDMARK_NAMES[name]||'a construção')+' realizado!');
  }catch(e){notify(e.message)}
  finally{if(button)button.disabled=false}
 }
@@ -480,41 +425,8 @@ async function refreshMinecraftDashboard(){
    '<div class="panel"><strong>Servidor OpusCraft</strong><p>'+(data.ready?'Mundo online':'Iniciando')+'</p></div>'+
    '<div class="panel"><strong>Jogadores</strong><p>'+Number(data.guests||0)+'</p></div>'+
    '<div class="panel"><strong>Último salvamento</strong><p>'+(data.lastSave?new Date(data.lastSave).toLocaleTimeString('pt-BR'):'Aguardando')+'</p></div></div>'+
-   (npc?.role==='invisible_host'?'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3>'+
-    '<p class="sub">Andarilha: '+(npc.hidden?'invisível e parada':'preparando servidor')+
-     ' • Sem conexão com serviços de IA</p>'+
-    (npc.worldAttractions?'<p><strong>Atrações prontas:</strong> '+Number(npc.worldAttractions.placedAttractions||0)+
-      ' de '+Number(npc.worldAttractions.totalAttractions||0)+'</p>'+
-      (npc.worldAttractions.building?'<p class="sub">Preparando: '+esc(npc.worldAttractions.building.name)+
-       ' • '+Number(npc.worldAttractions.building.done||0)+'/'+Number(npc.worldAttractions.building.total||0)+' blocos</p>':
-       '<p class="sub">'+esc(npc.worldAttractions.blocked||'Buscando terrenos para as próximas atrações')+'</p>')+
-      '<p class="sub">Áreas avaliadas: '+Number(npc.worldAttractions.surveyed||0)+
-      ' • Terrenos rejeitados: '+Number(npc.worldAttractions.rejected||0)+
-      ' • Tentativas: '+Number(npc.worldAttractions.searches||0)+'</p>'+
-      (npc.worldAttractions.terrainSearch?'<p class="sub">Próxima região: X '+
-       Math.round(npc.worldAttractions.terrainSearch.x)+' • Z '+
-       Math.round(npc.worldAttractions.terrainSearch.z)+'</p>':'')+
-      (npc.worldAttractions.terrainCare?'<p class="sub"><strong>Terreno das construções:</strong> '+
-       Number(npc.worldAttractions.terrainCare.remaining||0)+' aguardando • '+
-       Number(npc.worldAttractions.terrainCare.protected||0)+' protegidas'+
-       (npc.worldAttractions.terrainCare.active?' • Etapa: '+esc(npc.worldAttractions.terrainCare.active.phase):'')+
-       ' • '+esc(npc.worldAttractions.terrainCare.reason||'Verificando solo')+'</p>':'')+
-      (npc.worldAttractions.registryRecoveryRequired?
-       '<p class="sub"><strong>Registro das atrações em recuperação.</strong> Nenhuma construção nova será gerada automaticamente para proteger as existentes. Entre no mundo, aproxime-se de uma atração e use Reconhecer construção no painel Jogadores / Teleporte.</p>':'')+
-      (npc.worldAttractions.drySiteRepair?'<p class="sub"><strong>Correção do terreno e da água:</strong> '+
-       Number(npc.worldAttractions.drySiteRepair.completed||0)+'/'+
-       Number(npc.worldAttractions.drySiteRepair.total||7)+' áreas revisadas • '+
-       Number(npc.worldAttractions.drySiteRepair.blocked||0)+' protegidas (revisão manual) • '+
-       esc(npc.worldAttractions.drySiteRepair.reason||'Aguardando')+'</p>':'')+
-      (npc.worldAttractions.prewarm?'<p class="sub"><strong>Cache dos chunks (V2):</strong> '+
-       Number(npc.worldAttractions.prewarm.savedWindows||0)+'/'+
-       Number(npc.worldAttractions.prewarm.totalWindows||0)+' áreas preparadas • '+
-       Number(npc.worldAttractions.prewarm.savedChunks||0)+' chunks salvos • '+
-       esc(npc.worldAttractions.prewarm.reason||'Aguardando')+'</p>':'')+
-      '<div class="npc-landmarks">'+familyLandmarkButtons(npc.worldAttractions)+'</div>'+
-      (npc.worldAttractions.signRepair?'<p class="sub">Letreiro: '+esc(npc.worldAttractions.signRepair)+'</p>':''):
-     '<p class="sub">Aguardando o carregamento do mundo</p>')+
-    '</div>':'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3><p class="sub">O mundo está hospedado, mas a consulta das atrações não respondeu. Aguarde ou atualize a página antes de visitar as construções.</p></div>')+
+   (npc?.role==='invisible_host'?'<div class="panel"><h3>Exploração da Família — V3</h3>'+
+    '<p class="sub">Servidor persistente, sem atrações automáticas. Crie suas próprias construções livremente.</p></div>':'')+
    (npc?.performance?'<div class="panel"><h3>⚡ Diagnóstico de desempenho — VPS</h3>'+
      '<p>Host: '+(npc.performance.simulationOnly?'Somente simulação (renderização desativada) • ':'Inicializando modo leve • ')+Number(npc.performance.fps||0)+' quadros/s (sem renderização gráfica) • '+
        Number(npc.performance.frameMs||0)+' ms por quadro</p>'+
@@ -526,16 +438,13 @@ async function refreshMinecraftDashboard(){
    '<div class="panel"><h3>Controle do mundo — ADM</h3>'+
     '<p class="sub">Entre no Multiplayer como administrador para alterar o horário e o clima. O limite diário das crianças continua no painel acima.</p>'+
     '<div class="row"><button data-world-time="day">Dia</button><button data-world-time="night">Noite</button><button data-world-time="sunrise">Amanhecer</button><button data-world-time="sunset">Pôr do sol</button><button data-world-weather="clear">Sol</button><button data-world-weather="rain">Chuva</button></div></div>'+
-   '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
+   '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Mundo e inventários mantidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+
    '<div class="panel"><h3>Proteção parental</h3><p>Os botões em cada perfil acima controlam limite diário, bloqueio imediato, desconexão e microfone. O chat escrito fica restrito às contas autenticadas.</p></div>';
   el.querySelectorAll('button[data-world-time],button[data-world-weather]').forEach(btn=>{
    btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',
     btn.dataset.worldTime||btn.dataset.worldWeather,btn);
-  });
-  el.querySelectorAll('button[data-landmark]').forEach(btn=>{
-   btn.onclick=()=>void visitFamilyLandmark(btn.dataset.landmark,btn);
   });
  }catch(e){el.textContent='Não foi possível consultar o mundo OpusCraft: '+e.message}
 }

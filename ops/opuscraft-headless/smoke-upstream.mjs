@@ -54,6 +54,23 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  assert.equal(reloadedWorld.getState(1,64,1),1);
  assert.equal(recovered.cx,0);
  assert.equal(recovered.cz,0);
+ // Save two independent upstream columns and verify their coordinates,
+ // blocks and biome values survive a clean process-style reload.
+ const other=new Chunk(-2,3,world.dim.lightDefault);
+ other.setState(4,70,9,1);
+ other.biomes[7]=3;
+ saveColumn(path.join(temp,'chunk--2-3.json'),other);
+ const recoveredOther=loadColumn(path.join(temp,'chunk--2-3.json'),Chunk);
+ reloadedWorld.chunks.set(recoveredOther.key,recoveredOther);
+ assert.equal(reloadedWorld.getState(-28,70,57),1);
+ assert.equal(reloadedWorld.getState(1,64,1),1);
+ assert.equal(recoveredOther.biomes[7],3);
+ // A malformed checkpoint must stop recovery instead of silently regenerating
+ // an empty chunk and deleting a child's construction.
+ const corrupted=path.join(temp,'corrupt.json');
+ fs.writeFileSync(corrupted,JSON.stringify({format:1,cx:0,cz:0,sections:999}));
+ assert.throws(()=>loadColumn(corrupted,Chunk),/Invalid chunk snapshot/);
+
 
 
  // Exercise the actual upstream simulation, not merely the TypeScript import.

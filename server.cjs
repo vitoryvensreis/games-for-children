@@ -250,6 +250,65 @@ if(pathname==='/api/opuscraft/teleport'&&req.method==='POST'){
   return json(res,200,{ok:true,dimension:data.dimension});
  }catch{return json(res,503,{error:'Mundo ocupado. Tente novamente em alguns instantes'})}
 }
+// Family-world privileged controls: never trust the target or the operator's
+// name from the browser. Identity is derived from the signed-in ADM session.
+if(pathname==='/api/admin/opuscraft/summon'&&req.method==='POST'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
+ const current=now();
+ if(current-(lastOpusTeleport.get(u.id)||0)<8000)return json(res,429,{error:'Aguarde 8 segundos entre teletransportes'});
+ if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
+  return json(res,409,{error:'Entre primeiro no servidor da família'});
+ const body=await readBody(req,350),target=String(body.to||'');
+ if(!state.users.some(v=>v.role==='child'&&v.enabled&&opusName(v)===target))
+  return json(res,400,{error:'Selecione uma criança da família'});
+ try{
+  const players=await opusGuests(),admin=players.find(p=>p.name===opusName(u)),child=players.find(p=>p.name===target);
+  if(!admin||!child||admin.dimension!==child.dimension)
+   return json(res,409,{error:'O ADM e a criança precisam estar no mesmo mundo e dimensão'});
+  const r=await fetch('http://127.0.0.1:4173/__summon',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:opusName(u),to:target}),signal:AbortSignal.timeout(4000)
+  });
+  const result=await r.json();
+  if(!result.ok)return json(res,409,{error:result.error||'Não foi possível trazer o jogador'});
+  lastOpusTeleport.set(u.id,current);
+  return json(res,200,{ok:true});
+ }catch{return json(res,503,{error:'Servidor familiar ocupado, tente novamente'})}
+}
+if(pathname==='/api/admin/opuscraft/world-control'&&req.method==='POST'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
+ if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
+  return json(res,409,{error:'Entre primeiro no servidor da família'});
+ const body=await readBody(req,350);
+ if(!(['day','night','sunrise','sunset'].includes(body.time)&&body.weather===undefined||
+   ['clear','rain'].includes(body.weather)&&body.time===undefined))
+  return json(res,400,{error:'Selecione dia, noite, amanhecer, pôr do sol, sol ou chuva'});
+ try{
+  const r=await fetch('http://127.0.0.1:4173/__world-control',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:opusName(u),...(body.time?{time:body.time}:{weather:body.weather})}),
+   signal:AbortSignal.timeout(6000)
+  });
+  const result=await r.json();
+  return json(res,result.ok?200:409,result.ok?{ok:true,...result}:{error:result.error||'Comando indisponível'});
+ }catch{return json(res,503,{error:'Não foi possível alterar o tempo no mundo agora'})}
+}
+if(pathname==='/api/admin/opuscraft/npc/recover'&&req.method==='POST'){
+ if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
+ if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
+  return json(res,409,{error:'Entre no mundo familiar e aproxime-se da construção'});
+ const body=await readBody(req,350);
+ const allowed=['names','windmill','pinwheels','castle','village','garden','watchtower'];
+ if(!allowed.includes(body.kind))return json(res,400,{error:'Tipo de construção inválido'});
+ try{
+  const r=await fetch('http://127.0.0.1:4173/__npc/recover',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({from:opusName(u),kind:body.kind}),signal:AbortSignal.timeout(10000)
+  });
+  const result=await r.json();
+  return json(res,result.ok?200:409,result.ok?result:{error:result.error||'Construção não localizada'});
+ }catch{return json(res,503,{error:'Falha ao recuperar o registro. Tente de novo perto da construção'})}
+}
 // The resident is a host-owned avatar; only the administrator can locate or visit it.
 if(pathname==='/api/admin/opuscraft/npc'&&req.method==='GET'){
  if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});

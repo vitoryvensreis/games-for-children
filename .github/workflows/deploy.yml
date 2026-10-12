@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-relay-host.cjs && node --check ops/opuscraft-browser-relay-smoke.cjs
+      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-relay-host.cjs && node --check ops/opuscraft-browser-relay-smoke.cjs && node --check ops/opuscraft-browser-host-smoke.cjs
       - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-browser-host.cjs
       - name: Build unmodified upstream OpusCraft
         run: bash ops/build-opuscraft.sh
@@ -49,6 +49,7 @@ jobs:
           done
           if test "$ready" -ne 1; then cat /tmp/opuscraft-relay.log; exit 1; fi
           node ops/opuscraft-browser-relay-smoke.cjs
+          node ops/opuscraft-browser-host-smoke.cjs
           echo "OPUSCRAFT_NO_DEDICATED_WORLD_HOST_OK"
 
 

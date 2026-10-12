@@ -458,8 +458,8 @@ function familyLandmarkButtons(state){
  if(!all.length)return '<p>As primeiras atrações estão sendo preparadas.</p>';
  return all.map(x=>'<div class="opus-player"><div><strong>📍 '+
   esc(FAMILY_LANDMARK_NAMES[x.name]||x.name)+'</strong><small>X '+Math.round(x.x)+
-  ' • Z '+Math.round(x.z)+(x.underConstruction?' • Em construção':' • Pronta')+
-  '</small></div><button type="button" data-landmark="'+esc(x.name)+'">Ir até</button></div>').join('');
+  ' • Z '+Math.round(x.z)+(x.underConstruction?' • Em construção':x.ready===false?' • Aguardando terreno seco':' • Pronta')+
+  '</small></div><button type="button" data-landmark="'+esc(x.name)+'" '+(x.ready===false||x.underConstruction?'disabled title="Aguardando correção do terreno"':'')+'>Ir até</button></div>').join('');
 }
 async function visitFamilyLandmark(name,button){
  if(me?.role!=='admin')return;

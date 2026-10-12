@@ -12,7 +12,9 @@ import {saveColumn,loadColumn} from './native-column-store.cjs';
 import {writeCheckpoint,readCheckpoint,readCheckpointWithBackup} from './native-checkpoint.cjs';
 import {writePlayer,readPlayer} from './native-player-store.cjs';
 import {createDedicatedRuntime} from './dedicated-runtime.cjs';
-import {EventEmitter} from 'node:events';
+import {EventEmitter,once} from 'node:events';
+const requireLocal=createRequire(import.meta.url);
+const {WebSocketServer,WebSocket}=requireLocal('ws');
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -65,6 +67,36 @@ export {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerU
  assert.equal(restarted.world.getState(1,64,1),1);
  assert.equal(restarted.world.getState(16,-63,16),terrainState);
  restarted.stop();
+
+ // Real localhost WebSocket handshake against the original HostServer.
+ // This is an integration probe, not a deployed browser or public endpoint.
+ const wss=new WebSocketServer({host:'127.0.0.1',port:0});
+ try{
+  await once(wss,'listening');
+  const liveDir=path.join(temp,'ws-live-world');
+  const live=createDedicatedRuntime({
+   engine:{World,Level,Chunk,ChunkGenerator,HostServer,savePlayer},wss,
+   worldDir:liveDir,seed:'ws-integration',joinCode:'ABCD1234',
+   authenticate:()=>true
+  });
+  const ws=new WebSocket('ws://127.0.0.1:'+wss.address().port);
+  try{
+   await once(ws,'open');
+   const received=[];
+   ws.on('message',(data)=>received.push(Buffer.from(data)));
+   const liveUuid=offlinePlayerUuid('NetworkChild');
+   ws.send(Buffer.concat([Buffer.from([0]),Buffer.from(encode([[
+    SB.Hello,8,'headless-integration-smoke','NetworkChild',liveUuid,4,'ABCD1234'
+   ]]))]));
+   await new Promise(resolve=>setImmediate(resolve));
+   live.host.receive();
+   live.level.tick();
+   live.host.tick();
+   const frames=received.flatMap(bytes=>bytes[0]===0?decode(bytes.subarray(1),16*1024*1024):[]);
+   assert.ok(frames.some(packet=>packet[0]===CB.Login),'Real websocket guest receives native CB.Login');
+   assert.equal(live.host.guestCount(),1);
+  }finally{ws.close();live.stop()}
+ }finally{await new Promise(resolve=>wss.close(resolve))}
 
  const world=new World();
  const level=new Level(world,'24h-seed');

@@ -13,7 +13,7 @@ async function read(){
  assert.equal(first.mode,'host','server left host mode');
  assert.equal(first.spawned,true,'world not spawned');
  assert.equal(first.cpuMode,true,'headless VPS optimization is not active');
- assert.equal(first.world?.id,'gamesnavagador-family-world-v2');
+ assert.equal(first.world?.id,'gamesnavagador-family-world-v3');
  assert.ok(first.loadedChunks>0,'terrain chunks not loaded');
  assert.ok(Number.isFinite(first.meshedSections));
  const start=Number(first.hostTicks||0),mesh=Number(first.meshedSections);

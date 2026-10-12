@@ -14,13 +14,6 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  npm ci --no-audit --no-fund
  cp "$REPO_ROOT/ops/gfc-world-backup.ts" src/gfc-world-backup.ts
  cp "$REPO_ROOT/ops/gfc-npc.ts" src/gfc-npc.ts
-cp "$REPO_ROOT/ops/gfc-world-attractions.ts" src/gfc-world-attractions.ts
-cp "$REPO_ROOT/ops/gfc-family-town.ts" src/gfc-family-town.ts
-cp "$REPO_ROOT/ops/gfc-v2-dry-site-repair.ts" src/gfc-v2-dry-site-repair.ts
-cp "$REPO_ROOT/ops/gfc-chunk-warmup.ts" src/gfc-chunk-warmup.ts
-cp "$REPO_ROOT/ops/gfc-ground-relocation.ts" src/gfc-ground-relocation.ts
-cp "$REPO_ROOT/ops/gfc-site-care.ts" src/gfc-site-care.ts
-cp "$REPO_ROOT/ops/gfc-rotors.ts" src/gfc-rotors.ts
 cp "$REPO_ROOT/ops/gfc-family-client.ts" src/gfc-family-client.ts
 cp "$REPO_ROOT/ops/gfc-adaptive-quality.ts" src/gfc-adaptive-quality.ts
  cp "$REPO_ROOT/ops/gfc-leaf-merge.ts" src/render/gfc-leaf-merge.ts

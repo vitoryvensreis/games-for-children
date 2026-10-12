@@ -9,14 +9,14 @@ const puppeteer=require('puppeteer-core');
 const chromium=require('@sparticuz/chromium');
 const ROOT=path.resolve(__dirname,'..');
 const SITE=path.join(ROOT,'public','opuscraft');
-const PROFILE=path.join(ROOT,'data','opuscraft','profile-v2');
+const PROFILE=path.join(ROOT,'data','opuscraft','profile-v3');
 const PORT=Number(process.env.OPUSCRAFT_PORT||4173);
 let browser=null,hostPage=null,relay=null,starting=false,stopping=false,lastSave=null,lastError='',tries=0;
 const log=(...a)=>console.log('[OpusCraft VPS]',...a);
 const mime={'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.wasm':'application/wasm','.woff2':'font/woff2'};
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://127.0.0.1');
- if(req.method!=='GET'&&!(req.method==='POST'&&['/__teleport','/__npc/visit','/__summon','/__world-control','/__npc/recover'].includes(url.pathname))){res.writeHead(405).end();return}
+ if(req.method!=='GET'&&!(req.method==='POST'&&['/__teleport','/__summon','/__world-control'].includes(url.pathname))){res.writeHead(405).end();return}
  if(url.pathname==='/__players'&&req.method==='GET'){
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>{
    const g=window.__game,srv=g?.server;
@@ -120,47 +120,14 @@ const server=http.createServer((req,res)=>{
    }catch(e){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}))}
   });return;
  }
- if(url.pathname==='/__npc/recover'&&req.method==='POST'){
-  let bytes=0,chunks=[];
-  req.on('data',part=>{bytes+=part.length;if(bytes>256){req.destroy();return}chunks.push(part)});
-  req.on('end',async()=>{
-   try{
-    const {from,kind}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||'')||
-       !['names','windmill','pinwheels','castle','village','garden','watchtower'].includes(kind))
-      throw Error('Dados inválidos');
-    if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponível');
-    const result=await hostPage.evaluate(({from,kind})=>
-      window.__gfcNpc?.recover?.(from,kind)||{ok:false,error:'Atrações indisponíveis'},{from,kind});
-    res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'}).end(JSON.stringify(result));
-   }catch(e){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(e.message).slice(0,120)}))}
-  });return;
- }
  if(url.pathname==='/__npc/status'&&req.method==='GET'){
   Promise.resolve(hostPage&&!hostPage.isClosed()?hostPage.evaluate(()=>
    (window.__gfcNpc?.status?.()||{ok:false,ready:false})): {ok:false,ready:false})
    .then(result=>{
     res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({...result,brain:'disabled',configured:false}));
-   }).catch(()=>{res.writeHead(503).end('NPC offline')});
+   }).catch(()=>{res.writeHead(503).end('Host offline')});
   return;
- }
- if(url.pathname==='/__npc/visit'&&req.method==='POST'){
-  let bytes=0,chunks=[];
-  req.on('data',part=>{bytes+=part.length;if(bytes>256){req.destroy();return}chunks.push(part)});
-  req.on('end',async()=>{
-   try{
-    const {from,attraction}=JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    if(!/^ADM_[A-Za-z0-9_]{6,16}$/.test(from||''))throw Error('Identidade invalida');
-    const allowed=['names','windmill','pinwheels','castle','village','garden','watchtower'];
-    if(attraction!==undefined&&!allowed.includes(attraction))throw Error('Atração invalida');
-    if(!hostPage||hostPage.isClosed())throw Error('Mundo indisponivel');
-    const result=await hostPage.evaluate(({name,kind})=>window.__gfcNpc?.visit?.(name,kind)
-     ||{ok:false,error:'Mundo ainda nao iniciou'},{name:from,kind:attraction});
-    res.writeHead(result.ok?200:409,{'Content-Type':'application/json','Cache-Control':'no-store'});
-    res.end(JSON.stringify(result));
-   }catch(err){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({ok:false,error:String(err.message).slice(0,100)}))}
-  });return;
  }
  if(url.pathname==='/__ci/world-block'&&process.env.OPUSCRAFT_CI_MARKER==='yes'){
   // Test-only route for the CI runner, disabled completely in production.

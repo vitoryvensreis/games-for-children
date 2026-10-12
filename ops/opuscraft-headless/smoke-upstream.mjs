@@ -200,7 +200,16 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  assert.ok(level.playerByUuid(uuid),'Guest player must live in real Level');
  // Preserve the upstream SavedPlayer payload (including inventory and
  // survival stats) without creating our own incompatible player schema.
- const savedPlayer=savePlayer(level.playerByUuid(uuid),world.dim.id);
+ const originalPlayer=level.playerByUuid(uuid);
+ originalPlayer.moveTo(6,81,8,45,10);
+ originalPlayer.food.level=13;
+ originalPlayer.xpLevel=4;
+ originalPlayer.inventory.selected=2;
+ const savedPlayer=savePlayer(originalPlayer,world.dim.id);
+ assert.equal(savedPlayer.x,6);
+ assert.equal(savedPlayer.food,13);
+ assert.equal(savedPlayer.xpLevel,4);
+ assert.equal(savedPlayer.selected,2);
  const playerDir=path.join(temp,'players');
  writePlayer(playerDir,uuid,savedPlayer);
  const loadedPlayer=readPlayer(playerDir,uuid);
@@ -286,6 +295,10 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  assert.equal(returning.player.uuid,uuid);
  assert.equal(returning.player.x,loadedPlayer.x);
  assert.equal(returning.player.food.level,loadedPlayer.food);
+ assert.equal(returning.player.y,loadedPlayer.y);
+ assert.equal(returning.player.z,loadedPlayer.z);
+ assert.equal(returning.player.xpLevel,4);
+ assert.equal(returning.player.inventory.selected,2);
  assert.equal(returning.player.inventory.main.length,loadedPlayer.inventory.length);
  peerHandler('full-login-guest',false);
  assert.equal(host.guestCount(),0);

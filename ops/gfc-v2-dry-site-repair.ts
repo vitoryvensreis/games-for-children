@@ -50,14 +50,22 @@ export function installGfcDrySiteRepair(game:Game,sites:FamilySite[],
     if(!game.level.world.isLoaded(cx*16,cz*16))return false;
   return true;
  }
+ // A castle can contain thousands of blueprint blocks. Do not reconstruct
+ // the full old/new coordinate maps on every authoritative 20Hz tick.
+ let mapCache:{job:Job;result:{
+  plan:FamilyBlock[];source:Map<string,string>;destination:Map<string,string>
+ }}|null=null;
  function maps(j:Job){
+  if(mapCache?.job===j)return mapCache.result;
   const plan=planFor(j.kind),source=new Map<string,string>(),
    destination=new Map<string,string>();
   for(const b of plan){
    source.set(cell(j.x+b.x,j.oldY+b.y,j.z+b.z),b.name);
    destination.set(cell(j.x+b.x,j.y+b.y,j.z+b.z),b.name);
   }
-  return {plan,source,destination};
+  const result={plan,source,destination};
+  mapCache={job:j,result};
+  return result;
  }
  function begin(){
   for(const site of sites){

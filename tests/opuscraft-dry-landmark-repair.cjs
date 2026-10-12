@@ -12,7 +12,7 @@ test('Existing underwater attractions recover at original X and Z with durable c
  const repair=read('ops/gfc-v2-dry-site-repair.ts'),
   build=read('ops/build-opuscraft.sh');
  assert.match(build,/gfc-v2-dry-site-repair\.ts/);
- assert.match(repair,/const SEA=63, SAFE_Y=72, PAD=8/);
+ assert.match(repair,/const SEA=63, SAFE_Y=SEA\+9, PAD=8/);
  assert.match(repair,/const target=Math\.max\(SAFE_Y,site\.y\)/);
  assert.match(repair,/gfc-v2-dry-site-recovery-v1:/);
  assert.match(repair,/if\(j\.phase==='saveCopy'\)/);

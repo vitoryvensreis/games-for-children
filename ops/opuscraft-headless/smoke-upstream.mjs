@@ -76,6 +76,19 @@ export {World,Level,HostServer};`);
  const host=new HostServer(level,transport,hooks,{
   lanId:'headless-test',joinCode:'smoke-test-code',announce:false
  });
+ // Mirror the precise upstream Game.tick ordering:
+ // HostServer.receive -> Level.tick -> HostServer.tick.
+ // The world currently contains zero chunks and players; this is a server
+ // lifecycle proof, not multiplayer join or terrain generation.
+ const serverClock=level.gameTime;
+ const serverTick=()=>{
+  host.receive();
+  level.tick();
+  host.tick();
+ };
+ for(let i=0;i<3;i++)serverTick();
+ assert.equal(level.gameTime,serverClock+3);
+
  assert.equal(typeof messageHandler,'function');
  assert.equal(typeof peerHandler,'function');
  assert.equal(host.guestCount(),0);

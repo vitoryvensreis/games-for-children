@@ -54,22 +54,34 @@ server.on('upgrade',(req,socket,head)=>{
    '--use-angle=swiftshader','--ignore-gpu-blocklist','--disable-background-timer-throttling',
    '--window-size=480,320'],defaultViewport:{width:480,height:320},protocolTimeout:180000
  });
+ // Create isolated guest target before the host starts world generation.
+ // On small GitHub runners, opening a brand-new Chromium target while the
+ // world is meshing can stall Chrome's CDP Target.createTarget for minutes.
+ stage='preallocate-client-targets';
+ const guestContext=await browser.createBrowserContext();
+ const guest=await guestContext.newPage();
+ guest.on('pageerror',e=>errors.push('guest: '+e.message));
  stage='host-browser';
  const host=await browser.newPage();
  host.on('pageerror',e=>errors.push('host: '+e.message));
- await host.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?mp=host&quick=1&rd=2&guests=creative',
+ await host.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?mp=host&quick=1&rd=2&mode=creative&guests=creative',
   {waitUntil:'domcontentloaded',timeout:50000});
  await host.waitForFunction(()=>{
   const g=window.__game;return g?.mode==='host'&&g.inWorld&&g.spawned&&g.lanShare?.code;
  },{timeout:150000,polling:1000});
+ // Test the real original game's normal video options; slow the headless
+ // host's visuals only so it has CPU headroom to send guest chunks.
+ await host.evaluate(()=>{
+  const g=window.__game;
+  g.opts.maxFps=20;g.opts.renderDistance=2;g.opts.simulationDistance=2;
+  g.opts.graphics=0;g.opts.fancy=false;g.opts.smoothLighting=false;
+  g.opts.clouds=0;g.opts.particles=2;
+ });
  const code=await host.evaluate(()=>window.__game.lanShare.code);
  console.log('OPUSCRAFT_ORIGINAL_BROWSER_HOST_READY',code);
  stage='guest-browser';
  // Upstream prioritizes BroadcastChannel when two tabs share one browser
  // profile; use an isolated browser context to force the real VPS WebSocket.
- const guestContext=await browser.createBrowserContext();
- const guest=await guestContext.newPage();
- guest.on('pageerror',e=>errors.push('guest: '+e.message));
  await guest.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?mp=join&code='+encodeURIComponent(code),
   {waitUntil:'domcontentloaded',timeout:70000});
  try{

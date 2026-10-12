@@ -29,8 +29,11 @@ function writeCheckpoint(file,{seed,gameTime,dayTime,chunks}){
   // Keep the last complete checkpoint before replacing the current one.
   // Never rotate an invalid current checkpoint over a good backup.
   if(fs.existsSync(file)){
+   // A structurally valid JSON file may still be a corrupt checkpoint.
+   // Validate every chunk before rotating the current file into .bak.
+   if(!chunks.length)throw Error('Cannot rotate checkpoint without a chunk constructor');
+   readCheckpoint(file,{expectedSeed:seed,Chunk:chunks[0].constructor});
    const prior=fs.readFileSync(file,'utf8');
-   JSON.parse(prior);
    const backup=file+'.bak';
    const backupTmp=backup+'.'+process.pid+'.'+crypto.randomBytes(6).toString('hex')+'.tmp';
    try{

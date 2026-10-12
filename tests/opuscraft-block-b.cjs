@@ -2,19 +2,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),
  path=require('node:path'),url=require('node:url');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
-test('Family meshing must be opt-in for multiplayer; never mutate V2 land or solo',()=>{
+test('V3 production uses original OpusCraft mesher; old experimental reducer is archived',()=>{
  const patch=read('ops/patch-opuscraft-mesh.mjs'),build=read('ops/build-opuscraft.sh');
- assert.match(build,/gfc-leaf-merge\.ts/);
- assert.match(build,/patch-opuscraft-mesh\.mjs/);
- assert.match(patch,/input\.foliageMerge = \(window as any\)\.__gfcFamilySession === true/);
- assert.match(patch,/mode === 'client'/);
- assert.match(patch,/!input\.fancy && !input\.smooth/);
- assert.match(patch,/m\.quads\.length === 6/);
- assert.match(patch,/q\.full && q\.flush && q\.aligned && q\.cull === q\.dir/);
- assert.match(patch,/flatLight\(ni\)!==faceLight/);
- assert.match(patch,/tintFor\(st,/);
- assert.match(patch,/FACE_OCC\[n\]/);
- assert.doesNotMatch(patch,/saveWorld|deleteWorld|setBlock|removeChunk|game\.meta/);
+ assert.doesNotMatch(build,/node "\$REPO_ROOT\/ops\/patch-opuscraft-mesh\.mjs"/);
+ assert.doesNotMatch(build,/cp "\$REPO_ROOT\/ops\/gfc-leaf-merge\.ts"/);
+ assert.match(patch,/foliageMerge/);
+ // Historical mesher tests stay available for analysis, but its code must
+ // never enter production while diagnosing blank/wrong voxel geometry.
 });
 test('Greedy leaf faces group a 2x2 shell without missing or duplicating faces',async()=>{
  const {mergeFoliageFace}=await import(url.pathToFileURL(path.join(__dirname,'..','ops/gfc-leaf-merge.ts')).href);

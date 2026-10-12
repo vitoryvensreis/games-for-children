@@ -19,6 +19,7 @@ test('Remove only exact V2 voxel rotor arms; animated visual blades remain',()=>
  assert.match(repair,/for\(let t=1;t<=\(mill\?4:2\);t\+\+\)/);
  assert.match(repair,/if\(old\(x,y,z\)===wool\)game\.level\.setBlock\(x,y,z,S\('air'\)\)/);
  assert.match(rotors,/__gfcRotorRender/);
+ assert.match(rotors,/if\(legacyPresent\)continue/);
  assert.match(rotors,/pose\.rotZ\(time\+arm\*90\)/);
 });
 test('Castle and village receive torches only on vacant supported blocks',()=>{

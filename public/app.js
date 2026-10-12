@@ -360,6 +360,31 @@ $('#adminContent').querySelectorAll('button').forEach(b=>b.onclick=async()=>{con
 
 const FAMILY_LANDMARK_NAMES={names:'Letreiro Caique e Cauã',windmill:'Moinho giratório',
  pinwheels:'Cataventos giratórios',castle:'Castelo',village:'Vila',garden:'Jardim',watchtower:'Torre'};
+function familyKindOptions(){
+ return Object.entries(FAMILY_LANDMARK_NAMES).map(([id,label])=>
+  '<option value="'+esc(id)+'">'+esc(label)+'</option>').join('');
+}
+async function changeOpusWorld(kind,value,button){
+ if(me?.role!=='admin')return;
+ if(button)button.disabled=true;
+ try{
+  await api('admin/opuscraft/world-control','POST',kind==='time'?{time:value}:{weather:value});
+  notify('Mundo atualizado: '+({day:'Dia',night:'Noite',sunrise:'Amanhecer',sunset:'Pôr do sol',
+   clear:'Tempo limpo',rain:'Chuva'}[value]||value));
+ }catch(e){notify(e.message)}
+ finally{if(button)button.disabled=false}
+}
+async function recoverFamilyLandmark(kind,button){
+ if(me?.role!=='admin'||!FAMILY_LANDMARK_NAMES[kind])return;
+ if(button)button.disabled=true;
+ try{
+  const result=await api('admin/opuscraft/npc/recover','POST',{kind});
+  notify(result.already?'Atração já estava registrada':
+   'Registro encontrado e preservado! '+FAMILY_LANDMARK_NAMES[kind]);
+  if($('#adminMinecraftDashboard'))void refreshMinecraftDashboard();
+ }catch(e){notify(e.message)}
+ finally{if(button)button.disabled=false}
+}
 function familyLandmarkButtons(state){
  if(!state)return '<p>O mundo ainda está iniciando.</p>';
  const done=Array.isArray(state.attractions)?state.attractions:[];
@@ -410,14 +435,23 @@ async function refreshMinecraftDashboard(){
        Number(npc.worldAttractions.terrainCare.protected||0)+' protegidas'+
        (npc.worldAttractions.terrainCare.active?' • Etapa: '+esc(npc.worldAttractions.terrainCare.active.phase):'')+
        ' • '+esc(npc.worldAttractions.terrainCare.reason||'Verificando solo')+'</p>':'')+
+      (npc.worldAttractions.registryRecoveryRequired?
+       '<p class="sub"><strong>Registro das atrações em recuperação.</strong> Nenhuma construção nova será gerada automaticamente para proteger as existentes. Entre no mundo, aproxime-se de uma atração e use Reconhecer construção no painel Jogadores / Teleporte.</p>':'')+
       '<div class="npc-landmarks">'+familyLandmarkButtons(npc.worldAttractions)+'</div>'+
       (npc.worldAttractions.signRepair?'<p class="sub">Letreiro: '+esc(npc.worldAttractions.signRepair)+'</p>':''):
      '<p class="sub">Aguardando o carregamento do mundo</p>')+
     '</div>':'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3><p class="sub">O mundo está hospedado, mas a consulta das atrações não respondeu. Aguarde ou atualize a página antes de visitar as construções.</p></div>')+
+   '<div class="panel"><h3>Controle do mundo — ADM</h3>'+
+    '<p class="sub">Entre no Multiplayer como administrador para alterar o horário e o clima. O limite diário das crianças continua no painel acima.</p>'+
+    '<div class="row"><button data-world-time="day">Dia</button><button data-world-time="night">Noite</button><button data-world-time="sunrise">Amanhecer</button><button data-world-time="sunset">Pôr do sol</button><button data-world-weather="clear">Sol</button><button data-world-weather="rain">Chuva</button></div></div>'+
    '<div class="panel"><h3>Um mundo familiar na VPS</h3><p class="sub">Construções e inventários persistidos no navegador administrado pela VPS. O host usa WebGL2 e precisa continuar funcionando para que as crianças joguem juntas.</p>'+
    data.players.map(p=>'<p>● '+esc(p.name)+'</p>').join('')+
    (data.error?'<small>'+esc(data.error)+'</small>':'')+'</div>'+
    '<div class="panel"><h3>Proteção parental</h3><p>Os botões em cada perfil acima controlam limite diário, bloqueio imediato, desconexão e microfone. O chat escrito fica restrito às contas autenticadas.</p></div>';
+  el.querySelectorAll('button[data-world-time],button[data-world-weather]').forEach(btn=>{
+   btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',
+    btn.dataset.worldTime||btn.dataset.worldWeather,btn);
+  });
   el.querySelectorAll('button[data-landmark]').forEach(btn=>{
    btn.onclick=()=>void visitFamilyLandmark(btn.dataset.landmark,btn);
   });

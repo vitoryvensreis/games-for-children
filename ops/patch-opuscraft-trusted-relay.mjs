@@ -13,3 +13,27 @@ const fixed=anchor+"\n  // GamesNavagador's exact-origin HTTPS relay already aut
 if(old.split(anchor).length!==2)throw Error('Upstream relay host guard changed: review before adapting');
 fs.writeFileSync(file,old.replace(anchor,fixed));
 console.log('OPUSCRAFT_AUTHENTICATED_PUBLIC_RELAY_ENABLED');
+
+// Experimental dedicated-world join uses upstream ClientSession/GUI unchanged.
+// The platform must proxy authenticated /__dedicated to the Node service
+// before this opt-in path can work. Normal multiplayer remains untouched.
+const gameFile=path.join(dir,'src/game/game.ts');
+let gameSource=fs.readFileSync(gameFile,'utf8');
+const oldTransport="new WebSocketGuestTransport({ latency: this.netLag ?? undefined })";
+const dedicatedTransport="new WebSocketGuestTransport({ latency: this.netLag ?? undefined, ...(new URLSearchParams(location.search).get('mp') === 'dedicated' ? { url: `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/__dedicated` } : {}) })";
+if(gameSource.split(oldTransport).length!==2)throw Error('Upstream guest transport changed; dedicated adaptation needs review');
+fs.writeFileSync(gameFile,gameSource.replace(oldTransport,dedicatedTransport));
+const mainFile=path.join(dir,'src/main.ts');
+let mainSource=fs.readFileSync(mainFile,'utf8');
+const oldImport="openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, JoinMultiplayerScreen";
+const newImport="openToLanOnceSpawned, joinFirstLanWorld, guestModeParam, guestIdentity, guestName, JoinMultiplayerScreen";
+if(mainSource.split(oldImport).length!==2)throw Error('Upstream multiplayer import changed');
+mainSource=mainSource.replace(oldImport,newImport);
+const oldJoin="  } else if (mp === 'join') {";
+if(mainSource.split(oldJoin).length!==2)throw Error('Upstream join bootstrap changed');
+mainSource=mainSource.replace(oldJoin,`  } else if (mp === 'dedicated') {
+    game.setScreen(new TitleScreen(game, false));
+    void game.joinWorld({ via: 'relay' }, guestIdentity(game, guestName(), params.get('code') ?? ''));
+`+oldJoin);
+fs.writeFileSync(mainFile,mainSource);
+console.log('OPUSCRAFT_EXPERIMENTAL_DEDICATED_BROWSER_JOIN_ENABLED');

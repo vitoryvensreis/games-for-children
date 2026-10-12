@@ -16,9 +16,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  cp "$REPO_ROOT/ops/gfc-npc.ts" src/gfc-npc.ts
 cp "$REPO_ROOT/ops/gfc-family-client.ts" src/gfc-family-client.ts
 cp "$REPO_ROOT/ops/gfc-adaptive-quality.ts" src/gfc-adaptive-quality.ts
- cp "$REPO_ROOT/ops/gfc-leaf-merge.ts" src/render/gfc-leaf-merge.ts
  node "$REPO_ROOT/ops/patch-opuscraft.mjs" "$PWD"
- node "$REPO_ROOT/ops/patch-opuscraft-mesh.mjs" "$PWD"
  node "$REPO_ROOT/ops/patch-opuscraft-host-cpu.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )

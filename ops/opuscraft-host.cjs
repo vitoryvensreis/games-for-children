@@ -195,7 +195,11 @@ const server=http.createServer((req,res)=>{
    return {mode:g?.mode,inWorld:g?.inWorld,spawned:g?.spawned,ticks:g?.ticks,
     world:{id:g?.meta?.id||null,created:g?.meta?.created||null,lastPlayed:g?.meta?.lastPlayed||null},
     hostSessions:[...(server?.sessions?.values()||[])].map(p=>({state:p.state,player:p.name||null})),
-    hostTicks:server?.ticks||0};
+    hostTicks:server?.ticks||0,
+    cpuMode:g?.chunks?.dedicatedHeadlessHost===true,
+    meshedSections:g?.chunks?.stats?.meshes||0,
+    pendingChunks:g?.chunks?.pendingGen?.()||0,
+    loadedChunks:g?.level?.world?.chunks?.size||0};
   }):{}).then(info=>{res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(info))})
   .catch(e=>{res.writeHead(503).end(String(e.message).slice(0,100))});
   return;

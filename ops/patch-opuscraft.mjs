@@ -64,10 +64,10 @@ patch('src/main.ts',
  "  if (params.has('seed') || params.has('quick')) {",
  `  if (params.has('gfcHost')) {
     // VPS-owned persistent IndexedDB profile, reused across automatic restarts.
-    const id = 'gamesnavagador-family-world';
+    const id = 'gamesnavagador-family-world-v2';
     let meta = await getWorldMeta(id);
     if (!meta) {
-      meta = newWorldMeta(id, 'Mundo da Familia', 'gamesnavagador-family-2026', 'creative', 'peaceful', false, true);
+      meta = newWorldMeta(id, 'Vila de Caique e Cauã', 'gamesnavagador-family-planned-2026-v2', 'creative', 'peaceful', false, true);
       await saveWorldMeta(meta);
     }
     game.opts.renderDistance = 2; // Dedicated host simulates chunks; it does not need far-field graphics.

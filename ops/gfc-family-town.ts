@@ -4,6 +4,7 @@
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
 import { installGfcChunkWarmup } from './gfc-chunk-warmup';
+import { installGfcDrySiteRepair } from './gfc-v2-dry-site-repair';
 
 export type FamilyKind = 'names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 export type FamilyBlock = {x:number;y:number;z:number;name:string};
@@ -54,6 +55,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
  const release=()=>game.chunks.setTicket('gfc-family-city',null);
  let ticks=0,busy=false,reason='Preparando o bairro da família',savedCount=state.completed.length;
  let warmup:ReturnType<typeof installGfcChunkWarmup>|null=null;
+ let dryRepair:ReturnType<typeof installGfcDrySiteRepair>|null=null;
  function area(job:Job):Area{
   const b=planFor(job.kind);
   const xs=b.map(p=>p.x),zs=b.map(p=>p.z);
@@ -103,14 +105,24 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
  function tick(){
   ticks++;
   if(!game.inWorld||!game.spawned||!empty()||busy){
-   if(!empty()){release();warmup?.tick();}
+   if(!empty()){release();warmup?.tick();dryRepair?.tick();}
    return;
   }
   // Never preload chunks while constructing buildings or with visitors online.
   if(!state.job&&state.completed.length===TOWN.length){
    release();
    if(!warmup)warmup=installGfcChunkWarmup(game,origin,state.completed);
-   warmup.tick();return;
+   warmup.tick();
+   // The existing persistent V2 world has older landmark elevations. Run a
+   // checkpointed, protected repair only after the native cache is ready.
+   const w=warmup.status();
+   if(w.savedWindows>=w.totalWindows){
+    if(!dryRepair)dryRepair=installGfcDrySiteRepair(game,state.completed,planFor,()=>{
+     savedCount=state.completed.length;persist();
+    });
+    dryRepair.tick();
+   }
+   return;
   }
   if(!state.job)newJob();
   const job=state.job;if(!job)return;
@@ -124,7 +136,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
    // A robust median is a better flat pad altitude than tree canopy peaks.
    for(let x=a.x0;x<=a.x1;x+=3)for(let z=a.z0;z<=a.z1;z+=3)heights.push(floorY(x,z));
    heights.sort((a,b)=>a-b);
-   job.y=Math.max(48,Math.min(160,heights[Math.floor(heights.length/2)]+1));
+   job.y=Math.max(72,Math.min(160,heights[Math.floor(heights.length/2)]+1));
    job.high=Math.min(224,Math.max(job.y+a.maxBlock+18,
     ...[a.x0,a.x1,job.x].flatMap(x=>[a.z0,a.z1,job.z].map(z=>game.level.world.heightAt(x,z)+6))));
    job.cursor=0;job.phase='clear';persist();
@@ -184,6 +196,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
    building:w?{name:w.kind,x:w.x,y:w.y,z:w.z,
     done:w.phase==='build'?w.cursor:0,total:planFor(w.kind).length,phase:w.phase}:null,
    blocked:reason,searches:0,surveyed:0,rejected:0,waiting:0,
+   drySiteRepair:dryRepair?.status()||{version:1,completed:0,total:7,blocked:0,active:null,reason:'Aguardando cache do mundo'},
    prewarm:warmup?.status()||{active:false,savedWindows:0,totalWindows:0,savedChunks:0,reason:'Aguardando 7 construções'},
    terrainSearch:null,terrainCare:{active:null,repaired:savedCount,
     protected:0,remaining:TOWN.length-state.completed.length,reason},

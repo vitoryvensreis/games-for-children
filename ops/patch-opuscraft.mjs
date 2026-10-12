@@ -174,7 +174,7 @@ patch('src/net/config.ts',
  "export const TIMEOUT_TICKS = 120 * 20;");
 patch('src/net/config.ts',
  "export const CHUNKS_PER_TICK = 6;",
- "export const CHUNKS_PER_TICK = 4;");
+ "export const CHUNKS_PER_TICK = 3;");
 patch('src/net/joinCode.ts',
  "export function newJoinCode(): string {\n  const b = new Uint8Array(JOIN_CODE_LENGTH);",
  "export function newJoinCode(): string {\n  if (new URLSearchParams(location.search).has('gfcHost')) return 'GFC2026X';\n  const b = new Uint8Array(JOIN_CODE_LENGTH);");
@@ -190,14 +190,14 @@ patch('src/net/transport/webSocket.ts',
 patch('src/game/game.ts',
  "    this.chunks.renderDistance = this.opts.renderDistance;\n    this.chunks.smoothLighting = this.opts.smoothLighting;",
  `    this.chunks.renderDistance = login && this.mode === 'client' && (window as any).__gfcFamilySession === true ?
-      Math.min(2,this.opts.renderDistance) : this.opts.renderDistance;
+      Math.min(1,this.opts.renderDistance) : this.opts.renderDistance;
     this.chunks.smoothLighting = this.opts.smoothLighting;`);
 patch('src/game/game.ts',
  "    client?.receive();\n    if (!this.inWorld) return client?.sendTick();",
  `    client?.receive();
     if (this.mode === 'client' && this.inWorld && this.spawned &&
         (window as any).__gfcFamilySession === true && this.chunks &&
-        this.ticks % 100 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
+        this.ticks % 70 === 0 && this.chunks.renderDistance < this.opts.renderDistance) {
       this.chunks.renderDistance++;
       this.renderer.renderDistance = this.chunks.renderDistance;
       this.chunks.refreshRadius();
@@ -220,8 +220,8 @@ patch('src/game/game.ts',
  `    const native = window.devicePixelRatio || 1;
     const family = (window as any).__gfcFamilySession === true && this.mode === 'client';
     const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const ratio = family ? (mobile ? 0.62 : 0.60) : 1;
-    const maxW = family ? (mobile ? 800 : 1024) : 8192;
+    const ratio = family ? (mobile ? 0.52 : 0.55) : 1;
+    const maxW = family ? (mobile ? 720 : 900) : 8192;
     const dpr = Math.min(native * ratio, maxW / Math.max(1,window.innerWidth));`);
 
 // Draw rotating 3D sails in the native entity pass, after opaque terrain.

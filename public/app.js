@@ -90,7 +90,7 @@ async function openOpusCraft(){
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div><div id="opusRecoverPanel"></div>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -149,11 +149,19 @@ async function openOpusCraft(){
     const meInWorld=result.players.find(p=>p.self);
     if(!meInWorld){playersList.textContent='Você ainda está entrando no servidor da família.';return}
     const same=result.players.filter(p=>!p.self&&p.dimension===meInWorld.dimension);
-    playersList.innerHTML=same.length?same.map(p=>'<div class="opus-player"><div><strong>'+esc(p.name)+'</strong><small> X '+p.x+' • Y '+p.y+' • Z '+p.z+'</small></div><button type="button" data-tp="'+esc(p.id)+'">Ir até</button></div>').join(''):'Nenhum outro jogador conectado nesta dimensão.';
+    playersList.innerHTML=same.length?same.map(p=>'<div class="opus-player"><div><strong>'+esc(p.name)+'</strong><small> X '+p.x+' • Y '+p.y+' • Z '+p.z+'</small></div><button type="button" data-tp="'+esc(p.id)+'">Ir até</button>'+ (me?.role==='admin'&&String(p.id).startsWith('KID_')?'<button type="button" data-summon="'+esc(p.id)+'">Trazer para perto</button>':'')+'</div>').join(''):'Nenhum outro jogador conectado nesta dimensão.';
     for(const btn of playersList.querySelectorAll('button[data-tp]')){
      btn.onclick=async()=>{
       btn.disabled=true;
       try{await api('opuscraft/teleport','POST',{to:btn.dataset.tp});notify('Teleporte realizado!')}
+      catch(e){notify(e.message)}
+      finally{btn.disabled=false}
+     };
+    }
+    if(me?.role==='admin')for(const btn of playersList.querySelectorAll('button[data-summon]')){
+     btn.onclick=async()=>{
+      btn.disabled=true;
+      try{await api('admin/opuscraft/summon','POST',{to:btn.dataset.summon});notify('Jogador trazido para perto do ADM!')}
       catch(e){notify(e.message)}
       finally{btn.disabled=false}
      };
@@ -163,6 +171,12 @@ async function openOpusCraft(){
      try{
       const npc=await api('admin/opuscraft/npc');
       if(landmarkList.isConnected)landmarkList.innerHTML=familyLandmarkButtons(npc.worldAttractions);
+      const recover=$('#opusRecoverPanel');
+      if(recover)recover.innerHTML=npc.worldAttractions?.registryRecoveryRequired?
+       '<p>O registro antigo das atrações precisa ser recuperado. Aproxime-se da construção e escolha qual reconhecer.</p>'+
+       '<div class="row"><select id="opusRecoverKind">'+familyKindOptions()+'</select><button id="opusRecoverHere" type="button">Reconhecer esta construção</button></div>':'';
+      const recoverButton=$('#opusRecoverHere');
+      if(recoverButton)recoverButton.onclick=()=>void recoverFamilyLandmark($('#opusRecoverKind')?.value,recoverButton);
      }catch(e){if(landmarkList.isConnected)landmarkList.textContent='Atrações indisponíveis: '+e.message}
     }
    }catch(e){if(playersList.isConnected)playersList.textContent='Jogadores indisponíveis: '+e.message}
@@ -173,6 +187,8 @@ async function openOpusCraft(){
    const btn=e.target.closest('button[data-landmark]');
    if(btn)void visitFamilyLandmark(btn.dataset.landmark,btn);
   });
+  if(me?.role==='admin')playersPanel.querySelectorAll('[data-world-time],[data-world-weather]').forEach(btn=>
+   btn.onclick=()=>void changeOpusWorld(btn.dataset.worldTime?'time':'weather',btn.dataset.worldTime||btn.dataset.worldWeather,btn));
   $('#opusPlayersToggle').onclick=()=>{
    playersPanel.hidden=!playersPanel.hidden;
    if(!playersPanel.hidden)void showFamilyPlayers();

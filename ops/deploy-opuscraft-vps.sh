@@ -27,6 +27,14 @@ trap rollback ERR
 # A live snapshot is supplemental; the original persistent profile is never deleted.
 # The browser flushes its world during the permitted service restart.
 if test -d data/opuscraft/profile; then
+ # Immutable recovery point before the ONE-TIME switch to the V2 family town.
+ # The browser profile contains world chunks, inventories, and landmark metadata.
+ # Never wipe the profile; the original V1 world remains in IndexedDB.
+ if ! test -s backup/opuscraft-family-v1-pre-v2.tar.gz; then
+  tar -czf backup/opuscraft-family-v1-pre-v2.tar.gz -C data/opuscraft profile
+  test -s backup/opuscraft-family-v1-pre-v2.tar.gz
+  echo "OPUSCRAFT_FAMILY_V1_ARCHIVED_BEFORE_V2"
+ fi
  tar -czf backup/opuscraft-profile-latest.tar.gz -C data/opuscraft profile
 fi
 tar -xzf release.tar.gz

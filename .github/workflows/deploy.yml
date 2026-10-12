@@ -1,4 +1,6 @@
-name: Deploy GamesForChildren
+name: GamesNavagador | Validação e deploy
+# Each run reflects the PR milestone and commit instead of repeating the WIP title.
+run-name: ${{ github.event_name == 'pull_request' && format('PR #{0}: {1} [{2}]', github.event.pull_request.number, github.event.pull_request.title, github.event.pull_request.head.sha) || github.event.head_commit.message || 'Execução manual GamesNavagador' }}
 on:
   push:
     branches: [main]
@@ -15,6 +17,7 @@ concurrency:
 
 jobs:
   validate:
+    name: "Validar projeto, OpusCraft Node e multiplayer"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -60,6 +63,7 @@ jobs:
 
 
   deploy:
+    name: "Publicar produção (somente main autorizado)"
     needs: validate
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
     runs-on: ubuntu-latest

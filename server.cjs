@@ -293,23 +293,7 @@ if(pathname==='/api/admin/opuscraft/world-control'&&req.method==='POST'){
   return json(res,result.ok?200:409,result.ok?{ok:true,...result}:{error:result.error||'Comando indisponível'});
  }catch{return json(res,503,{error:'Não foi possível alterar o tempo no mundo agora'})}
 }
-if(pathname==='/api/admin/opuscraft/npc/recover'&&req.method==='POST'){
- if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
- if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
-  return json(res,409,{error:'Entre no mundo familiar e aproxime-se da construção'});
- const body=await readBody(req,350);
- const allowed=['names','windmill','pinwheels','castle','village','garden','watchtower'];
- if(!allowed.includes(body.kind))return json(res,400,{error:'Tipo de construção inválido'});
- try{
-  const r=await fetch('http://127.0.0.1:4173/__npc/recover',{
-   method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({from:opusName(u),kind:body.kind}),signal:AbortSignal.timeout(10000)
-  });
-  const result=await r.json();
-  return json(res,result.ok?200:409,result.ok?result:{error:result.error||'Construção não localizada'});
- }catch{return json(res,503,{error:'Falha ao recuperar o registro. Tente de novo perto da construção'})}
-}
-// The resident is a host-owned avatar; only the administrator can locate or visit it.
+// The invisible host provides diagnostics to authorized ADM accounts.
 if(pathname==='/api/admin/opuscraft/npc'&&req.method==='GET'){
  if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
  try{
@@ -330,29 +314,6 @@ if(pathname==='/api/admin/opuscraft/npc/events'&&req.method==='GET'){
   console.warn('Monitor NPC: erro ao consultar histórico:',String(err.message).slice(0,130));
   return json(res,503,{error:'Histórico temporariamente indisponível'});
  }
-}
-if(pathname==='/api/admin/opuscraft/npc/visit'&&req.method==='POST'){
- if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
- const current=now();
- if(current-(lastOpusTeleport.get(u.id)||0)<8000)
-  return json(res,429,{error:'Aguarde alguns segundos para teleportar novamente'});
- if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
-  return json(res,409,{error:'Entre primeiro no servidor da familia'});
- try{
-  const body=await readBody(req,400);
-  const allowed=new Set(['names','windmill','pinwheels','castle','village','garden','watchtower']);
-  const attraction=body.attraction;
-  if(attraction!==undefined&&!allowed.has(attraction))
-   return json(res,400,{error:'Selecione uma construção válida'});
-  const r=await fetch('http://127.0.0.1:4173/__npc/visit',{
-   method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({from:opusName(u),attraction}),signal:AbortSignal.timeout(5500)
-  });
-  const result=await r.json();
-  if(!result.ok)return json(res,409,{error:result.error||'Construção indisponível'});
-  lastOpusTeleport.set(u.id,current);
-  return json(res,200,{ok:true,action:result.action||'visit_landmark',attraction:result.attraction||null});
- }catch{return json(res,503,{error:'Não foi possível visitar a construção agora'})}
 }
 if(pathname==='/api/opuscraft/world-backups'&&req.method==='GET'){
  return json(res,200,{backups:opusBackupIndex(u).sort((a,b)=>b.created.localeCompare(a.created))});
@@ -398,19 +359,6 @@ if(opusDownload&&req.method==='GET'){
  });
 }
 if(pathname==='/api/opuscraft/identity'&&req.method==='GET')return json(res,200,{playerName:opusName(u),joinCode:'GFC2026X'});
-if(pathname==='/api/opuscraft/landmarks'&&req.method==='GET'){
- try{
-  const live=await fetch('http://127.0.0.1:4173/__npc/status',{signal:AbortSignal.timeout(2500)});
-  if(!live.ok)return json(res,503,{error:'Mundo temporariamente indisponível'});
-  const info=await live.json();
-  const names=new Set(['windmill','pinwheels']);
-  const attractions=(info.worldAttractions?.attractions||[]).filter(v=>
-   names.has(v.name)&&v.ready===true&&
-   [v.x,v.y,v.z].every(Number.isFinite)).map(v=>({
-    name:v.name,x:v.x,y:v.y,z:v.z,ready:true}));
-  return json(res,200,{attractions});
- }catch{return json(res,503,{error:'Mundo temporariamente indisponível'})}
-}
 if(pathname==='/api/opuscraft/status'&&req.method==='GET')return json(res,200,await opusStatus());
 if(pathname==='/api/admin/opuscraft/status'&&req.method==='GET'){
  if(u.role!=='admin')return json(res,403,{error:'Somente responsavel'});

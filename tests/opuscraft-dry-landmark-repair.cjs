@@ -22,6 +22,17 @@ test('Existing underwater attractions recover at original X and Z with durable c
  assert.match(repair,/j\.phase='saveFinal'/);
  assert.match(repair,/site\.y=j\.y/);
 });
+test('Submerged damaged originals are recoverable, but changed blocks above sea or player edits are protected',()=>{
+ const repair=read('ops/gfc-v2-dry-site-repair.ts');
+ assert.match(repair,/actual!==name && !\(y<=SEA&&\(actual==='water'\|\|actual==='air'\)\)/);
+ assert.match(repair,/blockSite\(j,'construção modificada'\)/);
+ assert.match(repair,/game\.level\.world\.heightAt\(x,z\)\+4/);
+ assert.match(repair,/if\(highest>230\)/);
+ const rotors=read('ops/gfc-rotors.ts');
+ assert.match(rotors,/if\(!game\.level\.world\.isLoaded\(xx,legacyZ\)\|\|/);
+ assert.match(rotors,/if\(legacyPresent\)continue/);
+});
+
 test('Repair avoids changing non-original player blocks and pauses when children are online',()=>{
  const repair=read('ops/gfc-v2-dry-site-repair.ts');
  assert.match(repair,/!game\.inWorld\|\|!game\.spawned\|\|!game\.server\|\|!empty\(\)/);

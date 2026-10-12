@@ -12,7 +12,9 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
 (
  cd "$TMP/opuscraft"
  npm ci --no-audit --no-fund
- # Build the audited original game, without modifying any TypeScript source.
+ # Build original OpusCraft game logic and graphics; adapt only the exact
+ # trusted GamesNavagador HTTPS origin for authenticated player hosting.
+ node "$REPO_ROOT/ops/patch-opuscraft-trusted-relay.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )
 test -s "$TMP/opuscraft/dist/index.html"

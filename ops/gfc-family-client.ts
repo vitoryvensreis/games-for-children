@@ -26,7 +26,14 @@ export function prepareFamilyClient(game: Game): void {
   };
   (window as any).__gfcFamilySession = true;
   (window as any).__gfcFamilyJoining = true;
-  game.opts.renderDistance = 2;
+  // This setting is an opt-in for the NEXT family join: the host negotiates
+  // the chunk view radius at login, so changing it mid-session has no effect.
+  // Keep a safe device-specific default and a bounded larger view for PCs.
+  let requested=mobile?2:3;
+  try{const stored=Number(localStorage.getItem('gfc-family-view-distance'));
+   if(Number.isInteger(stored)&&stored>=2&&stored<=5)requested=stored;
+  }catch{}
+  game.opts.renderDistance=Math.max(2,Math.min(mobile?3:5,requested));
   game.opts.simulationDistance = Math.min(game.opts.simulationDistance, 1);
   game.opts.graphics = 0;
   game.opts.fancy = false;

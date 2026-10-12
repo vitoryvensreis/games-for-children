@@ -150,12 +150,19 @@ export function installGfcWorldAttractions(game:Game){
  const newSign=planFor('names').filter(b=>b.z===-1);
  const anchor={x:Math.floor(game.player.x),z:Math.floor(game.player.z)};
  const key=SAVE_KEY+':'+String(game.meta?.id||'family');
+ const journalKey=key+':completed-snapshot';
  const fresh=():State=>({version:1,searchRevision:SEARCH_REVISION,anchor,completed:[],work:null,attempts:0,phase:0});
  let saved:State=fresh();
+ // A world ID, not a moving spectator's spawn, identifies this registry.
+ // The extra journal survives an accidental reset of the primary state.
  try{
-  const data=JSON.parse(localStorage.getItem(key)||'null');
-  if(data?.version===1&&Array.isArray(data.completed)&&data.anchor&&
-    Math.abs(data.anchor.x-anchor.x)<5&&Math.abs(data.anchor.z-anchor.z)<5){
+  const current=JSON.parse(localStorage.getItem(key)||'null');
+  const snapshot=JSON.parse(localStorage.getItem(journalKey)||'null');
+  const data=snapshot?.version===1&&Array.isArray(snapshot.completed)&&
+    snapshot.completed.length>(Array.isArray(current?.completed)?current.completed.length:0)?
+    {...current,...snapshot,work:current?.work||null,relocation:current?.relocation||null,
+      siteCare:current?.siteCare||null}:current;
+  if(data?.version===1&&Array.isArray(data.completed)&&data.anchor){
    saved={version:1,searchRevision:SEARCH_REVISION,anchor,completed:data.completed.filter((x:any)=>KINDS.includes(x?.kind)&&
     Number.isFinite(x.x)&&Number.isFinite(x.y)&&Number.isFinite(x.z)).slice(0,10),
     work:data.work?.site&&KINDS.includes(data.work.site.kind)?
@@ -178,7 +185,20 @@ export function installGfcWorldAttractions(game:Game){
   }
  }catch{}
  const state=saved;
- const persist=()=>{try{localStorage.setItem(key,JSON.stringify(state))}catch{}};
+ // If the manifest vanished from an older persistent world, NEVER start
+ // new automated construction: physical structures may still exist in chunks.
+ let recoveryRequired=state.completed.length===0&&
+   (Date.now()-Number(game.meta?.created||Date.now()))>15*60*1000;
+ const persist=()=>{
+  try{
+   localStorage.setItem(key,JSON.stringify(state));
+   if(state.completed.length) localStorage.setItem(journalKey,JSON.stringify({
+    version:1,anchor:state.anchor,completed:state.completed,
+    caredSites:state.caredSites||[],careBlocked:state.careBlocked||[],
+    movedKinds:state.movedKinds||[],blockedKinds:state.blockedKinds||[]
+   }));
+  }catch{}
+ };
  let ticks=0,blocked='',finishedPending=false;
  let surveyed=0,rejected=0,waiting=0,firstCandidateAt=0;
  let pending:{kind:Kind;x:number;z:number}|null=null;
@@ -255,6 +275,7 @@ export function installGfcWorldAttractions(game:Game){
  }
  function trySelect(){
   const kind=KINDS.find(k=>!state.completed.some(s=>s.kind===k));
+  if(recoveryRequired){blocked='Registro antigo não localizado; criação suspensa para preservar construções existentes';return;}
   if(!kind||state.work||state.siteCare||!parked())return;
   if(!pending||pending.kind!==kind){
    const site=siteFor(kind,state.attempts);
@@ -448,7 +469,8 @@ export function installGfcWorldAttractions(game:Game){
     ready:(s.kind==='windmill'||s.kind==='pinwheels')?rotorReady(s):true})),
    building:w?{name:w.site.kind,x:w.site.x,y:w.site.y,z:w.site.z,
     done:w.cursor,total:planFor(w.site.kind).length,elevated:!!w.site.elevated}:null,
-   blocked,searches:state.attempts,surveyed,rejected,waiting,
+   blocked,registryRecoveryRequired:recoveryRequired,
+   registrySource:state.completed.length?'restored':'missing',searches:state.attempts,surveyed,rejected,waiting,
    terrainSearch:pending?{kind:pending.kind,x:pending.x,z:pending.z}:null,
    signRepair:signRepairStatus,grounding:grounding.status(),terrainCare:siteCare.status(),
    windmillAnimated:state.completed.some(s=>s.kind==='windmill'),

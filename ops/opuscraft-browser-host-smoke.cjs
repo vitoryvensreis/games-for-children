@@ -78,8 +78,20 @@ server.on('upgrade',(req,socket,head)=>{
  ]);
  if(pair[0].guests<1||pair[1].chunks<1)throw Error('World not replicated to guest: '+JSON.stringify(pair));
  const health=await fetch('http://127.0.0.1:4173/__health').then(r=>r.json());
- if(!health.hosting||health.guests<1||health.mode!=='player-hosted')
-  throw Error('Relay did not register browser-hosted world: '+JSON.stringify(health));
+ if(!health.hosting||health.guests<1||health.mode!=='player-hosted'){
+  const debug=await Promise.all([
+   host.evaluate(()=>({mode:window.__game?.mode,spawned:window.__game?.spawned,
+     guests:window.__game?.server?.guestCount?.(),serverTicks:window.__game?.server?.ticks,
+     relayStatus:window.__game?.lanShare?.relay?.socket?.readyState,
+     sessions:[...(window.__game?.server?.sessions?.values?.()||[])].map(s=>({
+      state:s.state,name:s.name,reason:s.endReason}))})),
+   guest.evaluate(()=>({mode:window.__game?.mode,spawned:window.__game?.spawned,
+     inWorld:window.__game?.inWorld,clientState:window.__game?.client?.state,
+     reason:window.__game?.client?.endReason,screen:window.__game?.screen?.constructor?.name,
+     hostGone:window.__game?.client?.hostGone}))
+  ]);
+  throw Error('Browser multiplayer dropped connection: '+JSON.stringify({health,debug,errors}));
+ }
  console.log('OPUSCRAFT_ORIGINAL_BROWSER_MULTIPLAYER_OK',JSON.stringify({pair,relay:health}));
 })().catch(e=>{console.error(e,errors.slice(-12));process.exitCode=1}).finally(async()=>{
  clearTimeout(watchdog);

@@ -27,12 +27,13 @@ import {encode,decode} from '${path.join(upstream,'src/net/codec.ts').replaceAll
 import {offlinePlayerUuid} from '${path.join(upstream,'src/net/offlineUuid.ts').replaceAll('\\','/')}';
 import {SB,CB} from '${path.join(upstream,'src/net/protocol.ts').replaceAll('\\','/')}';
 import {savePlayer} from '${path.join(upstream,'src/game/playerData.ts').replaceAll('\\','/')}';
-export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer};`);
+import {ItemStack} from '${path.join(upstream,'src/item/item.ts').replaceAll('\\','/')}';
+export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack};`);
  const output=path.join(temp,'server.mjs');
  await build({entryPoints:[entry],outfile:output,bundle:true,format:'esm',platform:'node',
   target:'node22',logLevel:'warning',define:{__BUILD_ID__:JSON.stringify('headless-integration-smoke')}});
  // Reject runtime reliance on browser globals instead of adding mock DOM/WebGL.
- const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer}=await import(pathToFileURL(output).href);
+ const {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,savePlayer,ItemStack}=await import(pathToFileURL(output).href);
  assert.equal(typeof HostServer,'function','HostServer must be loadable without a browser');
  const world=new World();
  const level=new Level(world,'24h-seed');
@@ -205,11 +206,15 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  originalPlayer.food.level=13;
  originalPlayer.xpLevel=4;
  originalPlayer.inventory.selected=2;
+ originalPlayer.inventory.setSlot(2,ItemStack.of('stone',17));
+ originalPlayer.inventory.setSlot(5,ItemStack.of('dirt',32));
  const savedPlayer=savePlayer(originalPlayer,world.dim.id);
  assert.equal(savedPlayer.x,6);
  assert.equal(savedPlayer.food,13);
  assert.equal(savedPlayer.xpLevel,4);
  assert.equal(savedPlayer.selected,2);
+ assert.deepEqual(savedPlayer.inventory[2],['stone',17,0]);
+ assert.deepEqual(savedPlayer.inventory[5],['dirt',32,0]);
  const playerDir=path.join(temp,'players');
  writePlayer(playerDir,uuid,savedPlayer);
  const loadedPlayer=readPlayer(playerDir,uuid);
@@ -299,6 +304,10 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  assert.equal(returning.player.z,loadedPlayer.z);
  assert.equal(returning.player.xpLevel,4);
  assert.equal(returning.player.inventory.selected,2);
+ assert.equal(returning.player.inventory.main[2]?.item.id,'stone');
+ assert.equal(returning.player.inventory.main[2]?.count,17);
+ assert.equal(returning.player.inventory.main[5]?.item.id,'dirt');
+ assert.equal(returning.player.inventory.main[5]?.count,32);
  assert.equal(returning.player.inventory.main.length,loadedPlayer.inventory.length);
  peerHandler('full-login-guest',false);
  assert.equal(host.guestCount(),0);

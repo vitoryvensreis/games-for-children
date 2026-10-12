@@ -92,6 +92,7 @@ export {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerU
    live.host.receive();
    live.level.tick();
    live.host.tick();
+   await new Promise(resolve=>setImmediate(resolve));
    const frames=received.flatMap(bytes=>bytes[0]===0?decode(bytes.subarray(1),16*1024*1024):[]);
    assert.ok(frames.some(packet=>packet[0]===CB.Login),'Real websocket guest receives native CB.Login');
    assert.equal(live.host.guestCount(),1);

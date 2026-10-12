@@ -121,7 +121,7 @@ test('Only explicit family multiplayer uses lightweight graphics without changin
  assert.match(patch,/await actions\.preflight\(\)/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/prepareFamilyClient\(game\)/);
- assert.match(family,/game\.opts\.renderDistance = 2/);
+ assert.match(family,/game\.opts\.renderDistance=Math\.max\(2,Math\.min\(mobile\?3:5,requested\)\)/);
  assert.match(family,/game\.opts\.simulationDistance = Math\.min\(game\.opts\.simulationDistance, 1\)/);
  assert.match(family,/game\.opts\.graphics = 0/);
  assert.match(family,/game\.opts\.maxFps = Math\.min\(game\.opts\.maxFps, mobile \? 24 : 30\)/);
@@ -172,7 +172,7 @@ test('Admin can choose only recorded landmarks, including the current build',()=
 test('Family chunk radius improves desktop horizon without changing solo worlds',()=>{
  const patch=read('ops/patch-opuscraft.mjs');
  const family=read('ops/gfc-family-client.ts');
- assert.match(family,/game\.opts\.renderDistance = 2/);
+ assert.match(family,/game\.opts\.renderDistance=Math\.max\(2,Math\.min\(mobile\?3:5,requested\)\)/);
  assert.match(patch,/actions\.prepare\(\)/);
  assert.match(patch,/this\.mode === 'client' \? 1 : LOADING_RADIUS/);
  assert.match(patch,/CHUNKS_PER_TICK = 3/);

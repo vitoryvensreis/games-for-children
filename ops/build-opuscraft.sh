@@ -18,6 +18,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  npm run build -- --base=/opuscraft/
 )
 test -s "$TMP/opuscraft/dist/index.html"
+rm -rf -- "$REPO_ROOT/public/opuscraft"
 mkdir -p "$REPO_ROOT/public/opuscraft"
 cp -a "$TMP/opuscraft/dist/." "$REPO_ROOT/public/opuscraft/"
 cp "$TMP/opuscraft/LICENSE" "$REPO_ROOT/public/opuscraft/OPUSCRAFT-LICENSE.txt"

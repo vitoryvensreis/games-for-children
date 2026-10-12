@@ -8,6 +8,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createRequire} from 'node:module';
 import {HeadlessTicker} from './ticker.cjs';
+import {saveColumn,loadColumn} from './native-column-store.cjs';
 const upstream=process.argv[2];
 if(!upstream||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Expected cloned upstream OpusCraft checkout as argument');
@@ -42,6 +43,18 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB};`);
  const previous=world.setState(1,64,1,1);
  assert.equal(previous,0);
  assert.equal(world.getState(1,64,1),1);
+ // Persist real upstream Chunk section arrays and recover into a fresh World.
+ const checkpoint=path.join(temp,'chunk-0-0.json');
+ saveColumn(checkpoint,chunk);
+ const recovered=loadColumn(checkpoint,Chunk);
+ assert.equal(recovered.getState(1,64,1),1);
+ assert.equal(recovered.modified,false);
+ const reloadedWorld=new World();
+ reloadedWorld.chunks.set(recovered.key,recovered);
+ assert.equal(reloadedWorld.getState(1,64,1),1);
+ assert.equal(recovered.cx,0);
+ assert.equal(recovered.cz,0);
+
 
  // Exercise the actual upstream simulation, not merely the TypeScript import.
  assert.equal(typeof level.tick,'function');

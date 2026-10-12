@@ -90,7 +90,7 @@ async function openOpusCraft(){
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div><h3>🎮 Qualidade deste aparelho</h3><label for="opusQualityMode">Perfil gráfico</label><select id="opusQualityMode"><option value="auto">Automático (recomendado)</option><option value="performance">Desempenho</option><option value="balanced">Equilibrado</option><option value="quality">Qualidade</option></select><p id="opusQualityStatus" class="sub" role="status">Aguardando entrada no multiplayer...</p><label for="opusViewDistance">Distância de visão (na próxima entrada)</label><select id="opusViewDistance"><option value="2">Leve — 2 chunks (32 blocos)</option><option value="3">Equilibrada — 3 chunks (48 blocos)</option><option value="4">Longe — 4 chunks (64 blocos)</option><option value="5">Muito longe — 5 chunks (80 blocos, mais pesado)</option></select><p class="sub" id="opusViewHelp">Alterar a distância exige sair e entrar novamente no Servidor da Família. No celular o máximo é 3 chunks.</p>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div><h3>🎮 Qualidade deste aparelho</h3><label for="opusQualityMode">Perfil gráfico</label><select id="opusQualityMode"><option value="original">Original OpusCraft (padrão)</option><option value="auto">Automático leve</option><option value="performance">Desempenho</option><option value="balanced">Equilibrado</option><option value="quality">Qualidade</option></select><p id="opusQualityStatus" class="sub" role="status">Aguardando entrada no multiplayer...</p><label for="opusViewDistance">Distância de visão (na próxima entrada)</label><select id="opusViewDistance"><option value="3">Leve — 3 chunks (48 blocos)</option><option value="4">Padrão celular — 4 chunks (64 blocos)</option><option value="6">Padrão PC — 6 chunks (96 blocos)</option><option value="8">Máximo do servidor — 8 chunks (128 blocos)</option></select><p class="sub" id="opusViewHelp">Alterar a distância exige sair e entrar novamente no Servidor da Família. No celular o máximo recomendado é 6 chunks. A qualidade original usa a resolução nativa do OpusCraft.</p>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -190,18 +190,18 @@ async function openOpusCraft(){
   };
   const viewSelect=$('#opusViewDistance');
   let viewStored=0;
-  try{viewStored=Number(localStorage.getItem('gfc-family-view-distance'))}catch{}
+  try{viewStored=Number(localStorage.getItem('gfc-family-native-view-distance-v1'))}catch{}
   const isMobileDevice=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||
     (matchMedia('(pointer: coarse)').matches&&innerWidth<1100);
-  const maxView=isMobileDevice?3:5;
-  const initialView=Number.isInteger(viewStored)&&viewStored>=2&&viewStored<=maxView?
-    viewStored:isMobileDevice?2:3;
+  const maxView=isMobileDevice?6:8;
+  const initialView=Number.isInteger(viewStored)&&viewStored>=3&&viewStored<=maxView?
+    viewStored:isMobileDevice?4:6;
   viewSelect.value=String(initialView);
   for(const option of viewSelect.options)option.disabled=Number(option.value)>maxView;
   viewSelect.onchange=()=>{
    const chosen=Number(viewSelect.value);
-   if(!Number.isInteger(chosen)||chosen<2||chosen>maxView)return;
-   try{localStorage.setItem('gfc-family-view-distance',String(chosen));
+   if(!Number.isInteger(chosen)||chosen<3||chosen>maxView)return;
+   try{localStorage.setItem('gfc-family-native-view-distance-v1',String(chosen));
     notify('Visão alterada. Saia e entre de novo no Servidor da Família para aplicar.')}
    catch{notify('O navegador não permitiu salvar a distância de visão.')}
   };
@@ -244,7 +244,7 @@ async function openOpusCraft(){
       qualityMode.disabled=false;
       qualityStatus.textContent='Resolução '+Math.round(quality.scale*100)+'% • '+
        Math.round(g.fps||0)+'/'+quality.targetFps+' FPS • '+
-       (quality.mode==='auto'?quality.pausedReason:'Perfil manual')+
+       (quality.mode==='auto'?quality.pausedReason:quality.mode==='original'?'Renderização original':'Perfil manual')+
        ' • Ajustes: '+quality.adjustments+
        ' • Visão atual: '+Number(g.opts.renderDistance||0)+' chunks';
      }else{

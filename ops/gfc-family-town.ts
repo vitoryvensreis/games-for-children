@@ -3,6 +3,7 @@
 // Its seven blueprints are the same as the previous world (especially the sign).
 import type { Game } from './game/game';
 import { S, blockOf } from './world/block';
+import { installGfcChunkWarmup } from './gfc-chunk-warmup';
 
 export type FamilyKind = 'names'|'windmill'|'pinwheels'|'castle'|'village'|'garden'|'watchtower';
 export type FamilyBlock = {x:number;y:number;z:number;name:string};
@@ -52,6 +53,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
  const empty=()=>visitors().length===0;
  const release=()=>game.chunks.setTicket('gfc-family-city',null);
  let ticks=0,busy=false,reason='Preparando o bairro da família',savedCount=state.completed.length;
+ let warmup:ReturnType<typeof installGfcChunkWarmup>|null=null;
  function area(job:Job):Area{
   const b=planFor(job.kind);
   const xs=b.map(p=>p.x),zs=b.map(p=>p.z);
@@ -100,7 +102,16 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
  }
  function tick(){
   ticks++;
-  if(!game.inWorld||!game.spawned||!empty()||busy){if(!empty())release();return}
+  if(!game.inWorld||!game.spawned||!empty()||busy){
+   if(!empty()){release();warmup?.tick();}
+   return;
+  }
+  // Never preload chunks while constructing buildings or with visitors online.
+  if(!state.job&&state.completed.length===TOWN.length){
+   release();
+   if(!warmup)warmup=installGfcChunkWarmup(game,origin,state.completed);
+   warmup.tick();return;
+  }
   if(!state.job)newJob();
   const job=state.job;if(!job)return;
   const a=area(job);
@@ -173,6 +184,7 @@ export function installGfcFamilyTown(game:Game,planFor:(kind:FamilyKind)=>Family
    building:w?{name:w.kind,x:w.x,y:w.y,z:w.z,
     done:w.phase==='build'?w.cursor:0,total:planFor(w.kind).length,phase:w.phase}:null,
    blocked:reason,searches:0,surveyed:0,rejected:0,waiting:0,
+   prewarm:warmup?.status()||{active:false,savedWindows:0,totalWindows:0,savedChunks:0,reason:'Aguardando 7 construções'},
    terrainSearch:null,terrainCare:{active:null,repaired:savedCount,
     protected:0,remaining:TOWN.length-state.completed.length,reason},
    signRepair:'O letreiro é a primeira atração do bairro',registryRecoveryRequired:false};

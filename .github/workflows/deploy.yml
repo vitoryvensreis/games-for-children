@@ -24,7 +24,7 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-host.cjs && node --check ops/patch-opuscraft.mjs
-      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs tests/opuscraft-backup-api.cjs tests/legacy-minecraft-retirement.cjs tests/opuscraft-npc.cjs tests/npc-audit.cjs tests/andarilha-survival.cjs tests/opuscraft-v2-town.cjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-migration.cjs tests/opuscraft-production-cache.cjs tests/opuscraft-worlds-teleport.cjs tests/opuscraft-backup-api.cjs tests/legacy-minecraft-retirement.cjs tests/opuscraft-npc.cjs tests/npc-audit.cjs tests/andarilha-survival.cjs tests/opuscraft-v2-town.cjs tests/opuscraft-block-a.cjs
       - name: Build pinned OpusCraft
         run: bash ops/build-opuscraft.sh
       - name: Validate compiled web assets
@@ -108,6 +108,30 @@ jobs:
           done
           if test "$all_ready" -ne 1; then
             echo "::error::Not all seven attractions finished in the V2 world"
+            curl -fsS http://127.0.0.1:4173/__npc/status || true
+            tail -n 100 /tmp/opuscraft-host.log
+            exit 1
+          fi
+          # The pre-generation must actually write generated chunk data to the
+          # native IndexedDB store, not merely add extra loading tickets.
+          warm_cache=0
+          for attempt in $(seq 1 120); do
+            status="$(curl -fsS --max-time 5 http://127.0.0.1:4173/__npc/status || true)"
+            if printf '%s' "$status" | node -e '
+              let body="";process.stdin.on("data",x=>body+=x).on("end",()=>{
+                try{const w=JSON.parse(body).worldAttractions?.prewarm;
+                  process.exit(w?.savedChunks>0&&w?.savedWindows>0?0:1);
+                }catch{process.exit(1)}
+              })
+            ';then
+              echo "OPUSCRAFT_CHUNK_CACHE_PERSISTED"
+              warm_cache=1
+              break
+            fi
+            sleep 1
+          done
+          if test "$warm_cache" -ne 1; then
+            echo "::error::V2 warmup did not persist generated chunks"
             curl -fsS http://127.0.0.1:4173/__npc/status || true
             tail -n 100 /tmp/opuscraft-host.log
             exit 1

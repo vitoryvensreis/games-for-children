@@ -90,7 +90,7 @@ async function openOpusCraft(){
   '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
   '<div class="opuscraft-join-alert" id="opuscraftJoinAlert" hidden role="alert"><strong>Não foi possível conectar ao mundo da família</strong><p id="opuscraftJoinMessage">Verifique a conexão e tente novamente.</p><div class="row"><button id="opuscraftJoinRetry" type="button">Tentar novamente</button><button id="opuscraftJoinBack" type="button">Voltar</button></div></div>'+
   '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o mundo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+
-  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div><div id="opusRecoverPanel"></div>':'')+'</div></section>'+ 
+  '<section class="opuscraft-players" id="opusPlayersDock" hidden><button id="opusPlayersToggle" type="button">👥 Jogadores / Teleporte</button><div id="opusPlayersPanel" hidden><h3>Família no mesmo mundo</h3><div id="opusPlayersList" role="status"></div>'+ (me?.role==='admin'?'<h3>🌤️ Comandos do mundo (ADM)</h3><div class="row"><button type="button" data-world-time="day">Dia</button><button type="button" data-world-time="night">Noite</button><button type="button" data-world-weather="clear">Sol</button><button type="button" data-world-weather="rain">Chuva</button></div><h3>🏰 Construções do mapa</h3><div id="opusLandmarksList" role="status"><p>Carregando atrações...</p></div><div id="opusRecoverPanel"></div><details id="opusPerfDetails"><summary>⚡ Diagnóstico de desempenho (ADM)</summary><p id="opusPerfClient" class="sub">Aguardando FPS do jogo...</p><p id="opusPerfHost" class="sub">Aguardando dados da VPS...</p></details>':'')+'</div></section>'+ 
   '<section class="opuscraft-chat"><button id="familyChatToggle" type="button">💬 Conversar</button><div id="familyChatPanel" hidden><h3>Conversa da família</h3><div id="familyChatHistory" role="log" aria-live="polite"></div><form id="familyChatForm"><input id="familyChatInput" maxlength="180" autocomplete="off" placeholder="Mensagem para a família"><button type="submit">Enviar</button></form></div></section></main>';
   const gameFrame=$('#opuscraftFrame');
   gameFrame.addEventListener('load',()=>{
@@ -171,6 +171,14 @@ async function openOpusCraft(){
      try{
       const npc=await api('admin/opuscraft/npc');
       if(landmarkList.isConnected)landmarkList.innerHTML=familyLandmarkButtons(npc.worldAttractions);
+      const hostPerf=$('#opusPerfHost');
+      if(hostPerf&&npc.performance){
+       const m=npc.performance,cache=npc.worldAttractions?.prewarm;
+       hostPerf.textContent='VPS: '+Number(m.fps||0)+' quadros/s (host oculto) • '+
+        Number(m.frameMs||0)+' ms/quadro • '+Number(m.loadedChunks||0)+' chunks na RAM • '+
+        Number(m.queuedChunks||0)+' pendentes • '+Number(m.generatedChunks||0)+' gerados nesta sessão'+
+        (cache?' • Cache '+Number(cache.savedWindows||0)+'/'+Number(cache.totalWindows||0)+' áreas':'');
+      }
       const recover=$('#opusRecoverPanel');
       if(recover)recover.innerHTML=npc.worldAttractions?.registryRecoveryRequired?
        '<p>O registro antigo das atrações precisa ser recuperado. Aproxime-se da construção e escolha qual reconhecer.</p>'+
@@ -205,6 +213,18 @@ async function openOpusCraft(){
    if(!joining&&joinTracked){
     joinTracked=false;clearTimeout(joinTimeout);clearInterval(joinCheckTimer);
     joinAlert.hidden=true;
+   }
+   if(me?.role==='admin'&&$('#opusPerfDetails')?.open){
+    const clientPerf=$('#opusPerfClient');
+    if(clientPerf)try{
+     const g=gameFrame.contentWindow?.__game;
+     clientPerf.textContent=g?.mode==='client'?
+      'Seu aparelho: '+Math.round(g.fps||0)+' FPS • '+Number(g.frameTimeMs||0).toFixed(1)+
+      ' ms/quadro • '+Number(g.level?.world?.chunks?.size||0)+' chunks carregados • '+
+      Number(g.chunks?.pendingGen?.()||0)+' pendentes • '+
+      Number(g.chunks?.stats?.meshes||0)+' seções renderizadas':
+      'Entre no Multiplayer para medir seu FPS.';
+    }catch{clientPerf.textContent='Métricas não disponíveis neste navegador.'}
    }
    const active=mode==='client';
    playersDock.hidden=!active;
@@ -437,10 +457,23 @@ async function refreshMinecraftDashboard(){
        ' • '+esc(npc.worldAttractions.terrainCare.reason||'Verificando solo')+'</p>':'')+
       (npc.worldAttractions.registryRecoveryRequired?
        '<p class="sub"><strong>Registro das atrações em recuperação.</strong> Nenhuma construção nova será gerada automaticamente para proteger as existentes. Entre no mundo, aproxime-se de uma atração e use Reconhecer construção no painel Jogadores / Teleporte.</p>':'')+
+      (npc.worldAttractions.prewarm?'<p class="sub"><strong>Cache dos chunks (V2):</strong> '+
+       Number(npc.worldAttractions.prewarm.savedWindows||0)+'/'+
+       Number(npc.worldAttractions.prewarm.totalWindows||0)+' áreas preparadas • '+
+       Number(npc.worldAttractions.prewarm.savedChunks||0)+' chunks salvos • '+
+       esc(npc.worldAttractions.prewarm.reason||'Aguardando')+'</p>':'')+
       '<div class="npc-landmarks">'+familyLandmarkButtons(npc.worldAttractions)+'</div>'+
       (npc.worldAttractions.signRepair?'<p class="sub">Letreiro: '+esc(npc.worldAttractions.signRepair)+'</p>':''):
      '<p class="sub">Aguardando o carregamento do mundo</p>')+
     '</div>':'<div class="panel"><h3>🏰 Aventuras de Caique e Cauã</h3><p class="sub">O mundo está hospedado, mas a consulta das atrações não respondeu. Aguarde ou atualize a página antes de visitar as construções.</p></div>')+
+   (npc?.performance?'<div class="panel"><h3>⚡ Diagnóstico de desempenho — VPS</h3>'+
+     '<p>Host: '+Number(npc.performance.fps||0)+' quadros/s (sem renderização gráfica) • '+
+       Number(npc.performance.frameMs||0)+' ms por quadro</p>'+
+     '<p>Chunks na memória: '+Number(npc.performance.loadedChunks||0)+
+       ' • Na fila: '+Number(npc.performance.queuedChunks||0)+
+       ' • Gerados nesta execução: '+Number(npc.performance.generatedChunks||0)+
+       ' • Seções de geometria processadas: '+Number(npc.performance.meshedSections||0)+'</p>'+
+     '<p class="sub">FPS do PC/celular: abrir Multiplayer → Jogadores / Teleporte → Diagnóstico.</p></div>':'')+
    '<div class="panel"><h3>Controle do mundo — ADM</h3>'+
     '<p class="sub">Entre no Multiplayer como administrador para alterar o horário e o clima. O limite diário das crianças continua no painel acima.</p>'+
     '<div class="row"><button data-world-time="day">Dia</button><button data-world-time="night">Noite</button><button data-world-time="sunrise">Amanhecer</button><button data-world-time="sunset">Pôr do sol</button><button data-world-weather="clear">Sol</button><button data-world-weather="rain">Chuva</button></div></div>'+

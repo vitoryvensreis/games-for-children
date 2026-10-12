@@ -31,7 +31,7 @@ test('Greedy leaf masks respect boundaries, direction and dissimilar material or
  const corner=mergeFoliageFace(15,15,15,3,()=>true,()=>visited++);
  assert.equal(corner.width,1);assert.equal(corner.height,1);assert.equal(visited,1);
  const marked=[];
- const blocked=(x,y,z)=>x===2&&z===2&&y!==10;
+ const blocked=(x,y,z)=>x===2&&z===2&&y===10;
  const face=mergeFoliageFace(2,10,2,4,blocked,(x,y,z)=>marked.push([x,y,z]));
  assert.equal(face.width,1);
  assert.equal(face.height,1);

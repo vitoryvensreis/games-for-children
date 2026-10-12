@@ -59,6 +59,31 @@ jobs:
             tail -n 170 /tmp/opuscraft-host.log
             exit 1
           fi
+          # A passing connection alone isn't enough: the world must actually
+          # finish and SAVE the Caique/Cauã sign in its planned first lot.
+          sign_ready=0
+          for attempt in $(seq 1 210); do
+            status="$(curl -fsS --max-time 6 http://127.0.0.1:4173/__npc/status || true)"
+            if printf '%s' "$status" | node -e '
+              let body="";process.stdin.on("data",d=>body+=d).on("end",()=>{
+                try{
+                  const a=JSON.parse(body).worldAttractions;
+                  process.exit(a?.version===2&&a?.attractions?.some(x=>x.name==="names"&&x.ready===true)?0:1);
+                }catch{process.exit(1)}
+              })
+            '; then
+              echo "OPUSCRAFT_V2_SIGN_SAVED_AND_READY"
+              sign_ready=1
+              break
+            fi
+            sleep 1
+          done
+          if test "$sign_ready" -ne 1; then
+            echo "::error::V2 sign never finished construction in the test host"
+            curl -fsS http://127.0.0.1:4173/__npc/status || true
+            tail -n 100 /tmp/opuscraft-host.log
+            exit 1
+          fi
           # Test recovery using the SAME Chromium profile, never a newly generated world.
           # Save a physical world block at a known world coordinate, then
           # verify that same block AFTER the Chromium server was terminated.

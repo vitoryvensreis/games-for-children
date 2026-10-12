@@ -29,5 +29,10 @@ export {World,Level,HostServer};`);
  const level=new Level(world,'24h-seed');
  assert.equal(level.world,world);
  assert.equal(level.seed,'24h-seed');
- console.log('OPUSCRAFT_REAL_LEVEL_HEADLESS_NODE_IMPORT_OK');
+ // Exercise the actual upstream simulation, not merely the TypeScript import.
+ assert.equal(typeof level.tick,'function');
+ const before=level.gameTime;
+ for(let i=0;i<4;i++)level.tick();
+ assert.equal(level.gameTime,before+4,'Real Level must advance without browser runtime');
+ console.log('OPUSCRAFT_REAL_LEVEL_HEADLESS_NODE_TICK_OK');
 }finally{fs.rmSync(temp,{recursive:true,force:true})}

@@ -12,7 +12,7 @@ const {sanitizeNpcAudit}=require('./database/npc-audit.cjs');
 const PORT=Number(process.env.PORT||3100), HOST='127.0.0.1';
 const ROOT=__dirname, DATA=process.env.DATA_DIR||path.join(ROOT,'data'), DB=path.join(DATA,'state.json');
 const opusConnections=new Set();
-let opusHostProcess=null, opusRestarting=false;
+let opusRelayProcess=null;
 const DAY=86400000;fs.mkdirSync(DATA,{recursive:true,mode:0o700});
 const COVER_SLUGS=Object.freeze(['pong','snake','minecraft']);
 const COVER_DIR=path.join(DATA,'game-covers');
@@ -104,61 +104,32 @@ const publicDir=path.join(ROOT,'public');
 const OPUSCRAFT_ROOT=path.join(publicDir,'opuscraft');
 const OPUSCRAFT_READY=()=>fs.existsSync(path.join(OPUSCRAFT_ROOT,'index.html'));
 const OPUS_BACKUP_ROOT=path.join(DATA,'opuscraft','backups');
-const lastOpusTeleport=new Map();
-function validOpusWorldId(id){return typeof id==='string'&&id.length>0&&id.length<=90&&!id.includes('/')&&!id.includes(String.fromCharCode(92))&&![...id].some(c=>c.charCodeAt(0)<32)}
-function opusBackupDir(u){return path.join(OPUS_BACKUP_ROOT,u.id)}
-function opusBackupIndex(u){
- try{const rows=JSON.parse(fs.readFileSync(path.join(opusBackupDir(u),'index.json'),'utf8'));
-  return Array.isArray(rows)?rows.filter(b=>validOpusWorldId(b.id)&&/^[0-9]{13}-[a-f0-9]{8}$/.test(b.version)&&Number.isSafeInteger(b.size)):[]}
- catch{return []}
-}
-function opusFileName(id,version){return crypto.createHash('sha256').update(id).digest('hex').slice(0,40)+'-'+version+'.world'}
-async function opusGuests(){
- const r=await fetch('http://127.0.0.1:4173/__players',{signal:AbortSignal.timeout(3500)});
- if(!r.ok)throw Error('Servidor do mundo indisponível');
- const data=await r.json();
- return (Array.isArray(data.players)?data.players:[]).filter(p=>typeof p.name==='string'&&Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.z));
-}
-
 function opusBuildId(){
  try{return fs.readFileSync(path.join(OPUSCRAFT_ROOT,'GFC-BUILD-ID.txt'),'utf8').trim().slice(0,48)}
  catch{return 'unversioned'}
 }
 const opusGateway={attempts:0,accepted:0,forwarded:0,lastAttempt:null,lastForwarded:null,lastFailure:''};
-function opusName(u){return (u.role==='admin'?'ADM_':'KID_')+String(u.id).replace(/[^a-f0-9]/gi,'').slice(0,12)}
 async function opusStatus(){
- try{const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});const info=await response.json();
-  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),ready:!!info.ready,guests:Number(info.guests)||0,lastSave:info.lastSave||null,error:info.error||'',mode:'vps-persistent',gateway:{...opusGateway},players:[...opusConnections].filter(p=>p.role==='guest'&&p.ws.readyState===1).map(p=>({name:p.user.name,role:p.user.role}))};
- }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),ready:false,guests:0,players:[],gateway:{...opusGateway},error:'Servidor do mundo ainda iniciando',mode:'vps-persistent'}}
+ try{
+  const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});
+  const info=await response.json();
+  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),
+    ready:!!info.ready,mode:'player-hosted',hosting:!!info.hosting,
+    guests:Number(info.guests)||0};
+ }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),
+   ready:false,mode:'player-hosted',hosting:false,guests:0,error:'Relay iniciando'}}
 }
-function launchOpusHost(){
- if(opusHostProcess||!OPUSCRAFT_READY()||!fs.existsSync(path.join(ROOT,'ops','opuscraft-relay.mjs')))return;
- const child=spawn(process.execPath,[path.join(ROOT,'ops','opuscraft-host.cjs')],{cwd:ROOT,env:process.env,stdio:['ignore','inherit','inherit','ipc']});
- opusHostProcess=child;
- child.on('message',message=>{
-  if(message?.type==='npcLifeLoad'){
-   void sqlStore.loadNpcLife().then(data=>{
-    if(child.connected)child.send({type:'npcLifeRestore',data});
-   }).catch(err=>console.warn('Memória NPC: restauração:',String(err.message).slice(0,120)));
-   return;
-  }
-  if(message?.type==='npcLifeSnapshot'){
-   void sqlStore.saveNpcLife(message.data).catch(err=>
-    console.warn('Memória NPC: gravação:',String(err.message).slice(0,120)));
-   return;
-  }
-  if(message?.type!=='npcAudit')return;
-  const event=sanitizeNpcAudit(message.event);
-  if(!event)return;
-  void sqlStore.appendNpcEvent(event).then(saved=>{
-   if(!saved)return;
-   for(const peer of peers.values())
-    if(peer.user.role==='admin'&&peer.user.enabled&&peer.ws.readyState===1)
-     emit(peer.ws,{type:'npcAudit',event:saved});
-  }).catch(err=>console.warn('Monitor NPC: falha ao gravar evento:',String(err.message).slice(0,150)));
+function launchOpusRelay(){
+ if(opusRelayProcess||!OPUSCRAFT_READY()||
+    !fs.existsSync(path.join(ROOT,'ops','opuscraft-relay.mjs')))return;
+ const child=spawn(process.execPath,[path.join(ROOT,'ops','opuscraft-relay-host.cjs')],
+  {cwd:ROOT,env:process.env,stdio:'inherit'});
+ opusRelayProcess=child;
+ child.on('error',err=>console.error('[OpusCraft Relay]',err?.message));
+ child.on('exit',()=>{
+  if(opusRelayProcess===child)opusRelayProcess=null;
+  setTimeout(launchOpusRelay,6000).unref();
  });
- child.on('error',e=>console.error('[OpusCraft] Processo:',e.message));
- child.on('exit',()=>{if(opusHostProcess===child)opusHostProcess=null;setTimeout(()=>launchOpusHost(),6000).unref()});
 }
 
 // Browser-cacheable, authenticated client assets: privacy-safe code-only files.
@@ -219,102 +190,6 @@ state.sessions.push(s);save();track(u,'entrou');report();return json(res,200,{us
 }
 const auth=checkSession(req);if(!auth)return json(res,401,{error:'Sessão não autorizada'});const {u,s}=auth;
 if(pathname==='/api/me'&&req.method==='GET')return json(res,200,{user:userInfo(u)});
-if(pathname==='/api/opuscraft/players'&&req.method==='GET'){
- try{
-  const online=await opusGuests();
-  return json(res,200,{me:opusName(u),players:online.map(p=>{
-   const member=state.users.find(v=>v.enabled&&opusName(v)===p.name);
-   return member?{name:member.name,id:p.name,dimension:p.dimension,mode:p.mode,
-    x:p.x,y:p.y,z:p.z,self:member.id===u.id}:null;
-  }).filter(Boolean)});
- }catch{return json(res,503,{error:'Não foi possível consultar os jogadores deste mundo'})}
-}
-if(pathname==='/api/opuscraft/teleport'&&req.method==='POST'){
- const body=await readBody(req),target=String(body.to||'');
- const current=now();
- if(current-(lastOpusTeleport.get(u.id)||0)<6000)return json(res,429,{error:'Aguarde alguns segundos para teleportar novamente'});
- if(target===opusName(u)||!state.users.some(v=>v.enabled&&opusName(v)===target))
-  return json(res,400,{error:'Escolha outro jogador da família'});
- if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
-  return json(res,403,{error:'Você precisa estar no servidor da família'});
- try{
-  const players=await opusGuests(),from=players.find(p=>p.name===opusName(u)),to=players.find(p=>p.name===target);
-  if(!from||!to||from.dimension!==to.dimension)return json(res,409,{error:'Os dois precisam estar no mesmo mundo e dimensão'});
-  const r=await fetch('http://127.0.0.1:4173/__teleport',{
-   method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:opusName(u),to:target}),
-   signal:AbortSignal.timeout(3500)
-  });
-  const data=await r.json();
-  if(!data.ok)return json(res,409,{error:data.error||'Não foi possível teleportar'});
-  lastOpusTeleport.set(u.id,current);
-  return json(res,200,{ok:true,dimension:data.dimension});
- }catch{return json(res,503,{error:'Mundo ocupado. Tente novamente em alguns instantes'})}
-}
-// Family-world privileged controls: never trust the target or the operator's
-// name from the browser. Identity is derived from the signed-in ADM session.
-if(pathname==='/api/admin/opuscraft/summon'&&req.method==='POST'){
- if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
- const current=now();
- if(current-(lastOpusTeleport.get(u.id)||0)<8000)return json(res,429,{error:'Aguarde 8 segundos entre teletransportes'});
- if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
-  return json(res,409,{error:'Entre primeiro no servidor da família'});
- const body=await readBody(req,350),target=String(body.to||'');
- if(!state.users.some(v=>v.role==='child'&&v.enabled&&opusName(v)===target))
-  return json(res,400,{error:'Selecione uma criança da família'});
- try{
-  const players=await opusGuests(),admin=players.find(p=>p.name===opusName(u)),child=players.find(p=>p.name===target);
-  if(!admin||!child||admin.dimension!==child.dimension)
-   return json(res,409,{error:'O ADM e a criança precisam estar no mesmo mundo e dimensão'});
-  const r=await fetch('http://127.0.0.1:4173/__summon',{
-   method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({from:opusName(u),to:target}),signal:AbortSignal.timeout(4000)
-  });
-  const result=await r.json();
-  if(!result.ok)return json(res,409,{error:result.error||'Não foi possível trazer o jogador'});
-  lastOpusTeleport.set(u.id,current);
-  return json(res,200,{ok:true});
- }catch{return json(res,503,{error:'Servidor familiar ocupado, tente novamente'})}
-}
-if(pathname==='/api/admin/opuscraft/world-control'&&req.method==='POST'){
- if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
- if(![...opusConnections].some(p=>p.user.id===u.id&&p.role==='guest'&&p.ws.readyState===1))
-  return json(res,409,{error:'Entre primeiro no servidor da família'});
- const body=await readBody(req,350);
- if(!(['day','night','sunrise','sunset'].includes(body.time)&&body.weather===undefined||
-   ['clear','rain'].includes(body.weather)&&body.time===undefined))
-  return json(res,400,{error:'Selecione dia, noite, amanhecer, pôr do sol, sol ou chuva'});
- try{
-  const r=await fetch('http://127.0.0.1:4173/__world-control',{
-   method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({from:opusName(u),...(body.time?{time:body.time}:{weather:body.weather})}),
-   signal:AbortSignal.timeout(6000)
-  });
-  const result=await r.json();
-  return json(res,result.ok?200:409,result.ok?{ok:true,...result}:{error:result.error||'Comando indisponível'});
- }catch{return json(res,503,{error:'Não foi possível alterar o tempo no mundo agora'})}
-}
-// The invisible host provides diagnostics to authorized ADM accounts.
-if(pathname==='/api/admin/opuscraft/npc'&&req.method==='GET'){
- if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
- try{
-  const r=await fetch('http://127.0.0.1:4173/__npc/status',{signal:AbortSignal.timeout(3500)});
-  if(!r.ok)return json(res,503,{error:'A personagem ainda nao esta disponivel'});
-  return json(res,200,await r.json());
- }catch{return json(res,503,{error:'Servidor da familia indisponivel'})}
-}
-if(pathname==='/api/admin/opuscraft/npc/events'&&req.method==='GET'){
- if(u.role!=='admin')return json(res,403,{error:'Somente administrador'});
- try{
-  const query=new URL(req.url,'http://local').searchParams;
-  const after=Number(query.get('after')||0);
-  if(!Number.isSafeInteger(after)||after<0)return json(res,400,{error:'Cursor inválido'});
-  const data=await sqlStore.listNpcEvents(after,60);
-  return json(res,200,data);
- }catch(err){
-  console.warn('Monitor NPC: erro ao consultar histórico:',String(err.message).slice(0,130));
-  return json(res,503,{error:'Histórico temporariamente indisponível'});
- }
-}
 if(pathname==='/api/opuscraft/world-backups'&&req.method==='GET'){
  return json(res,200,{backups:opusBackupIndex(u).sort((a,b)=>b.created.localeCompare(a.created))});
 }
@@ -358,12 +233,7 @@ if(opusDownload&&req.method==='GET'){
   res.end(bytes);
  });
 }
-if(pathname==='/api/opuscraft/identity'&&req.method==='GET')return json(res,200,{playerName:opusName(u),joinCode:'GFC2026X'});
 if(pathname==='/api/opuscraft/status'&&req.method==='GET')return json(res,200,await opusStatus());
-if(pathname==='/api/admin/opuscraft/status'&&req.method==='GET'){
- if(u.role!=='admin')return json(res,403,{error:'Somente responsavel'});
- return json(res,200,await opusStatus());
-}
 const gameCover=pathname.match(/^\/api\/game-covers\/(pong|snake|minecraft)$/);
 if(gameCover&&req.method==='GET'){
  const slug=gameCover[1],custom=coverPath(slug),target=fs.existsSync(custom)?custom:defaultCoverPath(slug);
@@ -471,7 +341,7 @@ server.on('upgrade',(req,socket,head)=>{
  if(pathname==='/__mp'||pathname==='/ws'&&new URL(req.url,'http://local').searchParams.get('opus')==='1'){
   opusGateway.attempts++;opusGateway.lastAttempt=new Date().toISOString();
   const role=new URL(req.url,'http://local').searchParams.get('role');
-  if(!['guest','list'].includes(role)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return}
+  if(!['host','guest','list'].includes(role)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return}
   opusWss.handleUpgrade(req,socket,head,ws=>opusWss.emit('connection',ws,{...auth,role}));return;
  }
  wss.handleUpgrade(req,socket,head,ws=>wss.emit('connection',ws,auth))
@@ -519,5 +389,5 @@ async function boot(){try{const result=await sqlStore.start(DB,data=>{state=data
   void sqlStore.pruneNpcEvents().catch(e=>console.warn('Monitor NPC: retenção:',String(e.message).slice(0,120)));
   setInterval(()=>void sqlStore.pruneNpcEvents().catch(e=>console.warn('Monitor NPC: retenção:',String(e.message).slice(0,120))),6*60*60*1000).unref();
  }
- server.listen(PORT,HOST,()=>{console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local'));launchOpusHost()})}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
+ server.listen(PORT,HOST,()=>{console.log('GamesForChildren rodando em '+HOST+':'+PORT+' | Persistência '+(result.enabled?'MySQL':'JSON local'));launchOpusRelay()})}catch(e){console.error('Banco de dados não inicializado:',e.message);process.exitCode=1}}
 boot();

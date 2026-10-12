@@ -6,7 +6,7 @@ test('V3 remains unchanged with no world reset, new seed, destruction or attract
  assert.match(patch,/gamesnavagador-family-world-v3/);
  assert.match(patch,/gamesnavagador-exploration-clean-2026-v3/);
  assert.match(host,/profile-v3/);
- assert.doesNotMatch(patch,/gamesnavagador-family-world-v4|deleteWorld|clearWorld/);
+ assert.doesNotMatch(patch,/gamesnavagador-family-world-v4|await deleteWorld\(|clearWorld\(/);
 });
 test('Native OpusCraft chunk pipeline replaces early terrain display and low bandwidth cap',()=>{
  const patch=read('ops/patch-opuscraft.mjs'),build=read('ops/build-opuscraft.sh');

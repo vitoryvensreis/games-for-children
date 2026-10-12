@@ -204,7 +204,8 @@ export {World,Chunk,Level,HostServer,encode,decode,offlinePlayerUuid,SB,CB,saveP
  const playerDir=path.join(temp,'players');
  writePlayer(playerDir,uuid,savedPlayer);
  const loadedPlayer=readPlayer(playerDir,uuid);
- assert.deepEqual(loadedPlayer,savedPlayer);
+ assert.deepEqual(loadedPlayer,JSON.parse(JSON.stringify(savedPlayer)),
+  'JSON roundtrip intentionally omits undefined optional player fields');
  assert.ok(Array.isArray(loadedPlayer.inventory));
  assert.ok(Array.isArray(loadedPlayer.armor));
  assert.throws(()=>readPlayer(playerDir,'../bad'),/Invalid UUID/);

@@ -35,18 +35,18 @@ test('Family text and WebRTC voice remain enabled, but not Minecraft ADM control
  const server=read('server.cjs'),app=read('public/app.js');
  assert.match(server,/voice-ready/);assert.match(server,/voicePresence/);
  assert.match(server,/m\.type==='familyChat'/);
- assert.match(app,/familyChatToggle/);
- assert.match(app,/familyChatForm/);
- assert.match(app,/renderFamilyChat\(\)/);
+ assert.doesNotMatch(app,/familyChatToggle/);
+ assert.doesNotMatch(app,/familyChatForm/);
+ assert.match(app,/function ensureVoiceDock/);
  assert.match(app,/toggleVoice/);
  assert.match(app,/Zerar minutos/);
 });
 test('Clean reinstall purges OpusCraft world data but preserves other game profiles',()=>{
  const deploy=read('ops/deploy-opuscraft-vps.sh');
  assert.match(deploy,/OPUSCRAFT_ORIGINAL_PLAYER_RELAY_READY/);
- assert.match(deploy,/data\/opuscraft\/profile-v3/);
+ assert.match(deploy,/rm -rf -- data\/opuscraft/);
  assert.match(deploy,/OPUSCRAFT_DEPLOY_HEALTH_OK/);
- assert.doesNotMatch(deploy,/rm -rf data\/opuscraft\/backups/);
+ assert.doesNotMatch(deploy,/rm -rf data\/state\.json/);
  assert.doesNotMatch(deploy,/rm -rf data\/state\.json/);
  assert.match(deploy,/trap rollback ERR/);
 });

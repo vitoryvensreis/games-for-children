@@ -2,18 +2,15 @@
 set -Eeuo pipefail
 cd /home/gamesforchildren/apps/games-for-children
 mkdir -p backup
+# Save app files for rollback; do NOT include/alter profiles of other games.
 cp -f server.cjs backup/server-pre-opuscraft.cjs
 cp -f package.json backup/package-pre-opuscraft.json
 if test -d public; then rm -rf backup/public-pre-opuscraft; cp -a public backup/public-pre-opuscraft; fi
 if test -d ops; then rm -rf backup/ops-pre-opuscraft; cp -a ops backup/ops-pre-opuscraft; fi
-if test -d vendor/mcgalaxy && ! test -s backup/classicube-legacy.tar.gz; then
- tar -czf backup/classicube-legacy.tar.gz -C vendor/mcgalaxy levels properties bots
- test -s backup/classicube-legacy.tar.gz
-fi
 NPM=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm
 NODEBIN=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin
 rollback(){
- echo "OPUSCRAFT_DEPLOY_FAILED_ROLLBACK"
+ echo "OPUSCRAFT_PLAYER_HOST_DEPLOY_ROLLBACK"
  cp -f backup/server-pre-opuscraft.cjs server.cjs
  cp -f backup/package-pre-opuscraft.json package.json
  if test -d backup/public-pre-opuscraft; then rm -rf public; cp -a backup/public-pre-opuscraft public; fi
@@ -22,68 +19,41 @@ rollback(){
  sudo -n /usr/bin/systemctl restart games-for-children.service || true
 }
 trap rollback ERR
-# Deploy account is allowed to restart, but not to stop/start separately.
-# Keep the original process serving until its replacement has been installed.
-# A live snapshot is supplemental; the original persistent profile is never deleted.
-# The browser flushes its world during the permitted service restart.
-if test -d data/opuscraft/profile; then
- # Immutable recovery point before the ONE-TIME switch to the V2 family town.
- # The browser profile contains world chunks, inventories, and landmark metadata.
- # Never wipe the profile; the original V1 world remains in IndexedDB.
- if ! test -s backup/opuscraft-family-v1-pre-v2.tar.gz; then
-  tar -czf backup/opuscraft-family-v1-pre-v2.tar.gz -C data/opuscraft profile
-  test -s backup/opuscraft-family-v1-pre-v2.tar.gz
-  echo "OPUSCRAFT_FAMILY_V1_ARCHIVED_BEFORE_V2"
- fi
- tar -czf backup/opuscraft-profile-latest.tar.gz -C data/opuscraft profile
-fi
-if test -d data/opuscraft/profile-v2; then
- # Keep V2 unmodified and take a permanent snapshot BEFORE the clean V3 switch.
- if ! test -s backup/opuscraft-family-v2-pre-v3.tar.gz; then
-  tar -czf backup/opuscraft-family-v2-pre-v3.tar.gz -C data/opuscraft profile-v2
-  test -s backup/opuscraft-family-v2-pre-v3.tar.gz
-  echo "OPUSCRAFT_V2_ARCHIVED_BEFORE_V3"
- fi
- tar -czf backup/opuscraft-v2-profile-latest.tar.gz -C data/opuscraft profile-v2
-fi
-if test -d data/opuscraft/profile-v3; then
- tar -czf backup/opuscraft-v3-profile-latest.tar.gz -C data/opuscraft profile-v3
-fi
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
 sudo -n /usr/bin/systemctl restart games-for-children.service
 ready=0
-for attempt in $(seq 1 110); do
+for attempt in $(seq 1 90); do
  if curl -fsS --max-time 3 http://127.0.0.1:3100/api/health | grep -q '"ok":true' &&
-    curl -fsS --max-time 3 http://127.0.0.1:4173/__health | grep -q '"ready":true' &&
-    curl -fsS --max-time 3 http://127.0.0.1:4173/__health | grep -Eq '"lastSave":"20[0-9][0-9]-'; then
-  ready=1
-  break
+    curl -fsS --max-time 3 http://127.0.0.1:4173/__health | grep -q '"mode":"player-hosted"' &&
+    test -s public/opuscraft/index.html &&
+    test -s ops/opuscraft-relay.mjs; then
+  ready=1;break
  fi
  sleep 2
 done
 if test "$ready" -ne 1; then
- echo "OpusCraft did not demonstrate live multiplayer AND persisted world"
- curl -fsS --max-time 3 http://127.0.0.1:4173/__health || true
+ echo "Original OpusCraft or authenticated player relay did not start"
  /usr/bin/journalctl --no-pager -u games-for-children.service -n 90 || true
  false
 fi
-# The replacement is a fresh, unmodified family world. All V1/V2 profiles
-# remain on disk and the V2 profile was archived before this migration.
-status="$(curl -fsS --max-time 6 http://127.0.0.1:4173/__npc/status)"
-printf '%s' "$status" | grep -q '"worldId":"gamesnavagador-family-world-v3"' || {
- echo "New V3 family world did not start";false;
-}
-printf '%s' "$status" | grep -q '"worldAttractions":null' || {
- echo "Legacy attraction builder still active";false;
-}
-echo "OPUSCRAFT_V3_CLEAN_WORLD_NO_ATTRACTIONS_OK"
-echo "OPUSCRAFT_PERMANENT_WORLD_READY"
-curl -fsS --max-time 3 http://127.0.0.1:4173/__health
-# Retire only obsolete runtime/files after the replacement world passes health checks.
-# Preserve all world/data directories, JSON state, IndexedDB profiles and backups.
-# MCGalaxy world/config files were archived earlier as backup/classicube-legacy.tar.gz.
-rm -rf public/classicube vendor/mcgalaxy
-rm -f database/family-village.cjs database/exploration-world.cjs database/mining-world.cjs database/family-play.cjs database/minecraft-control.cjs ops/CLASSICUBE.md
+echo "OPUSCRAFT_ORIGINAL_PLAYER_RELAY_READY"
+curl -fsS http://127.0.0.1:4173/__health
+# Only after a HEALTHY replacement, retire the old dedicated family server
+# profiles, which the user explicitly authorized wiping. Never touch personal
+# per-child upload backups, profiles for other games or the family voice data.
+for obsolete in data/opuscraft/profile data/opuscraft/profile-v2 data/opuscraft/profile-v3; do
+ if test -d "$obsolete"; then rm -rf -- "$obsolete"; fi
+done
+# Old family-world snapshots only. The separate per-user "backups" directory
+# is intentionally kept because it may contain independent personal worlds.
+rm -f backup/opuscraft-family-v1-pre-v2.tar.gz backup/opuscraft-family-v2-pre-v3.tar.gz \
+ backup/opuscraft-profile-latest.tar.gz backup/opuscraft-v2-profile-latest.tar.gz \
+ backup/opuscraft-v3-profile-latest.tar.gz
+rm -f ops/opuscraft-host.cjs ops/gfc-npc.ts ops/gfc-family-client.ts \
+ ops/gfc-adaptive-quality.ts ops/gfc-world-backup.ts \
+ ops/patch-opuscraft.mjs ops/patch-opuscraft-host-cpu.mjs \
+ ops/patch-opuscraft-mesh.mjs ops/gfc-leaf-merge.ts ops/opuscraft-cpu-smoke.cjs
 trap - ERR
+echo "OPUSCRAFT_OLD_FAMILY_HOST_RETIRED"
 echo "OPUSCRAFT_DEPLOY_HEALTH_OK"

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
 const upstream=process.argv[2],output=process.argv[3];
 if(!upstream||!output||!fs.existsSync(path.join(upstream,'src/game/level.ts')))
  throw Error('Usage: node build-dedicated-engine.mjs UPSTREAM_DIR OUTPUT_FILE');
@@ -13,6 +14,19 @@ const requireUpstream=createRequire(path.join(upstream,'package.json'));
 const {build}=requireUpstream('esbuild');
 const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'opuscraft-dedicated-entry-'));
 try {
+ // Match Vite's upstream build-id plugin: hash every src file, path and
+ // contents, in sorted directory order. Client and dedicated Node must agree.
+ const hash=createHash('sha256');
+ const root=path.join(upstream,'src');
+ function walk(dir){
+  for(const item of fs.readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0)){
+   const file=path.join(dir,item.name);
+   if(item.isDirectory())walk(file);
+   else hash.update(file.slice(upstream.length)).update(fs.readFileSync(file));
+  }
+ }
+ walk(root);
+ const buildId=hash.digest('hex').slice(0,16);
  const imp=(p)=>JSON.stringify(path.join(upstream,'src',p).replaceAll('\\','/'));
  const entry=path.join(tmp,'entry.ts');
  fs.writeFileSync(entry,[
@@ -27,7 +41,7 @@ try {
  fs.mkdirSync(path.dirname(output),{recursive:true});
  await build({entryPoints:[entry],outfile:output,bundle:true,format:'esm',
   platform:'node',target:'node24',logLevel:'warning',
-  define:{__BUILD_ID__:JSON.stringify('headless-dedicated-v1')}});
+  define:{__BUILD_ID__:JSON.stringify(buildId)}});
  if(!fs.statSync(output).size)throw Error('Empty dedicated engine bundle');
- console.log('OPUSCRAFT_DEDICATED_ENGINE_BUNDLE_OK');
+ console.log('OPUSCRAFT_DEDICATED_ENGINE_BUNDLE_OK',buildId);
 }finally{fs.rmSync(tmp,{recursive:true,force:true})}

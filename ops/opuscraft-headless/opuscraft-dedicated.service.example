@@ -1,0 +1,29 @@
+# Experimental dedicated OpusCraft service — NOT installed automatically.
+# Copy only after reviewing paths, runtime permissions and the deployment plan.
+# The production GamesNavagador server must have the SAME environment token.
+[Unit]
+Description=GamesNavagador OpusCraft dedicated experimental world
+After=network.target
+
+[Service]
+Type=simple
+User=gamesforchildren
+Group=gamesforchildren
+WorkingDirectory=/home/gamesforchildren/experiments/minecraft-dedicated
+EnvironmentFile=/home/gamesforchildren/.config/opuscraft-dedicated.env
+ExecStart=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/node ops/opuscraft-headless/run-dedicated.cjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+UMask=0077
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/gamesforchildren/experiments/minecraft-world
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

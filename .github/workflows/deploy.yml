@@ -1,4 +1,6 @@
-name: Deploy GamesForChildren
+name: GamesNavagador | Validação e deploy
+# Each run reflects the PR milestone and commit instead of repeating the WIP title.
+run-name: "${{ github.event_name == 'pull_request' && format('PR #{0}: {1} [{2}]', github.event.pull_request.number, github.event.pull_request.title, github.event.pull_request.head.sha) || github.event.head_commit.message || 'Execução manual GamesNavagador' }}"
 on:
   push:
     branches: [main]
@@ -15,6 +17,7 @@ concurrency:
 
 jobs:
   validate:
+    name: "Validação essencial: jogos, engine Node e cliente"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -23,37 +26,23 @@ jobs:
         with:
           node-version: '24'
       - run: npm install --no-audit --no-fund
-      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-relay-host.cjs && node --check ops/opuscraft-browser-relay-smoke.cjs && node --check ops/opuscraft-browser-host-smoke.cjs
-      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-browser-host.cjs
-      - name: Build unmodified upstream OpusCraft
+      - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-headless/run-dedicated.cjs && node --check ops/opuscraft-headless/pilot-gateway.cjs
+      - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs
+      - run: bash -n ops/opuscraft-headless/activate-existing-site.sh
+      - name: Build upstream OpusCraft + integration of original Node engine
         run: bash ops/build-opuscraft.sh
+      - name: First playable dedicated browser (single end-to-end check)
+        run: node ops/opuscraft-dedicated-browser-smoke.cjs
       - name: Verify vanilla client and relay assets
         run: |
           test -s public/opuscraft/index.html
           test -s public/opuscraft/UPSTREAM-COMMIT.txt
           test -s ops/opuscraft-relay.mjs
           grep -q '/opuscraft/assets/' public/opuscraft/index.html
-      - name: Browser-hosted transport smoke (no VPS Chromium)
-        shell: bash
-        run: |
-          set -euo pipefail
-          node ops/opuscraft-relay-host.cjs >/tmp/opuscraft-relay.log 2>&1 &
-          RELAY_PID=$!
-          trap 'kill "$RELAY_PID" 2>/dev/null || true' EXIT
-          ready=0
-          for attempt in $(seq 1 30); do
-            if curl -fsS --max-time 2 http://127.0.0.1:4173/__health 2>/dev/null | grep -q '"mode":"player-hosted"'; then
-              ready=1;break
-            fi
-            sleep 1
-          done
-          if test "$ready" -ne 1; then cat /tmp/opuscraft-relay.log; exit 1; fi
-          node ops/opuscraft-browser-relay-smoke.cjs
-          node ops/opuscraft-browser-host-smoke.cjs
-          echo "OPUSCRAFT_NO_DEDICATED_WORLD_HOST_OK"
 
 
   deploy:
+    name: "Publicar produção (somente main autorizado)"
     needs: validate
     if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.ENABLE_DEPLOY == 'true' && vars.APP_READY == 'true' }}
     runs-on: ubuntu-latest

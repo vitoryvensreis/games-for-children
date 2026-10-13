@@ -83,6 +83,9 @@ async function openOpusCraft(){
   if(!status.available){notify('O OpusCraft original ainda não foi instalado.');return}
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
+  // Always open the original Minecraft title screen. Players decide whether
+  // to create singleplayer worlds or enter multiplayer from inside OpusCraft.
+  // Dedicated server remains available only via explicit opt-in, never auto-join.
   app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft original">'+
    '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+
     encodeURIComponent(status.clientVersion||'live')+'" title="OpusCraft original" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+

@@ -109,14 +109,15 @@ function opusBuildId(){
  catch{return 'unversioned'}
 }
 const opusGateway={attempts:0,accepted:0,forwarded:0,lastAttempt:null,lastForwarded:null,lastFailure:''};
+const dedicatedEnabled=()=>Boolean((process.env.OPUSCRAFT_DEDICATED_TOKEN||'').length>=32&&process.env.OPUSCRAFT_JOIN_CODE);
 async function opusStatus(){
  try{
   const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});
   const info=await response.json();
-  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),
+  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),dedicatedEnabled:dedicatedEnabled(),dedicatedJoinCode:dedicatedEnabled()?process.env.OPUSCRAFT_JOIN_CODE:null,
     ready:!!info.ready,mode:'player-hosted',hosting:!!info.hosting,
     guests:Number(info.guests)||0};
- }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),
+ }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),dedicatedEnabled:dedicatedEnabled(),dedicatedJoinCode:dedicatedEnabled()?process.env.OPUSCRAFT_JOIN_CODE:null,
    ready:false,mode:'player-hosted',hosting:false,guests:0,error:'Relay iniciando'}}
 }
 function launchOpusRelay(){
@@ -309,8 +310,16 @@ fs.readFile(fp,(err,b)=>{if(err){res.writeHead(404);return res.end('Não encontr
 const opusWss=new WebSocketServer({noServer:true,maxPayload:20*1024*1024});
 opusWss.on('connection',(ws,ctx)=>{
  opusGateway.accepted++;
- const {u,s,role}=ctx,p={ws,remote:null,session:s,user:u,role};opusConnections.add(p);
- const remote=new WebSocket('ws://127.0.0.1:4173/__mp?role='+role,{headers:{Origin:'http://127.0.0.1:4173'},maxPayload:20*1024*1024,perMessageDeflate:false});
+ const {u,s,role,dedicated=false}=ctx,p={ws,remote:null,session:s,user:u,role};opusConnections.add(p);
+ // Browser never receives the internal service token. Only this authenticated
+ // application gateway is allowed to connect to the localhost dedicated host.
+ const internalToken=process.env.OPUSCRAFT_DEDICATED_TOKEN||'';
+ const target=dedicated
+  ? 'ws://127.0.0.1:4185/?token='+encodeURIComponent(internalToken)
+  : 'ws://127.0.0.1:4173/__mp?role='+role;
+ if(dedicated&&internalToken.length<32){ws.close(1013,'Dedicated server not configured');opusConnections.delete(p);return}
+ const remote=new WebSocket(target,{headers:{Origin:'http://127.0.0.1:'+(dedicated?'4185':'4173')},
+  maxPayload:20*1024*1024,perMessageDeflate:false});
  p.remote=remote;let queued=[],queuedBytes=0;
  const done=()=>{opusConnections.delete(p);if(ws.readyState<2)ws.close();if(remote.readyState<2)remote.close()};
  remote.on('open',()=>{
@@ -331,13 +340,17 @@ const wss=new WebSocketServer({noServer:true,maxPayload:8192});
 server.on('upgrade',(req,socket,head)=>{
  const pathname=new URL(req.url,'http://local').pathname;
  const origin=req.headers.origin;
- if(pathname!=='/ws'&&pathname!=='/__mp'||origin!=='https://gamesforchildren.escotilhaprodutora.com'){
+ if(!['/ws','/__mp','/__dedicated'].includes(pathname)||origin!=='https://gamesforchildren.escotilhaprodutora.com'){
    console.warn('[WS] Rejeitado: caminho/origem',pathname,origin||'(ausente)');
    socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return;
  }
  const auth=checkSession(req);
  if(!auth){console.warn('[WS] Rejeitado: sessão ausente ou inválida');socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');socket.destroy();return}
  console.log('[WS] Upgrade aceito para papel:',auth.u.role);
+ if(pathname==='/__dedicated'){
+  opusWss.handleUpgrade(req,socket,head,ws=>opusWss.emit('connection',ws,{...auth,role:'dedicated',dedicated:true}));
+  return;
+ }
  if(pathname==='/__mp'||pathname==='/ws'&&new URL(req.url,'http://local').searchParams.get('opus')==='1'){
   opusGateway.attempts++;opusGateway.lastAttempt=new Date().toISOString();
   const role=new URL(req.url,'http://local').searchParams.get('role');

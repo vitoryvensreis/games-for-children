@@ -41,16 +41,31 @@ mainSource=mainSource.replace(oldJoin,`  } else if (mp === 'dedicated') {
 fs.writeFileSync(mainFile,mainSource);
 console.log('OPUSCRAFT_EXPERIMENTAL_DEDICATED_BROWSER_JOIN_ENABLED');
 
-// Add a visible, explicit dedicated choice without removing LAN/relay worlds.
+// Present the always-on world as a normal Multiplayer server-list row.
 const multiFile=path.join(dir,'src/gui/screens/multiplayer.ts');
 let multiSource=fs.readFileSync(multiFile,'utf8');
-const joinButtonAnchor="    this.add(new Button(cx - 100, this.height - 28, 200, 20, 'Back', () => this.onClose()));";
-if(multiSource.split(joinButtonAnchor).length!==2)throw Error('Upstream multiplayer UI changed');
-multiSource=multiSource.replace("this.width, 48, this.height - 112","this.width, 48, this.height - 140");
-multiSource=multiSource.replace(joinButtonAnchor,`    this.add(new Button(cx - 154, this.height - 84, 308, 20, 'Mundo da Familia - 24h', () => {
-      if (!this.nameOk()) return;
-      void this.game.joinWorld({ via: 'dedicated' }, guestIdentity(this.game, this.name, 'ABCD1234'));
-    }));
-`+joinButtonAnchor);
+function patchOnce(from,to){
+ if(multiSource.split(from).length!==2)throw Error('Upstream multiplayer UI changed: '+from.slice(0,50));
+ multiSource=multiSource.replace(from,to);
+}
+patchOnce("type Heard = { world: LanWorld; via: 'browser' | 'relay' };",
+ "type Heard = { world: LanWorld; via: 'browser' | 'relay' | 'dedicated' };");
+patchOnce("const where = e.via === 'browser' ? 'Another window of this browser' : `At ${location.host}`;",
+ "const where = e.via === 'dedicated' ? 'Online 24h - Mundo compartilhado' : e.via === 'browser' ? 'Another window of this browser' : `At ${location.host}`;");
+patchOnce("const heard: Heard[] = [...mine.map((world) => ({ world, via: 'browser' as const })), ...theirs.map((world) => ({ world, via: 'relay' as const }))];",
+ `const family: Heard = { via: 'dedicated', world: { id:'family-dedicated', name:'Mundo da Familia - 24h', host:'GamesNavagador',
+  players:0, max:16, protocol:PROTOCOL_VERSION, build:BUILD_ID, code:'ABCD1234' } };
+    const heard: Heard[] = [family, ...mine.map((world) => ({ world, via: 'browser' as const })), ...theirs.map((world) => ({ world, via: 'relay' as const }))];`);
+patchOnce("s.via === 'browser' || this.codeOk()","s.via === 'dedicated' || s.via === 'browser' || this.codeOk()");
+patchOnce("const code = h.via === 'browser' ? (h.world.code ?? '') : this.code;",
+ "const code = h.via === 'dedicated' ? (h.world.code ?? '') : h.via === 'browser' ? (h.world.code ?? '') : this.code;");
+patchOnce("if (h.via === 'relay' && !this.codeOk()) return;",
+ "if (h.via === 'relay' && !this.codeOk()) return;");
+patchOnce("h.via === 'browser' ? { via: 'browser', lanId: h.world.id } : { via: 'relay' }",
+ "h.via === 'dedicated' ? { via: 'dedicated' } : h.via === 'browser' ? { via: 'browser', lanId: h.world.id } : { via: 'relay' }");
+patchOnce("if (mx - this.rowLeft() <= 32 || dbl) this.screen.join(e);",
+ "if (mx - this.rowLeft() <= 32 || dbl) this.screen.join(e);");
+patchOnce("this.list = this.add(new LanList(this, this.width, 48, this.height - 112));",
+ "this.list = this.add(new LanList(this, this.width, 48, this.height - 112));");
 fs.writeFileSync(multiFile,multiSource);
-console.log('OPUSCRAFT_DEDICATED_MULTIPLAYER_MENU_ENTRY_ENABLED');
+console.log('OPUSCRAFT_DEDICATED_NATIVE_MULTIPLAYER_LIST_ROW_OK');

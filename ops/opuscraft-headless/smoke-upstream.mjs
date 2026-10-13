@@ -104,6 +104,19 @@ export {World,Chunk,ChunkGenerator,Level,HostServer,encode,decode,offlinePlayerU
     'Real websocket guest must receive native CB.Login; session='+JSON.stringify(
      [...live.host.sessions.values()].map(session=>session.state)));
    assert.equal(live.host.guestCount(),1);
+   // Continue driving the ORIGINAL host with a real socket, until the first
+   // generated terrain column is sent to the connected guest.
+   const chunkDeadline=Date.now()+8000;
+   while(Date.now()<chunkDeadline&&!frames.some(packet=>packet[0]===CB.LevelChunk)){
+    await new Promise(resolve=>setTimeout(resolve,10));
+    live.host.receive();
+    live.level.tick();
+    live.host.tick();
+    frames=received.flatMap(bytes=>bytes[0]===0?decode(bytes.subarray(1),16*1024*1024):[]);
+   }
+   assert.ok(frames.some(packet=>packet[0]===CB.LevelChunk),
+    'Dedicated websocket must stream real generated terrain to guest');
+   console.log('OPUSCRAFT_DEDICATED_SOCKET_LOGIN_AND_TERRAIN_OK');
   }finally{ws.close();live.stop()}
  }finally{await new Promise(resolve=>wss.close(resolve))}
 

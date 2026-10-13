@@ -20,13 +20,17 @@
   !Number.isInteger(port)||port<1024||port>65535||!token||token.length<32)
   throw Error('Absolute worldDir, seed, join code, port and 32+ character token required');
  const wss=new WebSocketServer({host:'127.0.0.1',port,maxPayload:2*1024*1024});
+ wss.on('error',err=>{console.error('[Dedicated websocket]',err);process.exitCode=1});
  const runtime=createDedicatedRuntime({
   engine,wss,worldDir,seed,joinCode,gameMode,
   authenticate:req=>new URL(req.url,'http://localhost').searchParams.get('token')===token
  });
  runtime.start();
+ const report=setInterval(()=>console.log('OPUSCRAFT_DEDICATED_STATUS',JSON.stringify(runtime.status())),30000);
+ report.unref();
  console.log('EXPERIMENTAL_NODE_OPUSCRAFT_READY '+JSON.stringify({port,worldDir}));
  function shutdown(){
+  clearInterval(report);
   try{runtime.stop()}finally{wss.close()}
  }
  process.once('SIGINT',shutdown);

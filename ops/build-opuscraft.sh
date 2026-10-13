@@ -17,12 +17,12 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  # Branch-only headless integration smoke: real upstream engine in Node without Chromium.
  node "$REPO_ROOT/ops/opuscraft-headless/smoke-upstream.mjs" "$PWD"
  # Experimental dedicated Node engine: creates a reusable module, not just a smoke bundle.
+ node "$REPO_ROOT/ops/patch-opuscraft-trusted-relay.mjs" "$PWD"
  node "$REPO_ROOT/ops/opuscraft-headless/build-dedicated-engine.mjs" "$PWD" "$REPO_ROOT/ops/opuscraft-headless/generated/engine.mjs"
  node --check "$REPO_ROOT/ops/opuscraft-headless/generated/engine.mjs"
 
  # Build original OpusCraft game logic and graphics; adapt only the exact
  # trusted GamesNavagador HTTPS origin for authenticated player hosting.
- node "$REPO_ROOT/ops/patch-opuscraft-trusted-relay.mjs" "$PWD"
  npm run build -- --base=/opuscraft/
 )
 test -s "$TMP/opuscraft/dist/index.html"

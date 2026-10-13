@@ -109,11 +109,12 @@ function opusBuildId(){
  catch{return 'unversioned'}
 }
 const opusGateway={attempts:0,accepted:0,forwarded:0,lastAttempt:null,lastForwarded:null,lastFailure:''};
+const dedicatedEnabled=()=>Boolean((process.env.OPUSCRAFT_DEDICATED_TOKEN||'').length>=32&&process.env.OPUSCRAFT_JOIN_CODE);
 async function opusStatus(){
  try{
   const response=await fetch('http://127.0.0.1:4173/__health',{signal:AbortSignal.timeout(1500)});
   const info=await response.json();
-  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),
+  return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),dedicatedEnabled:dedicatedEnabled(),dedicatedJoinCode:dedicatedEnabled()?process.env.OPUSCRAFT_JOIN_CODE:null,
     ready:!!info.ready,mode:'player-hosted',hosting:!!info.hosting,
     guests:Number(info.guests)||0};
  }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),

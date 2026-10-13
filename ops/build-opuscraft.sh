@@ -17,6 +17,7 @@ test "$(git -C "$TMP/opuscraft" rev-parse HEAD)" = "$UPSTREAM"
  # Branch-only headless integration smoke: real upstream engine in Node without Chromium.
  node "$REPO_ROOT/ops/opuscraft-headless/smoke-upstream.mjs" "$PWD"
  # Experimental dedicated Node engine: creates a reusable module, not just a smoke bundle.
+ node "$REPO_ROOT/ops/patch-opuscraft-dedicated-effects.mjs" "$PWD"
  node "$REPO_ROOT/ops/patch-opuscraft-trusted-relay.mjs" "$PWD"
  node "$REPO_ROOT/ops/opuscraft-headless/build-dedicated-engine.mjs" "$PWD" "$REPO_ROOT/ops/opuscraft-headless/generated/engine.mjs"
  node --check "$REPO_ROOT/ops/opuscraft-headless/generated/engine.mjs"

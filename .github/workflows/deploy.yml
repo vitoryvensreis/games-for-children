@@ -28,6 +28,7 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-headless/run-dedicated.cjs && node --check ops/opuscraft-headless/pilot-gateway.cjs
       - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs
+      - run: bash -n ops/opuscraft-headless/activate-existing-site.sh
       - name: Build upstream OpusCraft + integration of original Node engine
         run: bash ops/build-opuscraft.sh
       - name: First playable dedicated browser (single end-to-end check)

@@ -47,7 +47,7 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
  generateChunk(0,0);
  const spawnY=Math.max(-62,Math.min(318,world.heightAt(0,0)+2));
  const demand=createChunkDemand({isLoaded:(x,z)=>!!world.getChunk(x,z),generate:generateChunk});
- demand.requestAround(0,0,1);
+ demand.requestAround(0,0,3);
  const transport=createWebSocketTransport(wss,{authenticate,opuscraftGuestFrames:true});
  const hooks={
   spawnPoint:()=>[0,spawnY,0],hostName:()=>hostName,worldName:()=>worldName,
@@ -69,12 +69,12 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
  let tickIndex=0;
  const ticker=new HeadlessTicker({tick:()=>{
   host.receive();
-  // Queue only around authenticated, playable guests; generate at most one
+  // Queue sufficient spawn-area terrain for client render readiness; generate at most one
   // column every 10 ticks, keeping the exploration backlog bounded.
   if(++tickIndex%10===0){
    for(const session of host.sessions.values()){
     if(session.state==='play'&&session.player)
-     demand.requestAround(session.player.x,session.player.z,1);
+     demand.requestAround(session.player.x,session.player.z,3);
    }
    demand.pump();
   }

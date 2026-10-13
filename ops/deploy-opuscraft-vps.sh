@@ -42,17 +42,8 @@ if test "$ready" -ne 1; then
 fi
 echo "OPUSCRAFT_ORIGINAL_PLAYER_RELAY_READY"
 curl -fsS http://127.0.0.1:4173/__health
-# Reinstall the vanilla client cleanly: purge ALL previous OpusCraft
-# world data and family-world snapshots only after the healthy replacement.
-# Never remove shared data/state.json, SQL profiles, voice/chat or other games.
-if test -d data/opuscraft; then rm -rf -- data/opuscraft; fi
-rm -f backup/opuscraft-family-v1-pre-v2.tar.gz backup/opuscraft-family-v2-pre-v3.tar.gz \
- backup/opuscraft-profile-latest.tar.gz backup/opuscraft-v2-profile-latest.tar.gz \
- backup/opuscraft-v3-profile-latest.tar.gz
-rm -f ops/opuscraft-host.cjs ops/gfc-npc.ts ops/gfc-family-client.ts \
- ops/gfc-adaptive-quality.ts ops/gfc-world-backup.ts \
- ops/patch-opuscraft.mjs ops/patch-opuscraft-host-cpu.mjs \
- ops/patch-opuscraft-mesh.mjs ops/gfc-leaf-merge.ts ops/opuscraft-cpu-smoke.cjs
+# Preserve all legacy OpusCraft worlds, snapshots and auxiliary files.
+# A dedicated experimental world uses its own separate data directory.
 trap - ERR
-echo "OPUSCRAFT_OLD_FAMILY_HOST_RETIRED"
+echo "OPUSCRAFT_EXISTING_WORLD_DATA_PRESERVED"
 echo "OPUSCRAFT_DEPLOY_HEALTH_OK"

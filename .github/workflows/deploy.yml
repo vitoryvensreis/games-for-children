@@ -30,6 +30,8 @@ jobs:
       - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs
       - name: Build upstream OpusCraft + integration of original Node engine
         run: bash ops/build-opuscraft.sh
+      - name: First playable dedicated browser (single end-to-end check)
+        run: node ops/opuscraft-dedicated-browser-smoke.cjs
       - name: Verify vanilla client and relay assets
         run: |
           test -s public/opuscraft/index.html

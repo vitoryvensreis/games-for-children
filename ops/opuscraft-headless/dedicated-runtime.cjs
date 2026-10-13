@@ -9,11 +9,12 @@ const {createChunkDemand}=require('./chunk-demand.cjs');
 const {createWebSocketTransport}=require('./ws-transport.cjs');
 const {readCheckpointWithBackup,writeCheckpoint}=require('./native-checkpoint.cjs');
 const {readPlayer,writePlayer}=require('./native-player-store.cjs');
-function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Family Server',worldName='Family World',authenticate}){
+function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Family Server',worldName='Family World',authenticate,gameMode='survival'}){
  if(!engine?.World||!engine?.Level||!engine?.Chunk||!engine?.HostServer||!engine?.savePlayer||!engine?.ChunkGenerator)
   throw Error('Original upstream world, level, host and player serializer required');
  if(!worldDir||typeof seed!=='string'||!seed||typeof joinCode!=='string'||!joinCode)
   throw Error('World directory, seed and join code required');
+ if(!['survival','creative'].includes(gameMode))throw Error('Invalid experimental game mode');
  const {World,Level,Chunk,HostServer,savePlayer,ChunkGenerator}=engine;
  const generator=new ChunkGenerator(seed);
  const checkpoint=path.join(worldDir,'world.json');
@@ -57,7 +58,7 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
   },
   saveGuest:(uuid,data)=>writePlayer(playerDir,uuid,data)
  };
- const host=new HostServer(level,transport,hooks,{lanId:'family-dedicated',joinCode,announce:false,guestGameMode:'survival'});
+ const host=new HostServer(level,transport,hooks,{lanId:'family-dedicated',joinCode,announce:false,guestGameMode:gameMode});
  function save(){
   // Preserve native column arrays. This alone does NOT yet capture entities,
   // tile entities or scheduled ticks. Do not advertise full survival durability.

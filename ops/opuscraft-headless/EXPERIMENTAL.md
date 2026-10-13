@@ -27,7 +27,7 @@ O serviço escuta **somente** `127.0.0.1:4185`. Não há abertura de porta públ
 O fluxo opt-in preparado é:
 `?minecraft=dedicated&code=ABCD1234` na página principal; ao abrir Minecraft, o iframe usa `/opuscraft/index.html?mp=dedicated&code=ABCD1234`.
 
-A aplicação autentica o upgrade para `/__dedicated` com o cookie de sessão, valida a origem e encaminha o tráfego para `127.0.0.1:4185` com o token interno. **Esse fluxo ainda não foi validado como uma partida WebGL completa.** O serviço não deve ser exposto na internet antes de testar autenticação, carregamento e reconexão.
+A aplicação autentica o upgrade para `/__dedicated` com o cookie de sessão, valida a origem e encaminha o tráfego para `127.0.0.1:4185` com o token interno. **O cliente WebGL já passou na CI com dois navegadores, mas ainda não foi testado pela rota autenticada de produção na VPS.** O serviço não deve ser exposto na internet antes de testar autenticação, carregamento e reconexão.
 
 ## Diagnóstico rápido
 
@@ -38,3 +38,11 @@ A aplicação autentica o upgrade para `/__dedicated` com o cookie de sessão, v
 - Se o navegador permanecer na tela de conexão, checar se o cliente e o servidor foram compilados a partir do **mesmo checkout**, incluindo a identificação de build compartilhada.
 
 O mundo é **descartável** nesta fase: não há garantia de persistência integral de entidades, block entities e ticks. Não usar para construções que precisam ser preservadas.
+
+## Antes de ativar o serviço systemd de teste
+
+Apenas quando decidir publicar um ambiente experimental: confirmar que o Node em `/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/node` ainda existe, que o usuário `gamesforchildren` pode ler o código e que o diretório `/home/gamesforchildren/data/opuscraft-experimental` existe e tem permissão de escrita.
+
+O arquivo de variáveis protegido, `/home/gamesforchildren/.config/opuscraft-dedicated.env`, deve conter `OPUSCRAFT_WORLD_DIR=/home/gamesforchildren/data/opuscraft-experimental`, a seed, o código, o modo e o token. Restringir leitura ao usuário do serviço (permissão `0600`). A aplicação principal precisa do **mesmo token** via ambiente; apenas iniciar o serviço dedicado não basta para habilitar o gateway.
+
+**Não ativar `opuscraft-dedicated.service.example` diretamente** e não substituir o serviço principal atual sem preparar rollback. O arquivo é um modelo desabilitado, para revisão e instalação controlada.

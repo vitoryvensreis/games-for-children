@@ -117,7 +117,7 @@ async function opusStatus(){
   return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),dedicatedEnabled:dedicatedEnabled(),dedicatedJoinCode:dedicatedEnabled()?process.env.OPUSCRAFT_JOIN_CODE:null,
     ready:!!info.ready,mode:'player-hosted',hosting:!!info.hosting,
     guests:Number(info.guests)||0};
- }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),
+ }catch{return {available:OPUSCRAFT_READY(),clientVersion:opusBuildId(),dedicatedEnabled:dedicatedEnabled(),dedicatedJoinCode:dedicatedEnabled()?process.env.OPUSCRAFT_JOIN_CODE:null,
    ready:false,mode:'player-hosted',hosting:false,guests:0,error:'Relay iniciando'}}
 }
 function launchOpusRelay(){

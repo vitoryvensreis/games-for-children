@@ -46,6 +46,7 @@ const multiFile=path.join(dir,'src/gui/screens/multiplayer.ts');
 let multiSource=fs.readFileSync(multiFile,'utf8');
 const joinButtonAnchor="    this.add(new Button(cx - 100, this.height - 28, 200, 20, 'Back', () => this.onClose()));";
 if(multiSource.split(joinButtonAnchor).length!==2)throw Error('Upstream multiplayer UI changed');
+multiSource=multiSource.replace("this.width, 48, this.height - 112","this.width, 48, this.height - 140");
 multiSource=multiSource.replace(joinButtonAnchor,`    this.add(new Button(cx - 154, this.height - 84, 308, 20, 'Mundo da Familia - 24h', () => {
       if (!this.nameOk()) return;
       void this.game.joinWorld({ via: 'dedicated' }, guestIdentity(this.game, this.name, 'ABCD1234'));

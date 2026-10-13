@@ -19,9 +19,9 @@ rollback(){
  sudo -n /usr/bin/systemctl restart games-for-children.service || true
 }
 trap rollback ERR
-# Remove outdated compiled game files before extracting the clean release.
-# Rollback copies in backup/ remain available if activation fails.
-rm -rf -- public/opuscraft
+# Check the release before touching live assets. Keep the current
+# public/opuscraft directory in place until the replacement is available.
+tar -tzf release.tar.gz >/dev/null
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
 sudo -n /usr/bin/systemctl restart games-for-children.service

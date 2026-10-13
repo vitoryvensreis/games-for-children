@@ -41,10 +41,15 @@ function createDedicatedRuntime({engine,wss,worldDir,seed,joinCode,hostName='Fam
   if(existing)return existing;
   return world.addChunk(generator.generate(cx,cz));
  }
+ // Prepare the original spawn terrain before accepting a player.
+ // New experimental worlds may be discarded; this avoids spawning into void.
+ generateChunk(0,0);
+ const spawnY=Math.max(-62,Math.min(318,world.heightAt(0,0)+2));
  const demand=createChunkDemand({isLoaded:(x,z)=>!!world.getChunk(x,z),generate:generateChunk});
+ demand.requestAround(0,0,1);
  const transport=createWebSocketTransport(wss,{authenticate,opuscraftGuestFrames:true});
  const hooks={
-  spawnPoint:()=>[0,80,0],hostName:()=>hostName,worldName:()=>worldName,
+  spawnPoint:()=>[0,spawnY,0],hostName:()=>hostName,worldName:()=>worldName,
   chat:()=>{},setTicket:()=>{},hostBreaking:()=>null,
   loadGuest:uuid=>{
    try{return readPlayer(playerDir,uuid)}

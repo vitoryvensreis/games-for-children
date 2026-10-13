@@ -9,7 +9,7 @@ After=network.target
 Type=simple
 User=gamesforchildren
 Group=gamesforchildren
-WorkingDirectory=/home/gamesforchildren/apps/games-for-children
+WorkingDirectory=/home/gamesforchildren/experiments/minecraft-dedicated
 EnvironmentFile=/home/gamesforchildren/.config/opuscraft-dedicated.env
 ExecStart=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/node ops/opuscraft-headless/run-dedicated.cjs
 Restart=on-failure
@@ -20,7 +20,7 @@ Environment=NODE_ENV=production
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/gamesforchildren/data/opuscraft-experimental
+ReadWritePaths=/home/gamesforchildren/experiments/minecraft-world
 PrivateTmp=true
 StandardOutput=journal
 StandardError=journal

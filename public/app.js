@@ -83,8 +83,14 @@ async function openOpusCraft(){
   if(!status.available){notify('O OpusCraft original ainda não foi instalado.');return}
   if(room){send({type:'leave'});room=null}
   stopSnake();cancelAnimationFrame(pongRaf);cancelAnimationFrame(drawId);
+  // Experimental opt-in: ?minecraft=dedicated&code=XXXX bypasses player-hosted
+  // world. Normal users keep the existing unmodified OpusCraft iframe.
+  const params=new URLSearchParams(location.search);
+  const dedicated=params.get('minecraft')==='dedicated';
+  const joinCode=dedicated?params.get('code')||'':'';
+  const dedicatedQuery=dedicated?'mp=dedicated&code='+encodeURIComponent(joinCode)+'&':'';
   app.innerHTML='<main class="opuscraft-embed" id="cubeRoot" aria-label="OpusCraft original">'+
-   '<iframe id="opuscraftFrame" src="/opuscraft/index.html?v='+
+   '<iframe id="opuscraftFrame" src="/opuscraft/index.html?'+dedicatedQuery+'v='+
     encodeURIComponent(status.clientVersion||'live')+'" title="OpusCraft original" allow="fullscreen; gamepad" referrerpolicy="same-origin"></iframe>'+
    '<button id="opuscraftBack" class="opuscraft-exit" aria-label="Voltar à biblioteca">'+ico('left')+' Sair</button>'+
    '<div id="opuscraftRotate" class="opuscraft-rotate" aria-live="polite"><strong>Vire o celular na horizontal</strong><p>Assim você consegue ver o jogo e os controles.</p><button id="opuscraftTryLandscape">Ativar tela horizontal</button></div>'+

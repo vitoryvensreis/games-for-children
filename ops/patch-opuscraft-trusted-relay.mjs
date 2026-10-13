@@ -20,7 +20,10 @@ console.log('OPUSCRAFT_AUTHENTICATED_PUBLIC_RELAY_ENABLED');
 const gameFile=path.join(dir,'src/game/game.ts');
 let gameSource=fs.readFileSync(gameFile,'utf8');
 const oldTransport="new WebSocketGuestTransport({ latency: this.netLag ?? undefined })";
-const dedicatedTransport="new WebSocketGuestTransport({ latency: this.netLag ?? undefined, ...(new URLSearchParams(location.search).get('mp') === 'dedicated' ? { url: `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/__dedicated` } : {}) })";
+const dedicatedTransport="new WebSocketGuestTransport({ latency: this.netLag ?? undefined, ...(target.via === 'dedicated' ? { url: `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/__dedicated` } : {}) })";
+const oldTarget="type JoinTarget = { via: 'browser'; lanId: string } | { via: 'relay' };";
+if(gameSource.split(oldTarget).length!==2)throw Error('Upstream JoinTarget changed');
+gameSource=gameSource.replace(oldTarget,"type JoinTarget = { via: 'browser'; lanId: string } | { via: 'relay' } | { via: 'dedicated' };");
 if(gameSource.split(oldTransport).length!==2)throw Error('Upstream guest transport changed; dedicated adaptation needs review');
 fs.writeFileSync(gameFile,gameSource.replace(oldTransport,dedicatedTransport));
 const mainFile=path.join(dir,'src/main.ts');
@@ -33,7 +36,20 @@ const oldJoin="  } else if (mp === 'join') {";
 if(mainSource.split(oldJoin).length!==2)throw Error('Upstream join bootstrap changed');
 mainSource=mainSource.replace(oldJoin,`  } else if (mp === 'dedicated') {
     game.setScreen(new TitleScreen(game, false));
-    void game.joinWorld({ via: 'relay' }, guestIdentity(game, guestName(), params.get('code') ?? ''));
+    void game.joinWorld({ via: 'dedicated' }, guestIdentity(game, guestName(), params.get('code') ?? ''));
 `+oldJoin);
 fs.writeFileSync(mainFile,mainSource);
 console.log('OPUSCRAFT_EXPERIMENTAL_DEDICATED_BROWSER_JOIN_ENABLED');
+
+// Add a visible, explicit dedicated choice without removing LAN/relay worlds.
+const multiFile=path.join(dir,'src/gui/screens/multiplayer.ts');
+let multiSource=fs.readFileSync(multiFile,'utf8');
+const joinButtonAnchor="    this.add(new Button(cx - 100, this.height - 28, 200, 20, 'Back', () => this.onClose()));";
+if(multiSource.split(joinButtonAnchor).length!==2)throw Error('Upstream multiplayer UI changed');
+multiSource=multiSource.replace(joinButtonAnchor,`    this.add(new Button(cx - 154, this.height - 84, 308, 20, 'Mundo da Familia - 24h', () => {
+      if (!this.nameOk()) return;
+      void this.game.joinWorld({ via: 'dedicated' }, guestIdentity(this.game, this.name, 'ABCD1234'));
+    }));
+`+joinButtonAnchor);
+fs.writeFileSync(multiFile,multiSource);
+console.log('OPUSCRAFT_DEDICATED_MULTIPLAYER_MENU_ENTRY_ENABLED');

@@ -61,7 +61,26 @@ server.on('upgrade',(req,socket,head)=>{
     clientState:g?.client?.state,reason:g?.client?.endReason,chunks:g?.level?.world?.chunks?.size}});
   throw Error('Dedicated browser failed to load terrain: '+JSON.stringify({status,errors,server:output.slice(-1200)}));
  }
- console.log('OPUSCRAFT_REAL_BROWSER_DEDICATED_WORLD_OK');
+ // Second real browser tab joins the SAME Node world. Different remembered
+ // player names prevent duplicate offline UUIDs in the upstream server.
+ const second=await browser.newPage();
+ second.on('pageerror',e=>errors.push('player2: '+String(e)));
+ await second.evaluateOnNewDocument(()=>sessionStorage.setItem('mc-mp-name','SecondChild'));
+ await second.goto('http://127.0.0.1:'+PORT+'/opuscraft/index.html?mp=dedicated&code=ABCD1234',
+  {waitUntil:'domcontentloaded',timeout:45000});
+ try{
+  await second.waitForFunction(()=>{const g=window.__game;return g?.mode==='client'&&g.inWorld&&g.client?.state==='play'&&g.level?.world?.chunks?.size>0},
+   {timeout:90000,polling:500});
+ }catch(e){
+  const status=await second.evaluate(()=>{const g=window.__game;return {mode:g?.mode,inWorld:g?.inWorld,
+   clientState:g?.client?.state,reason:g?.client?.endReason,chunks:g?.level?.world?.chunks?.size}});
+  throw Error('Second player could not join shared world: '+JSON.stringify({status,errors,server:output.slice(-1200)}));
+ }
+ const both=await Promise.all([page,second].map(p=>p.evaluate(()=>({
+  state:window.__game?.client?.state,loaded:window.__game?.level?.world?.chunks?.size||0
+ }))));
+ if(both.some(p=>p.state!=='play'||p.loaded<1))throw Error('Two clients must share playable terrain: '+JSON.stringify(both));
+ console.log('OPUSCRAFT_TWO_REAL_BROWSER_GUESTS_OK',JSON.stringify(both));
 })().catch(err=>{console.error(err);process.exitCode=1}).finally(async()=>{
  for(const ws of connections)try{ws.terminate()}catch{}
  await browser?.close().catch(()=>{});

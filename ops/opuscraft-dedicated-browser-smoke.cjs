@@ -80,7 +80,16 @@ server.on('upgrade',(req,socket,head)=>{
   state:window.__game?.client?.state,loaded:window.__game?.level?.world?.chunks?.size||0
  }))));
  if(both.some(p=>p.state!=='play'||p.loaded<1))throw Error('Two clients must share playable terrain: '+JSON.stringify(both));
- console.log('OPUSCRAFT_TWO_REAL_BROWSER_GUESTS_OK',JSON.stringify(both));
+ // Both browsers must render the same authoritative terrain values at a
+ // fixed coordinate, rather than merely opening two unrelated local worlds.
+ const samples=await Promise.all([page,second].map(p=>p.evaluate(()=>{
+  const w=window.__game.level.world;
+  return {block:w.getState(0,64,0),origin:w.getState(0,0,0),
+   client:window.__game.mode,connected:window.__game.client?.state};
+ })));
+ if(samples[0].block!==samples[1].block||samples[0].origin!==samples[1].origin)
+  throw Error('Dedicated clients disagree on original world blocks: '+JSON.stringify(samples));
+ console.log('OPUSCRAFT_TWO_REAL_BROWSER_GUESTS_OK',JSON.stringify({both,samples}));
 })().catch(err=>{console.error(err);process.exitCode=1}).finally(async()=>{
  for(const ws of connections)try{ws.terminate()}catch{}
  await browser?.close().catch(()=>{});

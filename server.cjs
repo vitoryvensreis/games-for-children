@@ -137,7 +137,7 @@ function launchOpusRelay(){
 // gzip output is reused in this process to avoid compressing the same bundle per child.
 const opusGzipCache=new Map();
 function opuscraftStaticHeaders(file,ext){
- const opus=file.startsWith('opuscraft/');
+ const opus=file.startsWith('opuscraft/'),ps2=file.startsWith('ps2/');
  const hashed=opus&&/^opuscraft\/assets\/[^/]+-[a-zA-Z0-9_-]{8,}\.(?:js|css|wasm|svg|png|jpg|webp|woff2)$/.test(file);
  const noStore=!opus?['index.html','app.js','style.css','sw.js'].includes(file):
   file==='opuscraft/index.html'||file==='opuscraft/GFC-BUILD-ID.txt';
@@ -146,7 +146,7 @@ function opuscraftStaticHeaders(file,ext){
    '.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml',
    '.wasm':'application/wasm','.zip':'application/zip',
    '.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream',
-  'Cache-Control':noStore?'private, no-store, max-age=0':
+  'Cache-Control':ps2?'private, no-store, max-age=0':noStore?'private, no-store, max-age=0':
    hashed?'private, max-age=31536000, immutable':opus?'private, max-age=3600':'public, max-age=3600'
  };
 }

@@ -12,6 +12,7 @@ test('PS2 assets and page are protected by server-side admin authorization',()=>
  assert.match(server,/ps2Auth\.u\.role\s*!==\s*'admin'/);
  assert.match(server,/Cross-Origin-Opener-Policy/);
  assert.match(server,/Cross-Origin-Embedder-Policy/);
+ assert.match(server,/ps2\?'private, no-store, max-age=0'/);
 });
 test('PWA cannot cache private PS2 content',()=>{
  assert.match(read('public/sw.js'),/u\.pathname\.startsWith\('\/ps2\/'\)/);

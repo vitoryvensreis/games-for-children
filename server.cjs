@@ -176,6 +176,17 @@ function sendStaticAsset(req,res,file,fp,body){
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;
 res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options',pathname==='/opuscraft/index.html'?'SAMEORIGIN':'DENY');
+// A standalone cross-origin-isolated page is needed for Play! WebAssembly threads.
+// Protect all emulator resources, not merely the catalog button.
+if(pathname.startsWith('/ps2/')){
+ const ps2Auth=checkSession(req);
+ res.setHeader('Cache-Control','private, no-store');
+ if(!ps2Auth){res.writeHead(401);return res.end('Faça login como administrador para acessar o PS2')}
+ if(ps2Auth.u.role!=='admin'){res.writeHead(403);return res.end('Acesso restrito ao administrador')}
+ res.setHeader('Cross-Origin-Opener-Policy','same-origin');
+ res.setHeader('Cross-Origin-Embedder-Policy','require-corp');
+ res.setHeader('Cross-Origin-Resource-Policy','same-origin');
+}
 if(pathname==='/api/health')return json(res,200,{ok:true,service:'games-for-children'});
 if(pathname.startsWith('/opuscraft/')&&!checkSession(req)){res.writeHead(401,{'Cache-Control':'no-store'});return res.end('Entre no GamesNavagador para jogar')}
 

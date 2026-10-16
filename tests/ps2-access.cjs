@@ -26,3 +26,12 @@ test('local disc input and admin lab action are wired',()=>{
  assert.match(page,/id="iso"/);
  assert.match(app,/id="adminPS2"/);
 });
+
+test('deployment must not purge user worlds or preexisting backup archives',()=>{
+ const script=read('ops/deploy-opuscraft-vps.sh');
+ assert.doesNotMatch(script,/^\s*rm\s+-rf\s+--\s+data\/opuscraft/gm);
+ assert.doesNotMatch(script,/^\s*if\b[^\n]*\brm\s+-rf\s+--\s+data\/opuscraft/gm);
+ assert.doesNotMatch(script,/^\s*rm\s+-f\s+backup\/opuscraft/gm);
+ assert.match(script,/PS2_ADMIN_ONLY_LAB_READY/);
+ assert.match(script,/PS2_ROLLBACK_SNAPSHOT/);
+});

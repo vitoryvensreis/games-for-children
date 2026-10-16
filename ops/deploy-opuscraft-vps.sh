@@ -3,25 +3,28 @@ set -Eeuo pipefail
 cd /home/gamesforchildren/apps/games-for-children
 mkdir -p backup
 # Save app files for rollback; do NOT include/alter profiles of other games.
-cp -f server.cjs backup/server-pre-opuscraft.cjs
-cp -f package.json backup/package-pre-opuscraft.json
-if test -d public; then rm -rf backup/public-pre-opuscraft; cp -a public backup/public-pre-opuscraft; fi
-if test -d ops; then rm -rf backup/ops-pre-opuscraft; cp -a ops backup/ops-pre-opuscraft; fi
+# Unique rollback snapshot; previous snapshots must remain untouched.
+SNAPSHOT="$(mktemp -d -p backup ps2-deploy-XXXXXXXX)"
+cp -f server.cjs "$SNAPSHOT/server.cjs"
+cp -f package.json "$SNAPSHOT/package.json"
+if test -d public; then cp -a public "$SNAPSHOT/public"; fi
+if test -d ops; then cp -a ops "$SNAPSHOT/ops"; fi
+echo "PS2_ROLLBACK_SNAPSHOT=$SNAPSHOT"
 NPM=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin/npm
 NODEBIN=/home/gamesforchildren/.nvm/versions/node/v24.21.0/bin
 rollback(){
  echo "OPUSCRAFT_PLAYER_HOST_DEPLOY_ROLLBACK"
- cp -f backup/server-pre-opuscraft.cjs server.cjs
- cp -f backup/package-pre-opuscraft.json package.json
- if test -d backup/public-pre-opuscraft; then rm -rf public; cp -a backup/public-pre-opuscraft public; fi
- if test -d backup/ops-pre-opuscraft; then rm -rf ops; cp -a backup/ops-pre-opuscraft ops; fi
+ cp -f "$SNAPSHOT/server.cjs" server.cjs
+ cp -f "$SNAPSHOT/package.json" package.json
+ if test -d "$SNAPSHOT/public"; then cp -a "$SNAPSHOT/public/." public/; fi
+ if test -d "$SNAPSHOT/ops"; then cp -a "$SNAPSHOT/ops/." ops/; fi
  PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund || true
  sudo -n /usr/bin/systemctl restart games-for-children.service || true
 }
 trap rollback ERR
 # Remove outdated compiled game files before extracting the clean release.
 # Rollback copies in backup/ remain available if activation fails.
-rm -rf -- public/opuscraft
+# Retain existing OpusCraft files and persistent local state; tar overlays new build.
 tar -xzf release.tar.gz
 PATH="$NODEBIN:$PATH" "$NPM" install --omit=dev --no-audit --no-fund
 sudo -n /usr/bin/systemctl restart games-for-children.service
@@ -42,17 +45,19 @@ if test "$ready" -ne 1; then
 fi
 echo "OPUSCRAFT_ORIGINAL_PLAYER_RELAY_READY"
 curl -fsS http://127.0.0.1:4173/__health
-# Reinstall the vanilla client cleanly: purge ALL previous OpusCraft
-# world data and family-world snapshots only after the healthy replacement.
-# Never remove shared data/state.json, SQL profiles, voice/chat or other games.
-if test -d data/opuscraft; then rm -rf -- data/opuscraft; fi
-rm -f backup/opuscraft-family-v1-pre-v2.tar.gz backup/opuscraft-family-v2-pre-v3.tar.gz \
- backup/opuscraft-profile-latest.tar.gz backup/opuscraft-v2-profile-latest.tar.gz \
- backup/opuscraft-v3-profile-latest.tar.gz
-rm -f ops/opuscraft-host.cjs ops/gfc-npc.ts ops/gfc-family-client.ts \
- ops/gfc-adaptive-quality.ts ops/gfc-world-backup.ts \
- ops/patch-opuscraft.mjs ops/patch-opuscraft-host-cpu.mjs \
- ops/patch-opuscraft-mesh.mjs ops/gfc-leaf-merge.ts ops/opuscraft-cpu-smoke.cjs
+# Do not touch ANY persisted worlds, map backups, family snapshots or
+# legacy operational scripts during this unrelated PS2 laboratory deploy.
+# In particular, never rm -rf data/opuscraft and never prune backup/*.tar.gz.
+test -s public/ps2/index.html
+test -s public/ps2/emulator/Play.js
+test -s public/ps2/emulator/Play.wasm
+test -s public/ps2/emulator/License.txt
+# The PS2 route must NOT serve protected assets without an admin session.
+ps2_status="$(curl -sS --max-time 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/ps2/index.html)"
+test "$ps2_status" = 401 || { echo "PS2_AUTH_GUARD_FAILED: $ps2_status"; false; }
+ps2_binary_status="$(curl -sS --max-time 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/ps2/emulator/Play.wasm)"
+test "$ps2_binary_status" = 401 || { echo "PS2_RUNTIME_AUTH_GUARD_FAILED: $ps2_binary_status"; false; }
 trap - ERR
-echo "OPUSCRAFT_OLD_FAMILY_HOST_RETIRED"
-echo "OPUSCRAFT_DEPLOY_HEALTH_OK"
+echo "OPUSCRAFT_PERSISTED_WORLDS_AND_BACKUPS_PRESERVED"
+echo "PS2_ADMIN_ONLY_LAB_READY"
+echo "GAMESFORCHILDREN_DEPLOY_HEALTH_OK"

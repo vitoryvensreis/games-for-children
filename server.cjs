@@ -137,7 +137,7 @@ function launchOpusRelay(){
 // gzip output is reused in this process to avoid compressing the same bundle per child.
 const opusGzipCache=new Map();
 function opuscraftStaticHeaders(file,ext){
- const opus=file.startsWith('opuscraft/');
+ const opus=file.startsWith('opuscraft/'),ps2=file.startsWith('ps2/');
  const hashed=opus&&/^opuscraft\/assets\/[^/]+-[a-zA-Z0-9_-]{8,}\.(?:js|css|wasm|svg|png|jpg|webp|woff2)$/.test(file);
  const noStore=!opus?['index.html','app.js','style.css','sw.js'].includes(file):
   file==='opuscraft/index.html'||file==='opuscraft/GFC-BUILD-ID.txt';
@@ -146,7 +146,7 @@ function opuscraftStaticHeaders(file,ext){
    '.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml',
    '.wasm':'application/wasm','.zip':'application/zip',
    '.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream',
-  'Cache-Control':noStore?'private, no-store, max-age=0':
+  'Cache-Control':ps2?'private, no-store, max-age=0':noStore?'private, no-store, max-age=0':
    hashed?'private, max-age=31536000, immutable':opus?'private, max-age=3600':'public, max-age=3600'
  };
 }
@@ -176,6 +176,17 @@ function sendStaticAsset(req,res,file,fp,body){
 const server=http.createServer(async(req,res)=>{try{
 const pathname=new URL(req.url,'http://local').pathname;
 res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');res.setHeader('X-Frame-Options',pathname==='/opuscraft/index.html'?'SAMEORIGIN':'DENY');
+// A standalone cross-origin-isolated page is needed for Play! WebAssembly threads.
+// Protect all emulator resources, not merely the catalog button.
+if(pathname.startsWith('/ps2/')){
+ const ps2Auth=checkSession(req);
+ res.setHeader('Cache-Control','private, no-store');
+ if(!ps2Auth){res.writeHead(401);return res.end('Faça login como administrador para acessar o PS2')}
+ if(ps2Auth.u.role!=='admin'){res.writeHead(403);return res.end('Acesso restrito ao administrador')}
+ res.setHeader('Cross-Origin-Opener-Policy','same-origin');
+ res.setHeader('Cross-Origin-Embedder-Policy','require-corp');
+ res.setHeader('Cross-Origin-Resource-Policy','same-origin');
+}
 if(pathname==='/api/health')return json(res,200,{ok:true,service:'games-for-children'});
 if(pathname.startsWith('/opuscraft/')&&!checkSession(req)){res.writeHead(401,{'Cache-Control':'no-store'});return res.end('Entre no GamesNavagador para jogar')}
 

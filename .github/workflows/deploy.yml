@@ -24,6 +24,8 @@ jobs:
           node-version: '24'
       - run: npm install --no-audit --no-fund
       - run: node --check server.cjs && node --check public/app.js && node --check ops/opuscraft-relay-host.cjs && node --check ops/opuscraft-browser-relay-smoke.cjs && node --check ops/opuscraft-browser-host-smoke.cjs
+      - name: Validate private PS2 laboratory
+        run: bash -n ops/install-ps2-runtime.sh && bash -n ops/deploy-opuscraft-vps.sh && node --check public/ps2/app.js && node --test tests/ps2-access.cjs
       - run: node --test --test-concurrency=1 tests/pong-physics.cjs tests/snake.cjs tests/game-covers.cjs tests/opuscraft-browser-host.cjs
       - name: Build unmodified upstream OpusCraft
         run: bash ops/build-opuscraft.sh
@@ -98,7 +100,9 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Build pinned OpusCraft for production
         run: bash ops/build-opuscraft.sh
-      - name: Package OpusCraft-only application
+      - name: Fetch and verify official Play! browser runtime
+        run: bash ops/install-ps2-runtime.sh
+      - name: Package OpusCraft and optional PS2 laboratory
         run: tar -czf release.tar.gz server.cjs package.json public database ops
       - name: Upload release to the VPS
         env:

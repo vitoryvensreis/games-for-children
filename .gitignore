@@ -1,0 +1,9 @@
+# Runtime upstream Play! baixado e verificado no deploy.
+# Não versionar mídias comerciais, arquivos pessoais ou saves.
+public/ps2/emulator/
+*.iso
+*.cso
+*.chd
+*.isz
+*.bin
+*.ps2
